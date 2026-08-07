@@ -1,0 +1,140 @@
+export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
+
+export function createWindowManager({
+  BrowserWindow,
+  screen,
+  ipcMain,
+  defaultSession,
+  config,
+  rendererPath,
+  preloadPath,
+}) {
+  const windows = new Map();
+  const bootstrapByWebContents = new Map();
+  let queue = Promise.resolve();
+  let started = false;
+
+  const enqueueReconcile = () => {
+    queue = queue.then(reconcile);
+    return queue;
+  };
+
+  const onDisplayAdded = () => { enqueueReconcile(); };
+  const onDisplayRemoved = () => { enqueueReconcile(); };
+  const onDisplayMetricsChanged = () => { enqueueReconcile(); };
+
+  function secureWebContents(webContents) {
+    webContents.on('will-navigate', (event) => event.preventDefault());
+    webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  }
+
+  async function createDisplayWindow(display) {
+    const { x, y, width, height } = display.bounds;
+    const window = new BrowserWindow({
+      x,
+      y,
+      width,
+      height,
+      title: 'animated-ocean-wallpaper',
+      frame: false,
+      show: false,
+      backgroundColor: '#152229',
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+        preload: preloadPath,
+      },
+    });
+
+    secureWebContents(window.webContents);
+    window.setIgnoreMouseEvents(!config.interactionEnabled);
+    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    window.once('ready-to-show', () => window.showInactive());
+    windows.set(display.id, window);
+    bootstrapByWebContents.set(window.webContents.id, { config, display });
+    window.once('closed', () => {
+      windows.delete(display.id);
+      bootstrapByWebContents.delete(window.webContents.id);
+    });
+    await window.loadFile(rendererPath);
+  }
+
+  async function reconcile() {
+    const displays = screen.getAllDisplays();
+    const displayById = new Map(displays.map((display) => [display.id, display]));
+
+    for (const [displayId, window] of windows) {
+      if (!displayById.has(displayId)) {
+        window.close();
+      }
+    }
+
+    for (const display of displays) {
+      const window = windows.get(display.id);
+      if (!window) {
+        await createDisplayWindow(display);
+        continue;
+      }
+      window.setBounds(display.bounds);
+      bootstrapByWebContents.set(window.webContents.id, { config, display });
+    }
+  }
+
+  function installSessionGuards() {
+    defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
+    defaultSession.on('will-download', (event) => event.preventDefault());
+    defaultSession.webRequest.onBeforeRequest(
+      { urls: ['http://*/*', 'https://*/*'] },
+      (_details, callback) => callback({ cancel: true }),
+    );
+  }
+
+  async function start() {
+    if (started) {
+      return;
+    }
+    started = true;
+    installSessionGuards();
+    ipcMain.handle(BOOTSTRAP_CHANNEL, async (event) => {
+      const bootstrap = bootstrapByWebContents.get(event.sender.id);
+      if (!bootstrap) {
+        throw new Error('Unknown wallpaper renderer');
+      }
+      return bootstrap;
+    });
+    screen.on('display-added', onDisplayAdded);
+    screen.on('display-removed', onDisplayRemoved);
+    screen.on('display-metrics-changed', onDisplayMetricsChanged);
+    await enqueueReconcile();
+  }
+
+  function stop() {
+    if (!started) {
+      return;
+    }
+    started = false;
+    screen.off('display-added', onDisplayAdded);
+    screen.off('display-removed', onDisplayRemoved);
+    screen.off('display-metrics-changed', onDisplayMetricsChanged);
+    ipcMain.removeHandler(BOOTSTRAP_CHANNEL);
+    for (const window of [...windows.values()]) {
+      window.close();
+    }
+    windows.clear();
+    bootstrapByWebContents.clear();
+  }
+
+  return {
+    start,
+    stop,
+    whenIdle: () => queue,
+  };
+}
