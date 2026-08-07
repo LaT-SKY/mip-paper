@@ -1,0 +1,39 @@
+:root {
+  color-scheme: dark;
+  background: #152229;
+}
+
+html,
+body {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  overflow: hidden;
+  background: #152229;
+}
+
+body {
+  position: relative;
+}
+
+#wallpaper {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  color: #fff;
+  background: #152229;
+  font: 16px/1.5 system-ui, sans-serif;
+  text-align: center;
+}
+
+#error[hidden] {
+  display: none;
+}
