@@ -1,0 +1,16 @@
+{
+  "interactionEnabled": true,
+  "frameRate": {
+    "interactive": 60,
+    "drift": 30
+  },
+  "motion": {
+    "interactionSpeed": 1.15,
+    "returnSpeed": 0.3,
+    "driftSpeed": 1,
+    "deadZonePx": 2,
+    "horizontalPanPercent": 4.6,
+    "verticalPanPercent": 4.5,
+    "maxRotationDegrees": 0.7
+  }
+}

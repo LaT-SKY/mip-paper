@@ -1,0 +1,15 @@
+{
+  "name": "animated-ocean-wallpaper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "find src test -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check"
+  },
+  "dependencies": {
+    "electron": "43.3.0"
+  }
+}
