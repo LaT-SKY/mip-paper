@@ -1,2 +1,6 @@
 .idea/
 .claude/
+node_modules/
+coverage/
+.superpowers/
+npm-debug.log*

@@ -213,7 +213,95 @@ service_command() {
 }
 
 doctor() {
-  fail 'doctor is not implemented yet'
+  require_safe_paths
+  local failures=0
+  check_pass() { printf 'PASS %-18s %s\n' "$1" "$2"; }
+  check_fail() { printf 'FAIL %-18s %s\n' "$1" "$2"; failures=1; }
+  check_manual() { printf 'MANUAL %-16s %s\n' "$1" "$2"; }
+
+  if [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]]; then
+    check_pass session 'Wayland session detected'
+  else
+    check_fail session 'current session is not Wayland'
+  fi
+  if [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]]; then
+    check_pass desktop 'KDE Plasma desktop detected'
+  else
+    check_fail desktop 'KDE Plasma was not detected'
+  fi
+
+  local command_name
+  for command_name in node npm systemctl kreadconfig6 kwriteconfig6; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+      check_pass "command:$command_name" "$(command -v "$command_name")"
+    else
+      check_fail "command:$command_name" 'required command is missing'
+    fi
+  done
+  if command -v plasmashell >/dev/null 2>&1 && plasmashell --version | grep -Eq '(^| )6\.'; then
+    check_pass plasma 'Plasma 6 detected'
+  else
+    check_fail plasma 'Plasma 6 is unavailable'
+  fi
+  if command -v kwin_wayland >/dev/null 2>&1 && kwin_wayland --version | grep -Eq '(^| )6\.'; then
+    check_pass kwin 'KWin 6 detected'
+  else
+    check_fail kwin 'KWin 6 is unavailable'
+  fi
+
+  if [[ -d "$INSTALL_ROOT" && -f "$INSTALL_ROOT/src/main.mjs" && -x "$INSTALL_ROOT/node_modules/.bin/electron" ]]; then
+    check_pass snapshot "$INSTALL_ROOT"
+  else
+    check_fail snapshot 'installed application snapshot is incomplete'
+  fi
+  if [[ -f "$CONFIG_PATH" && -f "$INSTALL_ROOT/src/config.mjs" ]] \
+    && node --input-type=module - "$INSTALL_ROOT/src/config.mjs" "$CONFIG_PATH" <<'NODE'
+const [, , modulePath, configPathname] = process.argv;
+const { loadConfig } = await import(`file://${modulePath}`);
+await loadConfig(configPathname);
+NODE
+  then
+    check_pass config "$CONFIG_PATH"
+  else
+    check_fail config 'configuration is missing or invalid'
+  fi
+  if [[ -f "$SERVICE_PATH" ]]; then
+    check_pass service-file "$SERVICE_PATH"
+  else
+    check_fail service-file 'systemd user service file is missing'
+  fi
+  if systemctl --user is-enabled "$SERVICE_NAME" >/dev/null 2>&1; then
+    check_pass service-enabled 'user service is enabled'
+  else
+    check_fail service-enabled 'user service is not enabled'
+  fi
+  if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then
+    check_pass service-active 'user service is active'
+  else
+    check_fail service-active 'user service is not active'
+  fi
+  local rule_helper="$INSTALL_ROOT/scripts/kwin-rules.sh"
+  if [[ ! -x "$rule_helper" ]]; then rule_helper="$SOURCE_ROOT/scripts/kwin-rules.sh"; fi
+  if [[ -x "$rule_helper" ]] && "$rule_helper" check >/dev/null 2>&1; then
+    check_pass 'KWin rule' 'project rule is installed'
+  else
+    check_fail 'KWin rule' 'project rule is missing or invalid'
+  fi
+  if [[ -f "$INSTALL_ROOT/assets/161-2.jpeg" ]] && [[ $(stat -c %s "$INSTALL_ROOT/assets/161-2.jpeg") -gt 100000 ]]; then
+    check_pass image 'wallpaper image is present'
+  else
+    check_fail image 'wallpaper image is missing or incomplete'
+  fi
+
+  check_manual 'window stacking' 'verify wallpaper remains below ordinary windows and above the desktop surface'
+  check_manual 'panel visibility' 'verify Plasma panel and widgets remain above the wallpaper'
+  check_manual 'Alt+Tab' 'verify taskbar, pager, Alt+Tab, and overview isolation'
+  check_manual 'mouse input' 'verify interaction and configured mouse passthrough'
+  check_manual 'multi-display' 'verify independent windows, scaling, rotation, and hotplug'
+  check_manual 'lock/suspend' 'verify lock, suspend, wake, and session restart recovery'
+  check_manual 'resource usage' 'measure idle 30 FPS CPU/GPU/memory and battery impact'
+
+  return "$failures"
 }
 
 case "${1:-}" in
