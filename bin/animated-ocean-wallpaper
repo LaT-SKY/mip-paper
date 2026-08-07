@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly APP_ID='animated-ocean-wallpaper'
+readonly SERVICE_NAME='animated-ocean-wallpaper.service'
+
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+readonly LOCAL_PREFIX="${ANIMATED_WALLPAPER_LOCAL_PREFIX:-$HOME/.local}"
+readonly INSTALL_ROOT="${ANIMATED_WALLPAPER_INSTALL_ROOT:-$LOCAL_PREFIX/lib/$APP_ID}"
+readonly LAUNCHER_PATH="${ANIMATED_WALLPAPER_LAUNCHER_PATH:-$LOCAL_PREFIX/bin/$APP_ID}"
+readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+readonly CONFIG_DIRECTORY="$CONFIG_HOME/$APP_ID"
+readonly CONFIG_PATH="$CONFIG_DIRECTORY/config.json"
+readonly SERVICE_DIRECTORY="$CONFIG_HOME/systemd/user"
+readonly SERVICE_PATH="$SERVICE_DIRECTORY/$SERVICE_NAME"
+
+if [[ -n "${ANIMATED_WALLPAPER_SOURCE_ROOT:-}" ]]; then
+  SOURCE_ROOT=$ANIMATED_WALLPAPER_SOURCE_ROOT
+elif [[ -f "$script_directory/../package.json" ]]; then
+  SOURCE_ROOT=$(cd -- "$script_directory/.." && pwd -P)
+else
+  SOURCE_ROOT=$INSTALL_ROOT
+fi
+readonly SOURCE_ROOT
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: animated-ocean-wallpaper COMMAND [OPTION]
+
+Commands:
+  install [--no-start]  Install or update and enable the user service
+  uninstall [--purge]   Remove the app; --purge also removes user config
+  start                 Start the user service
+  stop                  Stop the user service
+  restart               Restart the user service
+  status                Show the user service status
+  doctor                Diagnose the installation and Plasma integration
+EOF
+  exit 2
+}
+
+fail() {
+  printf 'Error: %s\n' "$*" >&2
+  exit 1
+}
+
+require_safe_paths() {
+  [[ -n "${HOME:-}" && "$HOME" == /* && "$HOME" != '/' ]] || fail 'HOME must be an absolute user directory'
+  [[ "$INSTALL_ROOT" == "$HOME"/* && "$INSTALL_ROOT" != "$HOME/.local" ]] || fail 'Unsafe installation path'
+  [[ "$CONFIG_DIRECTORY" == "$HOME"/* && "$CONFIG_DIRECTORY" != "$HOME/.config" ]] || fail 'Unsafe configuration path'
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "Required command is missing: $1"
+}
+
+validate_environment() {
+  local command_name
+  for command_name in node npm systemctl plasmashell kwin_wayland kreadconfig6 kwriteconfig6; do
+    require_command "$command_name"
+  done
+  [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]] || fail 'The current session is not Wayland'
+  [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]] || fail 'The current desktop is not KDE Plasma'
+  plasmashell --version | grep -Eq '(^| )6\.' || fail 'Plasma 6 is required'
+  kwin_wayland --version | grep -Eq '(^| )6\.' || fail 'KWin 6 is required'
+  systemctl --user show-environment >/dev/null
+}
+
+validate_source() {
+  local required_path
+  for required_path in \
+    package.json package-lock.json src/main.mjs src/renderer/index.html \
+    assets/161-2.jpeg config/default.json scripts/kwin-rules.sh \
+    bin/animated-ocean-wallpaper resources/animated-ocean-wallpaper.service.in; do
+    [[ -e "$SOURCE_ROOT/$required_path" ]] || fail "Source file is missing: $required_path"
+  done
+}
+
+render_service() {
+  local template=$1 destination=$2 contents
+  contents=$(<"$template")
+  contents=${contents//@INSTALL_ROOT@/$INSTALL_ROOT}
+  printf '%s\n' "$contents" > "$destination"
+}
+
+copy_snapshot() {
+  local destination=$1
+  cp -a \
+    "$SOURCE_ROOT/package.json" \
+    "$SOURCE_ROOT/package-lock.json" \
+    "$SOURCE_ROOT/src" \
+    "$SOURCE_ROOT/assets" \
+    "$SOURCE_ROOT/config" \
+    "$SOURCE_ROOT/scripts" \
+    "$SOURCE_ROOT/bin" \
+    "$SOURCE_ROOT/resources" \
+    "$destination/"
+}
+
+install_app() {
+  local start_after_install=1
+  if (($# > 1)); then usage; fi
+  if (($# == 1)); then
+    [[ "$1" == '--no-start' ]] || usage
+    start_after_install=0
+  fi
+
+  require_safe_paths
+  validate_environment
+  validate_source
+
+  local library_parent launcher_directory stage backup
+  library_parent=$(dirname -- "$INSTALL_ROOT")
+  launcher_directory=$(dirname -- "$LAUNCHER_PATH")
+  mkdir -p "$library_parent" "$launcher_directory" "$SERVICE_DIRECTORY" "$CONFIG_DIRECTORY"
+  stage=$(mktemp -d "$library_parent/.${APP_ID}-stage.XXXXXX")
+  backup=$(mktemp -d "$library_parent/.${APP_ID}-backup.XXXXXX")
+
+  local committed=0 mutated=0 config_created=0 had_install=0 had_launcher=0 had_service=0 had_rule=0
+  cleanup_install() {
+    local exit_code=$?
+    set +e
+    if ((committed == 0 && mutated == 1)); then
+      rm -rf -- "$INSTALL_ROOT"
+      [[ -e "$backup/app" ]] && mv -- "$backup/app" "$INSTALL_ROOT"
+      rm -f -- "$LAUNCHER_PATH" "$SERVICE_PATH"
+      [[ -e "$backup/launcher" ]] && mv -- "$backup/launcher" "$LAUNCHER_PATH"
+      [[ -e "$backup/service" ]] && mv -- "$backup/service" "$SERVICE_PATH"
+      if ((config_created == 1)); then rm -f -- "$CONFIG_PATH"; fi
+      if ((had_rule == 1)); then
+        "$SOURCE_ROOT/scripts/kwin-rules.sh" install >/dev/null 2>&1
+      else
+        "$SOURCE_ROOT/scripts/kwin-rules.sh" remove >/dev/null 2>&1
+      fi
+      systemctl --user daemon-reload >/dev/null 2>&1
+    fi
+    [[ -n "${stage:-}" && -d "$stage" ]] && rm -rf -- "$stage"
+    [[ -n "${backup:-}" && -d "$backup" ]] && rm -rf -- "$backup"
+    exit "$exit_code"
+  }
+  trap cleanup_install EXIT
+
+  copy_snapshot "$stage"
+  npm ci --omit=dev --prefix "$stage"
+  [[ -f "$stage/node_modules/electron/package.json" ]] || fail 'Electron dependency was not installed'
+  [[ -x "$stage/node_modules/.bin/electron" ]] || fail 'Electron executable is missing'
+  [[ $(stat -c %s "$stage/assets/161-2.jpeg") -gt 100000 ]] || fail 'Wallpaper image is incomplete'
+
+  if "$SOURCE_ROOT/scripts/kwin-rules.sh" check >/dev/null 2>&1; then had_rule=1; fi
+  if [[ -e "$INSTALL_ROOT" ]]; then mv -- "$INSTALL_ROOT" "$backup/app"; had_install=1; fi
+  if [[ -e "$LAUNCHER_PATH" ]]; then cp -a -- "$LAUNCHER_PATH" "$backup/launcher"; had_launcher=1; fi
+  if [[ -e "$SERVICE_PATH" ]]; then cp -a -- "$SERVICE_PATH" "$backup/service"; had_service=1; fi
+  mutated=1
+
+  mv -- "$stage" "$INSTALL_ROOT"
+  stage=''
+  install -m 755 "$INSTALL_ROOT/bin/$APP_ID" "$LAUNCHER_PATH.tmp.$$"
+  mv -f -- "$LAUNCHER_PATH.tmp.$$" "$LAUNCHER_PATH"
+  render_service "$INSTALL_ROOT/resources/$SERVICE_NAME.in" "$SERVICE_PATH.tmp.$$"
+  chmod 644 "$SERVICE_PATH.tmp.$$"
+  mv -f -- "$SERVICE_PATH.tmp.$$" "$SERVICE_PATH"
+
+  if [[ ! -e "$CONFIG_PATH" ]]; then
+    install -m 644 "$INSTALL_ROOT/config/default.json" "$CONFIG_PATH"
+    config_created=1
+  fi
+
+  "$INSTALL_ROOT/scripts/kwin-rules.sh" install
+  systemctl --user daemon-reload
+  if ((start_after_install == 1)); then
+    systemctl --user enable --now "$SERVICE_NAME"
+  fi
+
+  committed=1
+  rm -rf -- "$backup"
+  backup=''
+  trap - EXIT
+  printf 'Installation complete: %s\n' "$INSTALL_ROOT"
+  if ((start_after_install == 0)); then
+    printf 'Service was not started (--no-start).\n'
+  fi
+}
+
+uninstall_app() {
+  local purge=0
+  if (($# > 1)); then usage; fi
+  if (($# == 1)); then
+    [[ "$1" == '--purge' ]] || usage
+    purge=1
+  fi
+  require_safe_paths
+  require_command systemctl
+
+  systemctl --user disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
+  local rule_helper="$INSTALL_ROOT/scripts/kwin-rules.sh"
+  if [[ ! -x "$rule_helper" ]]; then rule_helper="$SOURCE_ROOT/scripts/kwin-rules.sh"; fi
+  if [[ -x "$rule_helper" ]]; then "$rule_helper" remove || true; fi
+
+  rm -f -- "$SERVICE_PATH" "$LAUNCHER_PATH"
+  rm -rf -- "$INSTALL_ROOT"
+  systemctl --user daemon-reload
+  if ((purge == 1)); then
+    rm -f -- "$CONFIG_PATH"
+    rmdir -- "$CONFIG_DIRECTORY" 2>/dev/null || true
+  fi
+  printf 'Uninstallation complete.\n'
+}
+
+service_command() {
+  local command_name=$1
+  require_command systemctl
+  exec systemctl --user "$command_name" "$SERVICE_NAME"
+}
+
+doctor() {
+  fail 'doctor is not implemented yet'
+}
+
+case "${1:-}" in
+  install) shift; install_app "$@" ;;
+  uninstall) shift; uninstall_app "$@" ;;
+  start|stop|restart|status) command_name=$1; shift; (($# == 0)) || usage; service_command "$command_name" ;;
+  doctor) shift; (($# == 0)) || usage; doctor ;;
+  *) usage ;;
+esac

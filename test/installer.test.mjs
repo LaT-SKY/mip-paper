@@ -1,0 +1,192 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import {
+  access,
+  chmod,
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import test from 'node:test';
+
+const execFileAsync = promisify(execFile);
+const repositoryRoot = path.resolve('.');
+const cli = path.join(repositoryRoot, 'bin', 'animated-ocean-wallpaper');
+
+async function exists(pathname) {
+  try {
+    await access(pathname);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function writeExecutable(pathname, contents) {
+  await writeFile(pathname, contents);
+  await chmod(pathname, 0o755);
+}
+
+async function createFixture() {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-installer-'));
+  const fakeBin = path.join(home, 'fake-bin');
+  const configHome = path.join(home, '.config');
+  const rulesFile = path.join(configHome, 'kwinrulesrc');
+  const systemctlLog = path.join(home, 'systemctl.log');
+  await mkdir(fakeBin, { recursive: true });
+  await mkdir(configHome, { recursive: true });
+  await writeFile(rulesFile, '[General]\ncount=0\nrules=\n');
+  await writeFile(systemctlLog, '');
+
+  await writeExecutable(path.join(fakeBin, 'npm'), `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${FAKE_NPM_FAIL:-0}" == 1 ]]; then exit 42; fi
+prefix=''
+while (($#)); do
+  if [[ "$1" == '--prefix' ]]; then prefix=$2; shift 2; else shift; fi
+done
+mkdir -p "$prefix/node_modules/electron" "$prefix/node_modules/.bin"
+printf '{"name":"electron","version":"43.3.0"}\n' > "$prefix/node_modules/electron/package.json"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$prefix/node_modules/.bin/electron"
+chmod +x "$prefix/node_modules/.bin/electron"
+`);
+
+  await writeExecutable(path.join(fakeBin, 'systemctl'), `#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
+if [[ "\${FAKE_SYSTEMCTL_FAIL_ENABLE:-0}" == 1 && "$*" == *'enable --now'* ]]; then exit 8; fi
+case "$*" in
+  *'is-enabled'*) exit 1 ;;
+  *'is-active'*) exit 1 ;;
+esac
+exit 0
+`);
+
+  const env = {
+    ...process.env,
+    HOME: home,
+    XDG_CONFIG_HOME: configHome,
+    XDG_SESSION_TYPE: 'wayland',
+    XDG_CURRENT_DESKTOP: 'KDE',
+    PATH: `${fakeBin}:${process.env.PATH}`,
+    SYSTEMCTL_LOG: systemctlLog,
+    KWIN_RULES_FILE: rulesFile,
+    KWIN_RULES_NO_RELOAD: '1',
+    ANIMATED_WALLPAPER_SOURCE_ROOT: repositoryRoot,
+  };
+
+  return {
+    home,
+    env,
+    rulesFile,
+    systemctlLog,
+    installRoot: path.join(home, '.local', 'lib', 'animated-ocean-wallpaper'),
+    launcher: path.join(home, '.local', 'bin', 'animated-ocean-wallpaper'),
+    config: path.join(configHome, 'animated-ocean-wallpaper', 'config.json'),
+    service: path.join(configHome, 'systemd', 'user', 'animated-ocean-wallpaper.service'),
+  };
+}
+
+async function runCli(arguments_, fixture, extraEnv = {}) {
+  return execFileAsync(cli, arguments_, {
+    env: { ...fixture.env, ...extraEnv },
+    maxBuffer: 4 * 1024 * 1024,
+  });
+}
+
+async function cleanup(fixture) {
+  await rm(fixture.home, { recursive: true, force: true });
+}
+
+test('install --no-start creates a relocatable snapshot without enabling the service', async () => {
+  const fixture = await createFixture();
+  try {
+    const { stdout } = await runCli(['install', '--no-start'], fixture);
+    assert.match(stdout, /Installation complete/);
+    assert.equal(await exists(path.join(fixture.installRoot, 'src', 'main.mjs')), true);
+    assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'package.json')), true);
+    assert.equal(await exists(fixture.launcher), true);
+    assert.equal(await exists(fixture.config), true);
+    assert.equal(await exists(fixture.service), true);
+    assert.doesNotMatch(await readFile(fixture.service, 'utf8'), new RegExp(repositoryRoot));
+    assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /enable --now/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('install enables and starts the user service by default', async () => {
+  const fixture = await createFixture();
+  try {
+    await runCli(['install'], fixture);
+    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user enable --now animated-ocean-wallpaper\.service/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('repeated install preserves the existing user configuration', async () => {
+  const fixture = await createFixture();
+  try {
+    await runCli(['install', '--no-start'], fixture);
+    const custom = '{"interactionEnabled":false,"frameRate":{"interactive":75}}\n';
+    await writeFile(fixture.config, custom);
+    await runCli(['install', '--no-start'], fixture);
+    assert.equal(await readFile(fixture.config, 'utf8'), custom);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('failed dependency staging leaves the installed snapshot unchanged', async () => {
+  const fixture = await createFixture();
+  try {
+    await runCli(['install', '--no-start'], fixture);
+    const marker = path.join(fixture.installRoot, 'old-version-marker');
+    await writeFile(marker, 'keep');
+    await assert.rejects(runCli(['install', '--no-start'], fixture, { FAKE_NPM_FAIL: '1' }), (error) => {
+      assert.equal(error.code, 42);
+      return true;
+    });
+    assert.equal(await readFile(marker, 'utf8'), 'keep');
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('service lifecycle commands are forwarded to the user service', async () => {
+  const fixture = await createFixture();
+  try {
+    for (const command of ['start', 'stop', 'restart', 'status']) {
+      await runCli([command], fixture);
+    }
+    const log = await readFile(fixture.systemctlLog, 'utf8');
+    for (const command of ['start', 'stop', 'restart', 'status']) {
+      assert.match(log, new RegExp(`--user ${command} animated-ocean-wallpaper\\.service`));
+    }
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('normal uninstall preserves config and purge removes it', async () => {
+  const fixture = await createFixture();
+  try {
+    await runCli(['install', '--no-start'], fixture);
+    await runCli(['uninstall'], fixture);
+    assert.equal(await exists(fixture.installRoot), false);
+    assert.equal(await exists(fixture.launcher), false);
+    assert.equal(await exists(fixture.service), false);
+    assert.equal(await exists(fixture.config), true);
+
+    await runCli(['install', '--no-start'], fixture);
+    await runCli(['uninstall', '--purge'], fixture);
+    assert.equal(await exists(fixture.config), false);
+  } finally {
+    await cleanup(fixture);
+  }
+});
