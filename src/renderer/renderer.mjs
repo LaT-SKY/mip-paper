@@ -109,7 +109,9 @@ async function start() {
         collector.recordDraw(performance.now() - started);
       },
       report: (event) => {
+        if (event.type === 'callback') collector.recordCallback(event.intervalMs);
         if (event.type === 'missed-deadline') collector.recordMissedDeadline();
+        collector.updateContext({ mode: state.mode, targetFrameRate: event.targetFrameRate });
       },
     });
     if (probe.scenario === 'sweep') {

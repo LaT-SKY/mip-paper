@@ -182,10 +182,10 @@ test('late callbacks report a missed deadline', () => {
   const { clock, scheduler, reports } = setup('adaptive');
   clock.runRaf(0);
   clock.runRaf(100);
-  assert.equal(reports.length, 1);
-  assert.equal(reports[0].type, 'missed-deadline');
-  assert.equal(reports[0].targetFrameRate, 60);
-  assert.ok(reports[0].latenessMs > 0);
+  const missed = reports.find((event) => event.type === 'missed-deadline');
+  assert.ok(missed);
+  assert.equal(missed.targetFrameRate, 60);
+  assert.ok(missed.latenessMs > 0);
   scheduler.stop();
 });
 
@@ -204,4 +204,12 @@ test('VSync schedulers do not require timer dependencies', () => {
     () => createScheduler('timer', { ...dependencies, setTimeout: undefined, clearTimeout: undefined }),
     /setTimeout and clearTimeout/,
   );
+});
+
+test('reports actual callback intervals for probe timing percentiles', () => {
+  const { clock, scheduler, reports } = setup('adaptive');
+  clock.runRaf(0);
+  clock.runRaf(16.7);
+  assert.ok(reports.some((event) => event.type === 'callback' && Math.abs(event.intervalMs - 16.7) < 0.01));
+  scheduler.stop();
 });

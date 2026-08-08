@@ -43,3 +43,14 @@ test('rejects invalid summaries and collector samples', () => {
   assert.throws(() => collector.recordDraw(Number.NaN), /finite and non-negative/);
   assert.throws(() => createProbeCollector({ maxSamples: 2049 }), /between 1 and 2048/);
 });
+
+test('updates mode and target frame rate for each summary', () => {
+  const clock = clockFixture();
+  const collector = createProbeCollector({ clock: clock.now });
+  collector.configure({ strategy: 'adaptive', displayId: 1, mode: 'drift', scenario: 'sweep', targetFrameRate: 30 });
+  collector.updateContext({ mode: 'interactive', targetFrameRate: 60 });
+  clock.set(5);
+  const summary = collector.flush();
+  assert.equal(summary.mode, 'interactive');
+  assert.equal(summary.targetFrameRate, 60);
+});

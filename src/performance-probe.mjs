@@ -82,6 +82,13 @@ export function createProbeCollector({ clock = () => performance.now() / 1000, i
   }
   function recordScenario(name) { scenario = name; }
   function recordMissedDeadline() { missedDeadlineCount += 1; }
+  function updateContext(value = {}) {
+    if (value.mode !== undefined) mode = value.mode;
+    if (value.targetFrameRate !== undefined) {
+      finiteNonNegative(value.targetFrameRate, 'targetFrameRate');
+      targetFrameRate = value.targetFrameRate;
+    }
+  }
 
   function flush(force = false) {
     if (startedAt === null) throw new Error('probe collector is not configured');
@@ -99,7 +106,7 @@ export function createProbeCollector({ clock = () => performance.now() / 1000, i
   }
 
   return {
-    configure, recordCallback, recordDraw, recordWork, recordScenario, recordMissedDeadline, flush,
+    configure, updateContext, recordCallback, recordDraw, recordWork, recordScenario, recordMissedDeadline, flush,
   };
 }
 

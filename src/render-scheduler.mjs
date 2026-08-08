@@ -72,6 +72,15 @@ export function createScheduler(name, dependencies = {}) {
 
     options.advance(options.state, elapsedMs / 1000, frameTime / 1000, options.config, options.viewport);
 
+    if (hadPreviousTime) {
+      options.report?.({
+        type: 'callback',
+        intervalMs: elapsedMs,
+        targetFrameRate: rate,
+        timestamp: frameTime,
+      });
+    }
+
     if (hadPreviousTime && elapsedMs > intervalMs + 1e-6) {
       options.report?.({
         type: 'missed-deadline',
