@@ -23,6 +23,11 @@ function geometryMatches(left, right) {
     .every((key) => Math.abs(left[key] - right[key]) <= 1);
 }
 
+function geometryText(rect) {
+  if (!rect) return 'none';
+  return `${rect.x},${rect.y},${rect.width},${rect.height}`;
+}
+
 function projectWindows() {
   return workspace.windowList()
     .filter((window) => window.resourceClass === APP_ID && tracked.has(window));
@@ -51,6 +56,12 @@ function reconcile(reason) {
         continue;
       }
       claims.set(targetOutput.name, window.internalId);
+      console.info(`${LOG_PREFIX} geometry reason=${reason} window=${window.internalId}`
+        + ` target=${geometryText(target.bounds)}`
+        + ` frame=${geometryText(window.frameGeometry)}`
+        + ` geometry=${geometryText(window.geometry)}`
+        + ` output=${window.output ? window.output.name : 'none'}`
+        + ` outputGeometry=${geometryText(targetOutput.geometry)}`);
       if (!window.output || window.output.name !== targetOutput.name) {
         console.info(`${LOG_PREFIX} result=move reason=${reason} window=${window.internalId} target=${targetOutput.name}`);
         workspace.sendClientToScreen(window, targetOutput);

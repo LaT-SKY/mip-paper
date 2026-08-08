@@ -30,7 +30,7 @@
 4. 写入 systemd 用户服务、KWin 壁纸窗口规则和多显示器 coordinator。
 5. 执行 `systemctl --user enable --now`，立即启动并设置登录自启。
 
-KWin 规则负责强制全屏、移除窗口边框，以及桌面层级、任务栏、分页器和 Alt+Tab 隔离。强制全屏会让窗口使用输出的实际边界，避免缩放后的定位偏移和窗口圆角。coordinator 只读取每个 Electron 窗口标题中的目标显示器描述，并把窗口移动到唯一匹配的输出。显示器重连后会创建新的 Electron 窗口，因此该屏幕会从独立的运动状态重新开始。
+KWin 规则负责移除窗口边框，以及桌面层级、任务栏、分页器和 Alt+Tab 隔离。coordinator 读取每个 Electron 窗口标题中的目标显示器描述，并把窗口移动到唯一匹配的输出；KWin 保留每个输出的实际缩放和窗口几何。显示器重连后会创建新的 Electron 窗口，因此该屏幕会从独立的运动状态重新开始。
 
 安装完成后，自动启动状态可以这样确认：
 
@@ -50,7 +50,7 @@ systemctl --user enable --now animated-ocean-wallpaper.service
 ./bin/animated-ocean-wallpaper install --no-start
 ```
 
-修改源码后，必须重新执行 `install`，因为服务运行的是 `~/.local/lib` 中的安装快照，不是仓库目录。重复安装也会更新本项目已有的 KWin 规则，包括强制全屏设置。
+修改源码后，必须重新执行 `install`，因为服务运行的是 `~/.local/lib` 中的安装快照，不是仓库目录。重复安装也会更新本项目已有的 KWin 规则。
 
 ## 启动、停止和查看状态
 
