@@ -1,4 +1,10 @@
 export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
+const APP_ID = 'animated-ocean-wallpaper';
+
+export function formatDisplayTargetTitle(display) {
+  const { x, y, width, height } = display.bounds;
+  return `${APP_ID}|display=${display.id}|bounds=${x},${y},${width},${height}`;
+}
 
 export function createWindowManager({
   BrowserWindow,
@@ -35,7 +41,7 @@ export function createWindowManager({
       y,
       width,
       height,
-      title: 'animated-ocean-wallpaper',
+      title: formatDisplayTargetTitle(display),
       frame: false,
       show: false,
       backgroundColor: '#152229',
@@ -65,6 +71,7 @@ export function createWindowManager({
       bootstrapByWebContents.delete(window.webContents.id);
     });
     await window.loadFile(rendererPath);
+    window.setTitle(formatDisplayTargetTitle(display));
   }
 
   async function reconcile() {
@@ -83,6 +90,7 @@ export function createWindowManager({
         await createDisplayWindow(display);
         continue;
       }
+      window.setTitle(formatDisplayTargetTitle(display));
       window.setBounds(display.bounds);
       bootstrapByWebContents.set(window.webContents.id, { config, display });
     }

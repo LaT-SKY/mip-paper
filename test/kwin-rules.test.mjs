@@ -56,8 +56,8 @@ test('install adds an exact project rule without replacing existing rules', asyn
     assert.equal(await readKey(file, 'rustdesk-autohide', 'Description'), 'Unrelated existing rule');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'wmclass'), 'animated-ocean-wallpaper');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'wmclassmatch'), '1');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'title'), 'animated-ocean-wallpaper');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'titlematch'), '1');
+    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'title', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'titlematch', 'missing'), 'missing');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'below'), 'true');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'skiptaskbar'), 'true');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'skippager'), 'true');
@@ -79,6 +79,26 @@ test('install is idempotent and check detects the project rule', async () => {
     assert.equal(await readKey(file, 'General', 'count'), '2');
     const { stdout } = await runHelper('check', file);
     assert.match(stdout, /KWin rule is installed/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('install removes legacy exact-title matching keys', async () => {
+  const { directory, file } = await fixture();
+  try {
+    await writeFile(file, [
+      '',
+      '[animated-ocean-wallpaper]',
+      'title=animated-ocean-wallpaper',
+      'titlematch=1',
+      '',
+    ].join('\n'), { flag: 'a' });
+
+    await runHelper('install', file);
+
+    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'title', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'titlematch', 'missing'), 'missing');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

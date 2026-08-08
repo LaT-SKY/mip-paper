@@ -3,7 +3,11 @@ import { EventEmitter } from 'node:events';
 import test from 'node:test';
 
 import { DEFAULT_CONFIG } from '../src/config.mjs';
-import { BOOTSTRAP_CHANNEL, createWindowManager } from '../src/window-manager.mjs';
+import {
+  BOOTSTRAP_CHANNEL,
+  createWindowManager,
+  formatDisplayTargetTitle,
+} from '../src/window-manager.mjs';
 
 class FakeWebContents extends EventEmitter {
   static nextId = 1;
@@ -27,6 +31,7 @@ class FakeWindow extends EventEmitter {
     super();
     this.options = options;
     this.bounds = { x: options.x, y: options.y, width: options.width, height: options.height };
+    this.title = options.title;
     this.webContents = new FakeWebContents();
     this.destroyed = false;
     this.ignoreMouse = null;
@@ -37,10 +42,15 @@ class FakeWindow extends EventEmitter {
 
   async loadFile(pathname) {
     this.loadedFile = pathname;
+    this.title = 'animated-ocean-wallpaper';
   }
 
   setBounds(bounds) {
     this.bounds = { ...bounds };
+  }
+
+  setTitle(title) {
+    this.title = title;
   }
 
   setIgnoreMouseEvents(value) {
@@ -60,6 +70,13 @@ class FakeWindow extends EventEmitter {
     this.emit('closed');
   }
 }
+
+test('formats a display target title from its identity and bounds', () => {
+  assert.equal(formatDisplayTargetTitle({
+    id: 22,
+    bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
+  }), 'animated-ocean-wallpaper|display=22|bounds=1920,0,2560,1440');
+});
 
 class FakeScreen extends EventEmitter {
   constructor(displays) {
@@ -138,6 +155,7 @@ test('creates hardened windows for full display bounds', async () => {
     options: { visibleOnFullScreen: true },
   });
   assert.equal(first.loadedFile, '/app/src/renderer/index.html');
+  assert.equal(first.title, 'animated-ocean-wallpaper|display=11|bounds=0,0,1920,1080');
 });
 
 test('provides bootstrap data only to a managed renderer', async () => {
@@ -194,6 +212,18 @@ test('reconciles display add, geometry changes, and removal', async () => {
   displays.splice(1, 1);
   await manager.whenIdle();
   assert.equal(FakeWindow.instances[1].destroyed, true);
+});
+
+test('refreshes the display target title when display metrics change', async () => {
+  const { manager, displays, screen } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+
+  displays[0] = { ...displays[0], bounds: { x: -1600, y: 0, width: 1600, height: 900 } };
+  screen.emit('display-metrics-changed', {}, displays[0], ['bounds']);
+  await manager.whenIdle();
+
+  assert.equal(first.title, 'animated-ocean-wallpaper|display=11|bounds=-1600,0,1600,900');
 });
 
 test('uses configuration to control mouse passthrough', async () => {

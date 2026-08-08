@@ -91,8 +91,8 @@ install_rule() {
   write_key "$RULE_ID" wmclass "$RULE_ID"
   write_key "$RULE_ID" wmclasscomplete false --type bool
   write_key "$RULE_ID" wmclassmatch 1
-  write_key "$RULE_ID" title "$RULE_ID"
-  write_key "$RULE_ID" titlematch 1
+  delete_key "$RULE_ID" title
+  delete_key "$RULE_ID" titlematch
   write_key "$RULE_ID" types 1
   write_key "$RULE_ID" noborder true --type bool
   write_key "$RULE_ID" noborderrule 2
