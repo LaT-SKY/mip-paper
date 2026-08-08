@@ -126,6 +126,22 @@ test('refuses a second window that declares an already claimed output', async ()
   assert.match(logs.join('\n'), /result=duplicate-target/);
 });
 
+test('reassigns a duplicate target when the previous claimant closes', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
+  const target = 'animated-ocean-wallpaper|display=22|bounds=1536,0,1932,1087';
+  const previous = wallpaper('previous', target, secondary);
+  const replacement = wallpaper('replacement', target, primary);
+  const windows = [previous, replacement];
+  const { moves } = await runCoordinator({ outputs: [primary, secondary], windows });
+
+  previous.closed.emit();
+
+  assert.equal(moves.length, 1);
+  assert.equal(moves[0][0], replacement);
+  assert.equal(moves[0][1], secondary);
+});
+
 test('reconciles when the declared output appears', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
   const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });

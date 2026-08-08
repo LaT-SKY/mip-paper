@@ -53,6 +53,16 @@ class FakeWindow extends EventEmitter {
     this.title = title;
   }
 
+  updatePageTitle(title) {
+    let prevented = false;
+    this.emit('page-title-updated', {
+      preventDefault() {
+        prevented = true;
+      },
+    }, title, true);
+    if (!prevented) this.title = title;
+  }
+
   setIgnoreMouseEvents(value) {
     this.ignoreMouse = value;
   }
@@ -224,6 +234,16 @@ test('refreshes the display target title when display metrics change', async () 
   await manager.whenIdle();
 
   assert.equal(first.title, 'animated-ocean-wallpaper|display=11|bounds=-1600,0,1600,900');
+});
+
+test('prevents the renderer page title from replacing the display target', async () => {
+  const { manager } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+
+  first.updatePageTitle('animated-ocean-wallpaper');
+
+  assert.equal(first.title, 'animated-ocean-wallpaper|display=11|bounds=0,0,1920,1080');
 });
 
 test('uses configuration to control mouse passthrough', async () => {

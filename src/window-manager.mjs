@@ -61,6 +61,7 @@ export function createWindowManager({
     });
 
     secureWebContents(window.webContents);
+    window.on('page-title-updated', (event) => event.preventDefault());
     window.setIgnoreMouseEvents(!config.interactionEnabled);
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     window.once('ready-to-show', () => window.showInactive());

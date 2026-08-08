@@ -25,13 +25,13 @@ async function fixture({ invalidConfig = false } = {}) {
   await mkdir(path.join(installRoot, 'src'), { recursive: true });
   await mkdir(path.join(installRoot, 'scripts'), { recursive: true });
   await mkdir(path.join(installRoot, 'assets'), { recursive: true });
-  await mkdir(path.join(installRoot, 'node_modules', '.bin'), { recursive: true });
+  await mkdir(path.join(installRoot, 'node_modules', 'electron', 'dist'), { recursive: true });
   await mkdir(path.join(home, '.local', 'bin'), { recursive: true });
   await mkdir(path.join(configHome, 'animated-ocean-wallpaper'), { recursive: true });
   await mkdir(path.join(configHome, 'systemd', 'user'), { recursive: true });
   await writeFile(path.join(installRoot, 'src', 'main.mjs'), 'export {};\n');
   await writeFile(path.join(installRoot, 'src', 'config.mjs'), "import { readFile } from 'node:fs/promises'; export async function loadConfig(pathname) { return JSON.parse(await readFile(pathname, 'utf8')); }\n");
-  await executable(path.join(installRoot, 'node_modules', '.bin', 'electron'), '#!/usr/bin/env bash\n');
+  await executable(path.join(installRoot, 'node_modules', 'electron', 'dist', 'electron'), '#!/usr/bin/env bash\n');
   await writeFile(path.join(installRoot, 'assets', '161-2.jpeg'), Buffer.alloc(100001));
   await writeFile(path.join(installRoot, 'scripts', 'kwin-rules.sh'), '#!/usr/bin/env bash\nexit 0\n');
   await chmod(path.join(installRoot, 'scripts', 'kwin-rules.sh'), 0o755);

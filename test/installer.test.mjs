@@ -50,10 +50,12 @@ prefix=''
 while (($#)); do
   if [[ "$1" == '--prefix' ]]; then prefix=$2; shift 2; else shift; fi
 done
-mkdir -p "$prefix/node_modules/electron" "$prefix/node_modules/.bin"
+mkdir -p "$prefix/node_modules/electron/dist" "$prefix/node_modules/.bin"
 printf '{"name":"electron","version":"43.3.0"}\n' > "$prefix/node_modules/electron/package.json"
+printf "module.exports = require('path').join(__dirname, 'dist', 'electron');\n" > "$prefix/node_modules/electron/index.js"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$prefix/node_modules/.bin/electron"
-chmod +x "$prefix/node_modules/.bin/electron"
+cp "$prefix/node_modules/.bin/electron" "$prefix/node_modules/electron/dist/electron"
+chmod +x "$prefix/node_modules/.bin/electron" "$prefix/node_modules/electron/dist/electron"
 `);
 
   await writeExecutable(path.join(fakeBin, 'systemctl'), `#!/usr/bin/env bash
@@ -109,10 +111,15 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.match(stdout, /Installation complete/);
     assert.equal(await exists(path.join(fixture.installRoot, 'src', 'main.mjs')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'package.json')), true);
+    assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'dist', 'electron')), true);
     assert.equal(await exists(fixture.launcher), true);
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.service), true);
-    assert.doesNotMatch(await readFile(fixture.service, 'utf8'), new RegExp(repositoryRoot));
+    const service = await readFile(fixture.service, 'utf8');
+    assert.doesNotMatch(service, new RegExp(repositoryRoot));
+    assert.match(service, /ExecStart=.*\/node_modules\/electron\/dist\/electron /);
+    assert.doesNotMatch(service, /node_modules\/\.bin\/electron/);
+    assert.match(service, /KillSignal=SIGKILL/);
     assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /enable --now/);
   } finally {
     await cleanup(fixture);

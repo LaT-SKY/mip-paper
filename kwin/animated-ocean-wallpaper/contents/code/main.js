@@ -24,7 +24,8 @@ function geometryMatches(left, right) {
 }
 
 function projectWindows() {
-  return workspace.windowList().filter((window) => window.resourceClass === APP_ID);
+  return workspace.windowList()
+    .filter((window) => window.resourceClass === APP_ID && tracked.has(window));
 }
 
 function uniqueTargetOutput(target) {
@@ -65,7 +66,10 @@ function track(window) {
   tracked.set(window, true);
   window.captionChanged.connect(() => reconcile('caption-changed'));
   window.outputChanged.connect(() => reconcile('output-changed'));
-  window.closed.connect(() => tracked.delete(window));
+  window.closed.connect(() => {
+    tracked.delete(window);
+    reconcile('window-closed');
+  });
 }
 
 workspace.windowList().forEach(track);

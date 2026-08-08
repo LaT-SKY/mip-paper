@@ -142,8 +142,9 @@ install_app() {
 
   copy_snapshot "$stage"
   npm ci --omit=dev --prefix "$stage"
+  node -e "require(process.argv[1])" "$stage/node_modules/electron" >/dev/null
   [[ -f "$stage/node_modules/electron/package.json" ]] || fail 'Electron dependency was not installed'
-  [[ -x "$stage/node_modules/.bin/electron" ]] || fail 'Electron executable is missing'
+  [[ -x "$stage/node_modules/electron/dist/electron" ]] || fail 'Electron executable is missing'
   [[ $(stat -c %s "$stage/assets/161-2.jpeg") -gt 100000 ]] || fail 'Wallpaper image is incomplete'
 
   if "$SOURCE_ROOT/scripts/kwin-rules.sh" check >/dev/null 2>&1; then had_rule=1; fi
@@ -255,7 +256,7 @@ doctor() {
     check_fail kwin 'KWin 6 is unavailable'
   fi
 
-  if [[ -d "$INSTALL_ROOT" && -f "$INSTALL_ROOT/src/main.mjs" && -x "$INSTALL_ROOT/node_modules/.bin/electron" ]]; then
+  if [[ -d "$INSTALL_ROOT" && -f "$INSTALL_ROOT/src/main.mjs" && -x "$INSTALL_ROOT/node_modules/electron/dist/electron" ]]; then
     check_pass snapshot "$INSTALL_ROOT"
   else
     check_fail snapshot 'installed application snapshot is incomplete'

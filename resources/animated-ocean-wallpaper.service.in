@@ -5,9 +5,10 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=@INSTALL_ROOT@/node_modules/.bin/electron @INSTALL_ROOT@
+ExecStart=@INSTALL_ROOT@/node_modules/electron/dist/electron @INSTALL_ROOT@
 WorkingDirectory=@INSTALL_ROOT@
 Environment=ELECTRON_OZONE_PLATFORM_HINT=auto
+KillSignal=SIGKILL
 Restart=on-failure
 RestartSec=3
 
