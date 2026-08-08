@@ -31,9 +31,9 @@
 
 这与现象消失的假设一致。窗口在 `window-added` 的瞬间可能暂时位于错误 output，但随 `output-changed` 事件收敛到目标 output，最终几何正确。
 
-## 修复
+## 历史 A/B 与最终修复
 
-- KWin 项目规则恢复写入 `fullscreen=true` 和 `fullscreenrule=2`，以避免第三方装饰绘制圆角。
+- KWin 项目规则最终保留 `fullscreen=true` 和 `fullscreenrule=2`，以避免第三方装饰绘制圆角；移除 fullscreen 仅作为诊断用 A/B，不是最终方案。
 - coordinator 在 fullscreen 重叠区域提升右侧输出窗口的 z-index，使副屏壁纸覆盖主屏溢出。
 - coordinator 增加 geometry 诊断日志，记录 target、frame、当前 output 和 output geometry。
 - 后续发现 Wayland 下 Electron 初始位置可能被 KWin 偏移；coordinator 现在先切换到目标 output，再写入目标 `frameGeometry`，并显式设置 `noBorder=true`。
@@ -43,7 +43,7 @@
 
 - KWin rule 测试、完整 Node 测试和 shell 语法检查通过。
 - 当前服务为 `active`。
-- 实际安装配置中的 `fullscreen` 已为 `true`；当前 frame 放大是 KWin fullscreen 在双缩放布局下的已知行为。
+- 实际安装配置中的 `fullscreen` 必须为 `true`；当前 frame 放大是 KWin fullscreen 在双缩放布局下的已知行为，由 coordinator 的输出切换、几何校正和副屏置顶处理。
 - 重载 KWin 脚本后，副屏日志显示目标 frame `1536,0,1932,1086.79`，不再出现此前约 `1785,97` 的偏移；无边框属性已应用。
 
 ## 全屏 A/B 复测
