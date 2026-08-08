@@ -45,3 +45,7 @@
 - 当前服务为 `active`。
 - 实际安装配置中的 `fullscreen` 已为 `false`，最终窗口 frame 与输出 geometry 对齐。
 - 重载 KWin 脚本后，副屏日志显示目标 frame `1536,0,1932,1086.79`，不再出现此前约 `1785,97` 的偏移；无边框属性已应用。
+
+## 全屏 A/B 复测
+
+为处理第三方装饰仍保留的圆角，临时启用了 fullscreen rule。KWin 在当前双缩放布局下将 frame 放大为：主屏 `1567.8x1002`、副屏 `1963.8x1129.2`，即使 coordinator 随后写入目标几何也无法覆盖 fullscreen 的尺寸约束。该模式会重新造成跨屏重叠，因此已撤销 fullscreen keys；当前保留无 fullscreen 的几何校正方案。
