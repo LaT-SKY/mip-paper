@@ -73,9 +73,13 @@ function reconcile(reason) {
         if (!geometryMatches(window.frameGeometry, target.bounds)) {
           window.frameGeometry = target.bounds;
         }
-        if (window.noBorder !== true) {
-          window.noBorder = true;
-        }
+      if (window.noBorder !== true) {
+        window.noBorder = true;
+      }
+      if (targetOutput.geometry.x > 0 && typeof workspace.raiseWindow === 'function') {
+        workspace.raiseWindow(window);
+        console.info(`${LOG_PREFIX} result=raise reason=${reason} window=${window.internalId} output=${targetOutput.name}`);
+      }
       } catch (error) {
         console.info(`${LOG_PREFIX} apply-error window=${window.internalId} error=${error}`);
       }

@@ -96,6 +96,8 @@ install_rule() {
   write_key "$RULE_ID" types 1
   write_key "$RULE_ID" noborder true --type bool
   write_key "$RULE_ID" noborderrule 2
+  write_key "$RULE_ID" fullscreen true --type bool
+  write_key "$RULE_ID" fullscreenrule 2
   write_key "$RULE_ID" below true --type bool
   write_key "$RULE_ID" belowrule 2
   write_key "$RULE_ID" skiptaskbar true --type bool

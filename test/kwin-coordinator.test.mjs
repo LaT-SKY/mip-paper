@@ -35,6 +35,7 @@ function wallpaper(id, title, currentOutput) {
 
 async function runCoordinator({ outputs, windows }) {
   const moves = [];
+  const raises = [];
   const logs = [];
   const workspace = {
     screenOrder: outputs,
@@ -47,10 +48,11 @@ async function runCoordinator({ outputs, windows }) {
       window.output = target;
       window.outputChanged.emit();
     },
+    raiseWindow(window) { raises.push(window); },
   };
   const source = await readFile('kwin/animated-ocean-wallpaper/contents/code/main.js', 'utf8');
   vm.runInNewContext(source, { workspace, console: { info: (line) => logs.push(line) } });
-  return { workspace, moves, logs };
+  return { workspace, moves, raises, logs };
 }
 
 test('moves duplicate-output wallpaper windows to their declared targets', async () => {
@@ -61,13 +63,14 @@ test('moves duplicate-output wallpaper windows to their declared targets', async
     wallpaper('two', 'animated-ocean-wallpaper|display=22|bounds=1536,0,1932,1087', secondary),
   ];
 
-  const { moves } = await runCoordinator({ outputs: [primary, secondary], windows });
+  const { moves, raises } = await runCoordinator({ outputs: [primary, secondary], windows });
 
   assert.equal(moves.length, 1);
   assert.equal(moves[0][0], windows[0]);
   assert.equal(moves[0][1], primary);
   assert.equal(JSON.stringify(windows[0].frameGeometry), JSON.stringify(primary.geometry));
   assert.equal(windows[0].noBorder, true);
+  assert.deepEqual(raises, [windows[1]]);
 });
 
 test('does not move a correctly assigned wallpaper window', async () => {

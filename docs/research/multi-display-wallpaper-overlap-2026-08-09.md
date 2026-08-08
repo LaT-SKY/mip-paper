@@ -33,8 +33,8 @@
 
 ## 修复
 
-- KWin 项目规则不再写入 `fullscreen=true` 和 `fullscreenrule=2`。
-- 卸载/升级流程仍删除遗留 fullscreen keys，避免旧配置继续生效。
+- KWin 项目规则恢复写入 `fullscreen=true` 和 `fullscreenrule=2`，以避免第三方装饰绘制圆角。
+- coordinator 在 fullscreen 重叠区域提升右侧输出窗口的 z-index，使副屏壁纸覆盖主屏溢出。
 - coordinator 增加 geometry 诊断日志，记录 target、frame、当前 output 和 output geometry。
 - 后续发现 Wayland 下 Electron 初始位置可能被 KWin 偏移；coordinator 现在先切换到目标 output，再写入目标 `frameGeometry`，并显式设置 `noBorder=true`。
 - 已更新实际安装快照并重启服务。
@@ -43,9 +43,9 @@
 
 - KWin rule 测试、完整 Node 测试和 shell 语法检查通过。
 - 当前服务为 `active`。
-- 实际安装配置中的 `fullscreen` 已为 `false`，最终窗口 frame 与输出 geometry 对齐。
+- 实际安装配置中的 `fullscreen` 已为 `true`；当前 frame 放大是 KWin fullscreen 在双缩放布局下的已知行为。
 - 重载 KWin 脚本后，副屏日志显示目标 frame `1536,0,1932,1086.79`，不再出现此前约 `1785,97` 的偏移；无边框属性已应用。
 
 ## 全屏 A/B 复测
 
-为处理第三方装饰仍保留的圆角，临时启用了 fullscreen rule。KWin 在当前双缩放布局下将 frame 放大为：主屏 `1567.8x1002`、副屏 `1963.8x1129.2`，即使 coordinator 随后写入目标几何也无法覆盖 fullscreen 的尺寸约束。该模式会重新造成跨屏重叠，因此已撤销 fullscreen keys；当前保留无 fullscreen 的几何校正方案。
+为处理第三方装饰仍保留的圆角，最终采用 fullscreen rule。KWin 在当前双缩放布局下将 frame 放大为：主屏 `1567.8x1002`、副屏 `1963.8x1129.2`。coordinator 在副屏窗口切换到 `HDMI-A-1` 后调用 `workspace.raiseWindow(window)`，以 z-index 覆盖主屏在共享边界处的溢出；需要继续通过实际截图确认覆盖效果。
