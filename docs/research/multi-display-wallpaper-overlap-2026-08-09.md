@@ -36,6 +36,7 @@
 - KWin 项目规则不再写入 `fullscreen=true` 和 `fullscreenrule=2`。
 - 卸载/升级流程仍删除遗留 fullscreen keys，避免旧配置继续生效。
 - coordinator 增加 geometry 诊断日志，记录 target、frame、当前 output 和 output geometry。
+- 后续发现 Wayland 下 Electron 初始位置可能被 KWin 偏移；coordinator 现在先切换到目标 output，再写入目标 `frameGeometry`，并显式设置 `noBorder=true`。
 - 已更新实际安装快照并重启服务。
 
 ## 验证
@@ -43,3 +44,4 @@
 - KWin rule 测试、完整 Node 测试和 shell 语法检查通过。
 - 当前服务为 `active`。
 - 实际安装配置中的 `fullscreen` 已为 `false`，最终窗口 frame 与输出 geometry 对齐。
+- 重载 KWin 脚本后，副屏日志显示目标 frame `1536,0,1932,1086.79`，不再出现此前约 `1785,97` 的偏移；无边框属性已应用。

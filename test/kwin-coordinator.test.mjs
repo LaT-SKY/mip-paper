@@ -25,6 +25,8 @@ function wallpaper(id, title, currentOutput) {
     resourceClass: 'animated-ocean-wallpaper',
     caption: title,
     output: currentOutput,
+    frameGeometry: null,
+    noBorder: false,
     captionChanged: new Signal(),
     outputChanged: new Signal(),
     closed: new Signal(),
@@ -64,6 +66,8 @@ test('moves duplicate-output wallpaper windows to their declared targets', async
   assert.equal(moves.length, 1);
   assert.equal(moves[0][0], windows[0]);
   assert.equal(moves[0][1], primary);
+  assert.equal(JSON.stringify(windows[0].frameGeometry), JSON.stringify(primary.geometry));
+  assert.equal(windows[0].noBorder, true);
 });
 
 test('does not move a correctly assigned wallpaper window', async () => {
@@ -75,6 +79,18 @@ test('does not move a correctly assigned wallpaper window', async () => {
   const { moves } = await runCoordinator({ outputs: [primary], windows });
 
   assert.equal(moves.length, 0);
+});
+
+test('pins wallpaper geometry to the declared output and removes client borders', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const windows = [
+    wallpaper('one', 'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960', primary),
+  ];
+
+  await runCoordinator({ outputs: [primary], windows });
+
+  assert.equal(JSON.stringify(windows[0].frameGeometry), JSON.stringify(primary.geometry));
+  assert.equal(windows[0].noBorder, true);
 });
 
 test('ignores windows outside the project WM class', async () => {

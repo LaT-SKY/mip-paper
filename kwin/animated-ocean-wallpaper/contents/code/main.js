@@ -19,6 +19,7 @@ function parseTarget(caption) {
 }
 
 function geometryMatches(left, right) {
+  if (!left || !right) return false;
   return ['x', 'y', 'width', 'height']
     .every((key) => Math.abs(left[key] - right[key]) <= 1);
 }
@@ -65,6 +66,18 @@ function reconcile(reason) {
       if (!window.output || window.output.name !== targetOutput.name) {
         console.info(`${LOG_PREFIX} result=move reason=${reason} window=${window.internalId} target=${targetOutput.name}`);
         workspace.sendClientToScreen(window, targetOutput);
+      }
+      // Wayland clients cannot reliably position themselves. Move to the
+      // target output first, then pin the frame to its exact geometry.
+      try {
+        if (!geometryMatches(window.frameGeometry, target.bounds)) {
+          window.frameGeometry = target.bounds;
+        }
+        if (window.noBorder !== true) {
+          window.noBorder = true;
+        }
+      } catch (error) {
+        console.info(`${LOG_PREFIX} apply-error window=${window.internalId} error=${error}`);
       }
     }
   } finally {
