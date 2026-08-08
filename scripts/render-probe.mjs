@@ -57,11 +57,44 @@ export function parseSystemdResourceOutput(stdout) {
   };
 }
 
+function parseMetric(value) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '[N/A]') return null;
+  const number = Number(trimmed);
+  return Number.isFinite(number) ? number : null;
+}
+
+export function parseNvidiaSmiOutput(stdout) {
+  return stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => {
+    const [index, name, gpuUtilization, memoryUtilization, memoryUsed, memoryTotal, powerDraw, temperature] = line.split(',');
+    return {
+      index: parseMetric(index),
+      name: name?.trim() || null,
+      utilizationGpuPercent: parseMetric(gpuUtilization),
+      utilizationMemoryPercent: parseMetric(memoryUtilization),
+      memoryUsedMiB: parseMetric(memoryUsed),
+      memoryTotalMiB: parseMetric(memoryTotal),
+      powerDrawW: parseMetric(powerDraw),
+      temperatureC: parseMetric(temperature),
+    };
+  });
+}
+
 async function sampleResource() {
   const { stdout } = await systemctl(
     'show', SERVICE, '--property=CPUUsageNSec', '--property=MemoryCurrent',
   );
-  return { ...parseSystemdResourceOutput(stdout), at: new Date().toISOString() };
+  const resource = { ...parseSystemdResourceOutput(stdout), at: new Date().toISOString() };
+  try {
+    const { stdout: gpuStdout } = await execFileAsync('nvidia-smi', [
+      '--query-gpu=index,name,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw,temperature.gpu',
+      '--format=csv,noheader,nounits',
+    ], { maxBuffer: 2 * 1024 * 1024 });
+    resource.gpu = { provider: 'nvidia-smi', devices: parseNvidiaSmiOutput(gpuStdout) };
+  } catch (error) {
+    resource.gpu = { provider: 'nvidia-smi', devices: [], unavailable: error.code || error.message };
+  }
+  return resource;
 }
 
 export async function runProbe(args = process.argv.slice(2), env = process.env) {
