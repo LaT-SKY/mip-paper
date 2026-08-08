@@ -81,11 +81,63 @@ test('interactive mode draws at 60 FPS', () => {
   scheduler.stop();
 });
 
-test('drift mode skips alternate VSync callbacks at 30 FPS', () => {
+test('adaptive drift mode skips alternate VSync callbacks at 30 FPS', () => {
   const { clock, scheduler, draws } = setup('adaptive', 'drift');
   for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60, 4000 / 60]) clock.runRaf(time);
   assert.equal(draws.length, 3);
   scheduler.stop();
+});
+
+test('raf draws every VSync callback, including drift mode', () => {
+  const { clock, scheduler, draws } = setup('raf', 'drift');
+  for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60]) clock.runRaf(time);
+  assert.equal(draws.length, 4);
+  scheduler.stop();
+});
+
+test('timer routes frames through timers and never requests RAF', () => {
+  const clock = createClock();
+  let rafCalls = 0;
+  const scheduler = createScheduler('timer', {
+    ...clock,
+    requestAnimationFrame() { rafCalls += 1; },
+  });
+  const config = { frameRate: { interactive: 60, drift: 30 } };
+  scheduler.start({
+    state: { mode: 'interactive' },
+    config,
+    viewport: {},
+    advance() {},
+    draw() {},
+  });
+  clock.runTimer(0);
+  assert.equal(rafCalls, 0);
+  assert.equal(clock.queuedTimers(), 1);
+  scheduler.stop();
+});
+
+test('restarting invalidates queued callbacks from the previous run', () => {
+  const first = setup('raf');
+  const draws = [];
+  first.scheduler.start({
+    state: { mode: 'interactive' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    advance() {},
+    draw() { draws.push('new'); },
+  });
+  first.clock.runRaf(0);
+  first.scheduler.start({
+    state: { mode: 'interactive' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    advance() {},
+    draw() { draws.push('restart'); },
+  });
+  first.clock.runRaf(16);
+  first.clock.runRaf(16);
+  assert.deepEqual(draws, ['restart']);
+  first.scheduler.stop();
 });
 
 test('late callbacks report a missed deadline', () => {

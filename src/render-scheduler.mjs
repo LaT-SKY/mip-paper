@@ -33,18 +33,23 @@ export function createScheduler(name, dependencies = {}) {
   let drawAccumulatorMs = 0;
   let firstFrame = true;
   let previousIntervalMs = null;
+  let generation = 0;
 
-  function schedule() {
+  function schedule(runGeneration = generation) {
     if (!running) return;
     if (name === 'timer') {
       const rate = requestedFrameRate(options.state, options.config);
       timerId = timing.setTimeout(() => {
+        if (!running || runGeneration !== generation) return;
         timerId = null;
         handleFrame(timing.now());
       }, 1000 / rate);
       return;
     }
-    timing.requestAnimationFrame(handleFrame);
+    timing.requestAnimationFrame((time) => {
+      if (!running || runGeneration !== generation) return;
+      handleFrame(time);
+    });
   }
 
   function handleFrame(time) {
@@ -73,9 +78,9 @@ export function createScheduler(name, dependencies = {}) {
       });
     }
 
-    let shouldDraw = firstFrame;
+    let shouldDraw = name === 'raf' || firstFrame;
     firstFrame = false;
-    if (!shouldDraw) {
+    if (name !== 'raf' && !shouldDraw) {
       drawAccumulatorMs += elapsedMs;
       if (drawAccumulatorMs + 1e-6 >= intervalMs) {
         shouldDraw = true;
@@ -96,15 +101,24 @@ export function createScheduler(name, dependencies = {}) {
         throw new TypeError('advance and draw must be functions');
       }
       options = startOptions;
+      if (running) {
+        running = false;
+        if (timerId !== null) {
+          timing.clearTimeout(timerId);
+          timerId = null;
+        }
+      }
+      generation += 1;
       running = true;
       previousTime = null;
       drawAccumulatorMs = 0;
       firstFrame = true;
       previousIntervalMs = null;
-      schedule();
+      schedule(generation);
     },
     stop() {
       running = false;
+      generation += 1;
       if (timerId !== null) {
         timing.clearTimeout(timerId);
         timerId = null;
