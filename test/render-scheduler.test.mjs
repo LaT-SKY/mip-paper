@@ -192,3 +192,16 @@ test('late callbacks report a missed deadline', () => {
 test('unknown scheduler names are rejected', () => {
   assert.throws(() => createScheduler('unknown', createClock()), /Unknown scheduler/);
 });
+
+test('VSync schedulers do not require timer dependencies', () => {
+  const dependencies = {
+    now: () => 0,
+    requestAnimationFrame() {},
+  };
+  assert.doesNotThrow(() => createScheduler('raf', dependencies));
+  assert.doesNotThrow(() => createScheduler('adaptive', dependencies));
+  assert.throws(
+    () => createScheduler('timer', { ...dependencies, setTimeout: undefined, clearTimeout: undefined }),
+    /setTimeout and clearTimeout/,
+  );
+});

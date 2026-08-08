@@ -22,7 +22,8 @@ export function createScheduler(name, dependencies = {}) {
   if (name !== 'timer' && typeof timing.requestAnimationFrame !== 'function') {
     throw new TypeError('requestAnimationFrame must be a function');
   }
-  if (typeof timing.setTimeout !== 'function' || typeof timing.clearTimeout !== 'function') {
+  if (name === 'timer'
+    && (typeof timing.setTimeout !== 'function' || typeof timing.clearTimeout !== 'function')) {
     throw new TypeError('setTimeout and clearTimeout must be functions');
   }
 
