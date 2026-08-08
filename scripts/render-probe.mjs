@@ -44,10 +44,24 @@ async function systemctl(...args) {
   return execFileAsync('systemctl', ['--user', ...args], { maxBuffer: 2 * 1024 * 1024 });
 }
 
+export function parseSystemdResourceOutput(stdout) {
+  const values = {};
+  for (const line of stdout.split(/\r?\n/)) {
+    const separator = line.indexOf('=');
+    if (separator < 0) continue;
+    values[line.slice(0, separator)] = Number(line.slice(separator + 1)) || 0;
+  }
+  return {
+    cpuUsageNSec: values.CPUUsageNSec || 0,
+    memoryCurrent: values.MemoryCurrent || 0,
+  };
+}
+
 async function sampleResource() {
-  const { stdout } = await systemctl('show', SERVICE, '--property=CPUUsageNSec,MemoryCurrent', '--value');
-  const values = stdout.trim().split(/\s+/).map(Number);
-  return { cpuUsageNSec: values[0] || 0, memoryCurrent: values[1] || 0, at: new Date().toISOString() };
+  const { stdout } = await systemctl(
+    'show', SERVICE, '--property=CPUUsageNSec', '--property=MemoryCurrent',
+  );
+  return { ...parseSystemdResourceOutput(stdout), at: new Date().toISOString() };
 }
 
 export async function runProbe(args = process.argv.slice(2), env = process.env) {
