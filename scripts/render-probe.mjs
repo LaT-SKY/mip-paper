@@ -9,6 +9,23 @@ const SERVICE = 'animated-ocean-wallpaper.service';
 const STRATEGIES = ['raf', 'timer', 'adaptive'];
 const SCENARIOS = ['idle', 'sweep', 'return'];
 
+export function installSignalCleanup(restore, signals = process, exit = (code) => process.exit(code)) {
+  let cleaning = false;
+  const handler = (code) => {
+    if (cleaning) return;
+    cleaning = true;
+    Promise.resolve(restore()).finally(() => exit(code));
+  };
+  const onTerm = () => handler(143);
+  const onInterrupt = () => handler(130);
+  signals.once('SIGTERM', onTerm);
+  signals.once('SIGINT', onInterrupt);
+  return () => {
+    signals.removeListener('SIGTERM', onTerm);
+    signals.removeListener('SIGINT', onInterrupt);
+  };
+}
+
 function parseArgs(args) {
   const options = { duration: 60, output: path.join(os.tmpdir(), `animated-ocean-probe-${Date.now()}`), strategy: null };
   for (let index = 0; index < args.length; index += 1) {
@@ -46,6 +63,7 @@ export async function runProbe(args = process.argv.slice(2), env = process.env) 
     if (originalActive) await systemctl('restart', SERVICE).catch(() => {});
     else await systemctl('stop', SERVICE).catch(() => {});
   };
+  const removeSignalCleanup = installSignalCleanup(restore);
   const resources = [];
   try {
     for (const strategy of strategies) {
@@ -61,6 +79,7 @@ export async function runProbe(args = process.argv.slice(2), env = process.env) 
     await writeFile(path.join(options.output, 'comparison.md'), '# Rendering probe\n\nRaw renderer metrics are in `renderer.jsonl`; resource samples are in `metrics.json`.\n');
     return options.output;
   } finally {
+    removeSignalCleanup();
     await restore();
   }
 }
