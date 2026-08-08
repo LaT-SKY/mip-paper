@@ -1,4 +1,5 @@
 export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
+export const PROBE_REPORT_CHANNEL = 'wallpaper:report-probe';
 const APP_ID = 'animated-ocean-wallpaper';
 
 export function formatDisplayTargetTitle(display) {
@@ -14,6 +15,8 @@ export function createWindowManager({
   config,
   rendererPath,
   preloadPath,
+  probe = null,
+  onProbeReport = null,
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
@@ -66,7 +69,7 @@ export function createWindowManager({
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     window.once('ready-to-show', () => window.showInactive());
     windows.set(display.id, window);
-    bootstrapByWebContents.set(window.webContents.id, { config, display });
+    bootstrapByWebContents.set(window.webContents.id, { config, display, ...(probe ? { probe } : {}) });
     window.once('closed', () => {
       windows.delete(display.id);
       bootstrapByWebContents.delete(window.webContents.id);
@@ -93,7 +96,7 @@ export function createWindowManager({
       }
       window.setTitle(formatDisplayTargetTitle(display));
       window.setBounds(display.bounds);
-      bootstrapByWebContents.set(window.webContents.id, { config, display });
+      bootstrapByWebContents.set(window.webContents.id, { config, display, ...(probe ? { probe } : {}) });
     }
   }
 
@@ -119,6 +122,12 @@ export function createWindowManager({
       }
       return bootstrap;
     });
+    if (probe && onProbeReport) {
+      ipcMain.handle(PROBE_REPORT_CHANNEL, async (event, summary) => {
+        if (!bootstrapByWebContents.has(event.sender.id)) throw new Error('Unknown wallpaper renderer');
+        return onProbeReport(summary, event.sender.id);
+      });
+    }
     screen.on('display-added', onDisplayAdded);
     screen.on('display-removed', onDisplayRemoved);
     screen.on('display-metrics-changed', onDisplayMetricsChanged);
@@ -134,6 +143,7 @@ export function createWindowManager({
     screen.off('display-removed', onDisplayRemoved);
     screen.off('display-metrics-changed', onDisplayMetricsChanged);
     ipcMain.removeHandler(BOOTSTRAP_CHANNEL);
+    if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);
     for (const window of [...windows.values()]) {
       window.close();
     }

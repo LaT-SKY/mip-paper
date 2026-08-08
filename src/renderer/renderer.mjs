@@ -4,6 +4,8 @@ import {
   createMotionState,
   requestedFrameRate,
 } from '../motion.mjs';
+import { createScheduler } from '../render-scheduler.mjs';
+import { createProbeCollector } from '../performance-probe.mjs';
 
 const canvas = document.getElementById('wallpaper');
 const errorOutput = document.getElementById('error');
@@ -74,12 +76,48 @@ async function loadImage() {
 }
 
 async function start() {
-  const [{ config, display }, image] = await Promise.all([
+  const [bootstrap, image] = await Promise.all([
     window.wallpaper.getBootstrap(),
     loadImage(),
   ]);
+  const { config, display } = bootstrap;
   const viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
   const state = createMotionState(config, viewport, displayPhase(display.id));
+  const probe = bootstrap.probe?.enabled ? bootstrap.probe : null;
+  if (probe) {
+    const collector = createProbeCollector({ clock: () => performance.now() / 1000 });
+    collector.configure({
+      strategy: probe.strategy,
+      displayId: display.id,
+      mode: state.mode,
+      scenario: probe.scenario,
+      targetFrameRate: config.frameRate.interactive,
+    });
+    const scheduler = createScheduler(probe.strategy);
+    scheduler.start({
+      state,
+      config,
+      viewport,
+      advance: (...args) => {
+        const started = performance.now();
+        advanceMotion(...args);
+        collector.recordWork(performance.now() - started);
+      },
+      draw: (...args) => {
+        const started = performance.now();
+        draw(image, ...args);
+        collector.recordDraw(performance.now() - started);
+      },
+      report: (event) => {
+        if (event.type === 'missed-deadline') collector.recordMissedDeadline();
+      },
+    });
+    window.setInterval(() => {
+      const summary = collector.flush();
+      if (summary) void window.wallpaper.reportProbe(summary);
+    }, 1000);
+    return;
+  }
   let previousTime = performance.now();
   let timerId;
   let frameRequested = false;
