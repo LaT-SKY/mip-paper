@@ -13,6 +13,9 @@ readonly CONFIG_DIRECTORY="$CONFIG_HOME/$APP_ID"
 readonly CONFIG_PATH="$CONFIG_DIRECTORY/config.json"
 readonly SERVICE_DIRECTORY="$CONFIG_HOME/systemd/user"
 readonly SERVICE_PATH="$SERVICE_DIRECTORY/$SERVICE_NAME"
+readonly KWIN_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+readonly KWIN_SCRIPT_PATH="$KWIN_DATA_HOME/kwin/scripts/$APP_ID"
+readonly KWIN_CONFIG_PATH="${KWIN_CONFIG_FILE:-$CONFIG_HOME/kwinrc}"
 
 if [[ -n "${ANIMATED_WALLPAPER_SOURCE_ROOT:-}" ]]; then
   SOURCE_ROOT=$ANIMATED_WALLPAPER_SOURCE_ROOT
@@ -71,7 +74,9 @@ validate_source() {
   for required_path in \
     package.json package-lock.json src/main.mjs src/renderer/index.html \
     assets/161-2.jpeg config/default.json scripts/kwin-rules.sh \
-    bin/animated-ocean-wallpaper resources/animated-ocean-wallpaper.service.in; do
+    scripts/kwin-script.sh kwin/$APP_ID/metadata.json \
+    kwin/$APP_ID/contents/code/main.js bin/animated-ocean-wallpaper \
+    resources/animated-ocean-wallpaper.service.in; do
     [[ -e "$SOURCE_ROOT/$required_path" ]] || fail "Source file is missing: $required_path"
   done
 }
@@ -92,6 +97,7 @@ copy_snapshot() {
     "$SOURCE_ROOT/assets" \
     "$SOURCE_ROOT/config" \
     "$SOURCE_ROOT/scripts" \
+    "$SOURCE_ROOT/kwin" \
     "$SOURCE_ROOT/bin" \
     "$SOURCE_ROOT/resources" \
     "$destination/"
@@ -109,28 +115,40 @@ install_app() {
   validate_environment
   validate_source
 
-  local library_parent launcher_directory stage backup
+  library_parent=''
+  launcher_directory=''
+  stage=''
+  backup=''
   library_parent=$(dirname -- "$INSTALL_ROOT")
   launcher_directory=$(dirname -- "$LAUNCHER_PATH")
   mkdir -p "$library_parent" "$launcher_directory" "$SERVICE_DIRECTORY" "$CONFIG_DIRECTORY"
   stage=$(mktemp -d "$library_parent/.${APP_ID}-stage.XXXXXX")
   backup=$(mktemp -d "$library_parent/.${APP_ID}-backup.XXXXXX")
 
-  local committed=0 mutated=0 config_created=0 had_install=0 had_launcher=0 had_service=0 had_rule=0
+  committed=0 mutated=0 kwin_mutated=0 config_created=0 had_install=0 had_launcher=0 had_service=0 had_rule=0
+  had_kwin_package=0 prior_kwin_enabled=false
   cleanup_install() {
     local exit_code=$?
     set +e
-    if ((committed == 0 && mutated == 1)); then
+    if ((${committed:-0} == 0 && ${mutated:-0} == 1)); then
       rm -rf -- "$INSTALL_ROOT"
       [[ -e "$backup/app" ]] && mv -- "$backup/app" "$INSTALL_ROOT"
       rm -f -- "$LAUNCHER_PATH" "$SERVICE_PATH"
       [[ -e "$backup/launcher" ]] && mv -- "$backup/launcher" "$LAUNCHER_PATH"
       [[ -e "$backup/service" ]] && mv -- "$backup/service" "$SERVICE_PATH"
-      if ((config_created == 1)); then rm -f -- "$CONFIG_PATH"; fi
-      if ((had_rule == 1)); then
+      if ((${config_created:-0} == 1)); then rm -f -- "$CONFIG_PATH"; fi
+      if ((${had_rule:-0} == 1)); then
         "$SOURCE_ROOT/scripts/kwin-rules.sh" install >/dev/null 2>&1
       else
         "$SOURCE_ROOT/scripts/kwin-rules.sh" remove >/dev/null 2>&1
+      fi
+      if ((${kwin_mutated:-0} == 1)); then
+        rm -rf -- "$KWIN_SCRIPT_PATH"
+        if ((${had_kwin_package:-0} == 1)); then
+          mv -- "$backup/kwin-script" "$KWIN_SCRIPT_PATH"
+        fi
+        kwriteconfig6 --file "$KWIN_CONFIG_PATH" --group Plugins \
+          --key "${APP_ID}Enabled" --type bool "$prior_kwin_enabled" >/dev/null 2>&1
       fi
       systemctl --user daemon-reload >/dev/null 2>&1
     fi
@@ -151,6 +169,13 @@ install_app() {
   if [[ -e "$INSTALL_ROOT" ]]; then mv -- "$INSTALL_ROOT" "$backup/app"; had_install=1; fi
   if [[ -e "$LAUNCHER_PATH" ]]; then cp -a -- "$LAUNCHER_PATH" "$backup/launcher"; had_launcher=1; fi
   if [[ -e "$SERVICE_PATH" ]]; then cp -a -- "$SERVICE_PATH" "$backup/service"; had_service=1; fi
+  kwin_mutated=1
+  if [[ -e "$KWIN_SCRIPT_PATH" ]]; then
+    mv -- "$KWIN_SCRIPT_PATH" "$backup/kwin-script"
+    had_kwin_package=1
+  fi
+  prior_kwin_enabled=$(kreadconfig6 --file "$KWIN_CONFIG_PATH" --group Plugins \
+    --key "${APP_ID}Enabled" --default false)
   mutated=1
 
   mv -- "$stage" "$INSTALL_ROOT"
@@ -167,6 +192,8 @@ install_app() {
   fi
 
   "$INSTALL_ROOT/scripts/kwin-rules.sh" install
+  KWIN_SCRIPT_SOURCE="$INSTALL_ROOT/kwin/$APP_ID" \
+    "$INSTALL_ROOT/scripts/kwin-script.sh" install
   systemctl --user daemon-reload
   if ((start_after_install == 1)); then
     systemctl --user enable --now "$SERVICE_NAME"
@@ -196,6 +223,20 @@ uninstall_app() {
   local rule_helper="$INSTALL_ROOT/scripts/kwin-rules.sh"
   if [[ ! -x "$rule_helper" ]]; then rule_helper="$SOURCE_ROOT/scripts/kwin-rules.sh"; fi
   if [[ -x "$rule_helper" ]]; then "$rule_helper" remove || true; fi
+  local coordinator_helper="$INSTALL_ROOT/scripts/kwin-script.sh"
+  local coordinator_source="$INSTALL_ROOT/kwin/$APP_ID"
+  if [[ ! -x "$coordinator_helper" ]]; then
+    coordinator_helper="$SOURCE_ROOT/scripts/kwin-script.sh"
+    coordinator_source="$SOURCE_ROOT/kwin/$APP_ID"
+  fi
+  if [[ -x "$coordinator_helper" ]]; then
+    KWIN_SCRIPT_SOURCE="$coordinator_source" "$coordinator_helper" remove || true
+  else
+    rm -rf -- "$KWIN_SCRIPT_PATH"
+    kwriteconfig6 --file "$KWIN_CONFIG_PATH" --group Plugins \
+      --key "${APP_ID}Enabled" --type bool false >/dev/null 2>&1 || true
+  fi
+  rm -rf -- "$KWIN_SCRIPT_PATH"
 
   rm -f -- "$SERVICE_PATH" "$LAUNCHER_PATH"
   rm -rf -- "$INSTALL_ROOT"

@@ -68,6 +68,11 @@ esac
 exit 0
 `);
 
+  await writeExecutable(path.join(fakeBin, 'qdbus6'), `#!/usr/bin/env bash
+if [[ "\${FAKE_QDBUS_FAIL:-0}" == 1 ]]; then exit 9; fi
+exit 0
+`);
+
   const env = {
     ...process.env,
     HOME: home,
@@ -78,6 +83,9 @@ exit 0
     SYSTEMCTL_LOG: systemctlLog,
     KWIN_RULES_FILE: rulesFile,
     KWIN_RULES_NO_RELOAD: '1',
+    XDG_DATA_HOME: path.join(home, '.local', 'share'),
+    KWIN_CONFIG_FILE: path.join(configHome, 'kwinrc'),
+    KWIN_SCRIPT_NO_RELOAD: '1',
     ANIMATED_WALLPAPER_SOURCE_ROOT: repositoryRoot,
   };
 
@@ -90,6 +98,8 @@ exit 0
     launcher: path.join(home, '.local', 'bin', 'animated-ocean-wallpaper'),
     config: path.join(configHome, 'animated-ocean-wallpaper', 'config.json'),
     service: path.join(configHome, 'systemd', 'user', 'animated-ocean-wallpaper.service'),
+    kwinScript: path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper'),
+    kwinrc: path.join(configHome, 'kwinrc'),
   };
 }
 
@@ -115,12 +125,51 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.equal(await exists(fixture.launcher), true);
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.service), true);
+    assert.equal(await exists(path.join(fixture.kwinScript, 'contents', 'code', 'main.js')), true);
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=true/);
     const service = await readFile(fixture.service, 'utf8');
     assert.doesNotMatch(service, new RegExp(repositoryRoot));
     assert.match(service, /ExecStart=.*\/node_modules\/electron\/dist\/electron /);
     assert.doesNotMatch(service, /node_modules\/\.bin\/electron/);
     assert.match(service, /KillSignal=SIGKILL/);
     assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /enable --now/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('uninstall removes only the project KWin package', async () => {
+  const fixture = await createFixture();
+  try {
+    const unrelated = path.join(fixture.home, '.local', 'share', 'kwin', 'scripts', 'unrelated', 'keep');
+    await mkdir(path.dirname(unrelated), { recursive: true });
+    await writeFile(unrelated, 'keep');
+    await runCli(['install', '--no-start'], fixture);
+    await runCli(['uninstall'], fixture);
+    assert.equal(await exists(fixture.kwinScript), false);
+    assert.equal(await readFile(unrelated, 'utf8'), 'keep');
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=false/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('failed KWin activation restores the prior package and enabled state', async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.kwinScript, 'contents', 'code'), { recursive: true });
+    await writeFile(path.join(fixture.kwinScript, 'metadata.json'), 'old-package');
+    await writeFile(path.join(fixture.kwinScript, 'contents', 'code', 'main.js'), 'old-script');
+    await writeFile(fixture.kwinrc, '[Plugins]\nanimated-ocean-wallpaperEnabled=false\nother-scriptEnabled=true\n');
+
+    await assert.rejects(
+      runCli(['install', '--no-start'], fixture, { KWIN_SCRIPT_NO_RELOAD: '0', FAKE_QDBUS_FAIL: '1' }),
+      (error) => error.code !== 0,
+    );
+    assert.equal(await readFile(path.join(fixture.kwinScript, 'metadata.json'), 'utf8'), 'old-package');
+    assert.equal(await readFile(path.join(fixture.kwinScript, 'contents', 'code', 'main.js'), 'utf8'), 'old-script');
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=false/);
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /other-scriptEnabled=true/);
   } finally {
     await cleanup(fixture);
   }
