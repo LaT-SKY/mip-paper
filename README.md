@@ -27,8 +27,10 @@
 1. 将当前源码复制到 `~/.local/lib/animated-ocean-wallpaper/`。
 2. 在安装快照中执行 `npm ci --omit=dev`，准备 Electron 运行时。
 3. 安装命令入口 `~/.local/bin/animated-ocean-wallpaper`。
-4. 写入 systemd 用户服务和 KWin 壁纸窗口规则。
+4. 写入 systemd 用户服务、KWin 壁纸窗口规则和多显示器 coordinator。
 5. 执行 `systemctl --user enable --now`，立即启动并设置登录自启。
+
+KWin 规则只负责桌面层级、任务栏、分页器和 Alt+Tab 隔离；coordinator 读取每个 Electron 窗口标题中的目标显示器描述，并把窗口移动到唯一匹配的输出。显示器重连后会创建新的 Electron 窗口，因此该屏幕会从独立的运动状态重新开始。
 
 安装完成后，自动启动状态可以这样确认：
 
@@ -88,14 +90,20 @@ animated-ocean-wallpaper doctor
 journalctl --user -u animated-ocean-wallpaper.service -n 100 --no-pager
 ```
 
+查看 KWin coordinator 的定位日志：
+
+```bash
+journalctl --user -b --no-pager | grep animated-ocean-coordinator
+```
+
 常见情况：
 
 - `status=203/EXEC`：安装快照缺少 Electron，重新执行 `install`。
 - `Wallpaper failed to start`：查看日志中的配置或 preload 错误，确认安装快照已更新。
-- 服务是 `active` 但桌面没有壁纸：确认 `doctor` 的 `KWin rule` 为 `PASS`，然后执行 `restart`。规则文件是 `~/.config/kwinrulesrc`。
+- 服务是 `active` 但桌面没有壁纸：确认 `doctor` 的 `KWin rule` 和 `KWin coordinator` 都为 `PASS`，然后执行 `restart`。规则文件是 `${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc`。
 - `start` 无任何窗口：这是预期行为；本项目没有普通应用窗口，检查桌面背景和 `systemctl --user is-active`。
 
-`doctor` 会自动检查环境、配置、Electron 快照、服务和 KWin 规则；窗口层级、面板遮挡、鼠标输入、多显示器热插拔、锁屏恢复和资源占用仍需人工确认。
+`doctor` 会自动检查环境、配置、Electron 快照、服务、KWin 规则和 coordinator；窗口层级、面板遮挡、鼠标输入、多显示器热插拔、锁屏恢复和资源占用仍需人工确认。
 
 ## 配置
 

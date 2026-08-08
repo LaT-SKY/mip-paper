@@ -335,6 +335,13 @@ NODE
   else
     check_fail 'KWin rule' 'project rule is missing or invalid'
   fi
+  local coordinator_helper="$INSTALL_ROOT/scripts/kwin-script.sh"
+  if [[ -x "$coordinator_helper" ]] \
+    && KWIN_SCRIPT_SOURCE="$INSTALL_ROOT/kwin/$APP_ID" "$coordinator_helper" check >/dev/null 2>&1; then
+    check_pass 'KWin coordinator' 'display coordinator is installed and enabled'
+  else
+    check_fail 'KWin coordinator' 'display coordinator is missing or disabled'
+  fi
   if [[ -f "$INSTALL_ROOT/assets/161-2.jpeg" ]] && [[ $(stat -c %s "$INSTALL_ROOT/assets/161-2.jpeg") -gt 100000 ]]; then
     check_pass image 'wallpaper image is present'
   else

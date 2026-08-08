@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -15,7 +15,7 @@ async function executable(pathname, contents) {
   await chmod(pathname, 0o755);
 }
 
-async function fixture({ invalidConfig = false } = {}) {
+async function fixture({ invalidConfig = false, coordinator = 'valid' } = {}) {
   const home = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-doctor-'));
   const fakeBin = path.join(home, 'fake-bin');
   const configHome = path.join(home, '.config');
@@ -24,6 +24,7 @@ async function fixture({ invalidConfig = false } = {}) {
   await mkdir(path.join(fakeBin), { recursive: true });
   await mkdir(path.join(installRoot, 'src'), { recursive: true });
   await mkdir(path.join(installRoot, 'scripts'), { recursive: true });
+  await mkdir(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper'), { recursive: true });
   await mkdir(path.join(installRoot, 'assets'), { recursive: true });
   await mkdir(path.join(installRoot, 'node_modules', 'electron', 'dist'), { recursive: true });
   await mkdir(path.join(home, '.local', 'bin'), { recursive: true });
@@ -35,8 +36,20 @@ async function fixture({ invalidConfig = false } = {}) {
   await writeFile(path.join(installRoot, 'assets', '161-2.jpeg'), Buffer.alloc(100001));
   await writeFile(path.join(installRoot, 'scripts', 'kwin-rules.sh'), '#!/usr/bin/env bash\nexit 0\n');
   await chmod(path.join(installRoot, 'scripts', 'kwin-rules.sh'), 0o755);
+  const coordinatorHelper = await readFile(path.join(repositoryRoot, 'scripts', 'kwin-script.sh'), 'utf8');
+  await writeFile(path.join(installRoot, 'scripts', 'kwin-script.sh'), coordinatorHelper);
+  await chmod(path.join(installRoot, 'scripts', 'kwin-script.sh'), 0o755);
+  if (coordinator !== 'missing') {
+    await writeFile(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper', 'metadata.json'), '{}');
+    await mkdir(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper', 'contents', 'code'), { recursive: true });
+    await writeFile(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper', 'contents', 'code', 'main.js'), '{}');
+    await mkdir(path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper', 'contents', 'code'), { recursive: true });
+    await writeFile(path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper', 'metadata.json'), '{}');
+    await writeFile(path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper', 'contents', 'code', 'main.js'), '{}');
+  }
   await writeFile(path.join(configHome, 'animated-ocean-wallpaper', 'config.json'), invalidConfig ? '{broken' : JSON.stringify({ interactionEnabled: true }));
   await writeFile(path.join(configHome, 'systemd', 'user', 'animated-ocean-wallpaper.service'), '[Service]\n');
+  await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nanimated-ocean-wallpaperEnabled=${coordinator === 'valid'}\n`);
   await executable(path.join(home, '.local', 'bin', 'animated-ocean-wallpaper'), '#!/usr/bin/env bash\n');
   await mkdir(path.dirname(rulesFile), { recursive: true });
   await writeFile(rulesFile, '[General]\ncount=1\nrules=animated-ocean-wallpaper\n\n[animated-ocean-wallpaper]\nDescription=Animated Ocean Wallpaper\n');
@@ -67,6 +80,9 @@ exit 0
       ANIMATED_WALLPAPER_INSTALL_ROOT: installRoot,
       KWIN_RULES_FILE: rulesFile,
       KWIN_RULES_NO_RELOAD: '1',
+      XDG_DATA_HOME: path.join(home, '.local', 'share'),
+      KWIN_CONFIG_FILE: path.join(configHome, 'kwinrc'),
+      KWIN_SCRIPT_NO_RELOAD: '1',
     },
   };
 }
@@ -75,12 +91,25 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
   const fixtureData = await fixture();
   try {
     const { stdout } = await execFileAsync(cli, ['doctor'], { env: fixtureData.env });
-    for (const label of ['session', 'desktop', 'snapshot', 'config', 'service', 'KWin rule']) {
+    for (const label of ['session', 'desktop', 'snapshot', 'config', 'service', 'KWin rule', 'KWin coordinator']) {
       assert.match(stdout, new RegExp(`PASS .*${label}`));
     }
     for (const label of ['window stacking', 'panel visibility', 'Alt\\+Tab', 'mouse input', 'multi-display', 'lock/suspend', 'resource usage']) {
       assert.match(stdout, new RegExp(`MANUAL .*${label}`));
     }
+  } finally {
+    await rm(fixtureData.home, { recursive: true, force: true });
+  }
+});
+
+test('doctor reports a missing or disabled KWin coordinator', async () => {
+  const fixtureData = await fixture({ coordinator: 'missing' });
+  try {
+    await assert.rejects(execFileAsync(cli, ['doctor'], { env: fixtureData.env }), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout, /FAIL .*KWin coordinator/);
+      return true;
+    });
   } finally {
     await rm(fixtureData.home, { recursive: true, force: true });
   }
