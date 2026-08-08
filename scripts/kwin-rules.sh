@@ -7,6 +7,8 @@ readonly RULE_DESCRIPTION='Animated Ocean Wallpaper'
 config_args=()
 if [[ -n "${KWIN_RULES_FILE:-}" ]]; then
   config_args+=(--file "$KWIN_RULES_FILE")
+else
+  config_args+=(--file "${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc")
 fi
 
 require_commands() {

@@ -209,7 +209,13 @@ uninstall_app() {
 service_command() {
   local command_name=$1
   require_command systemctl
-  exec systemctl --user "$command_name" "$SERVICE_NAME"
+  systemctl --user "$command_name" "$SERVICE_NAME"
+  case "$command_name" in
+    start|restart)
+      printf 'Wallpaper service %s requested: %s\n' "$command_name" "$SERVICE_NAME"
+      printf 'The wallpaper runs in the desktop background; no application window is opened.\n'
+      ;;
+  esac
 }
 
 doctor() {

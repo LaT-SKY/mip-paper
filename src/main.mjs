@@ -32,7 +32,7 @@ async function run() {
     defaultSession: session.defaultSession,
     config,
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
-    preloadPath: path.join(sourceDirectory, 'preload.mjs'),
+    preloadPath: path.join(sourceDirectory, 'preload.cjs'),
   });
   await manager.start();
 }

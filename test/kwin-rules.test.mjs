@@ -113,3 +113,21 @@ test('check fails when the project rule is absent', async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('uses the user kwinrulesrc file when no override is configured', async () => {
+  const { directory, file } = await fixture();
+  try {
+    const { KWIN_RULES_FILE: _ignored, ...baseEnv } = process.env;
+    await execFileAsync(helper, ['install'], {
+      env: {
+        ...baseEnv,
+        HOME: directory,
+        XDG_CONFIG_HOME: directory,
+        KWIN_RULES_NO_RELOAD: '1',
+      },
+    });
+    assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide,animated-ocean-wallpaper');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

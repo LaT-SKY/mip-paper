@@ -173,6 +173,16 @@ test('service lifecycle commands are forwarded to the user service', async () =>
   }
 });
 
+test('start confirms that the background wallpaper service was requested', async () => {
+  const fixture = await createFixture();
+  try {
+    const { stdout } = await runCli(['start'], fixture);
+    assert.match(stdout, /Wallpaper service start requested/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
 test('normal uninstall preserves config and purge removes it', async () => {
   const fixture = await createFixture();
   try {
