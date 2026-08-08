@@ -40,5 +40,5 @@ test('renderer consumes the motion core and read-only preload bootstrap', async 
   assert.match(script, /window\.wallpaper\.getBootstrap\(\)/);
   assert.match(script, /applyPointerSample/);
   assert.match(script, /advanceMotion/);
-  assert.match(script, /requestedFrameRate/);
+  assert.match(script, /createScheduler\('adaptive'\)/);
 });

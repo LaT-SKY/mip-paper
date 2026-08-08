@@ -2,7 +2,6 @@ import {
   advanceMotion,
   applyPointerSample,
   createMotionState,
-  requestedFrameRate,
 } from '../motion.mjs';
 import { createScheduler } from '../render-scheduler.mjs';
 import { createProbeCollector } from '../performance-probe.mjs';
@@ -134,30 +133,14 @@ async function start() {
     }, 1000);
     return;
   }
-  let previousTime = performance.now();
-  let timerId;
-  let frameRequested = false;
-
-  function requestNextFrame(immediate = false) {
-    if (frameRequested) {
-      return;
-    }
-    frameRequested = true;
-    const delay = immediate ? 0 : Math.max(0, 1000 / requestedFrameRate(state, config) - 2);
-    timerId = window.setTimeout(() => {
-      requestAnimationFrame(frame);
-    }, delay);
-  }
-
-  function frame(time) {
-    frameRequested = false;
-    const elapsed = Math.max(0, (time - previousTime) / 1000);
-    previousTime = time;
-    resizeCanvas(viewport);
-    advanceMotion(state, elapsed, time / 1000, config, viewport);
-    draw(image, state, viewport);
-    requestNextFrame();
-  }
+  const scheduler = createScheduler('adaptive');
+  scheduler.start({
+    state,
+    config,
+    viewport,
+    advance: advanceMotion,
+    draw: (nextState, nextViewport) => draw(image, nextState, nextViewport),
+  });
 
   canvas.addEventListener('pointermove', (event) => {
     const rect = canvas.getBoundingClientRect();
@@ -170,9 +153,6 @@ async function start() {
       viewport,
     );
     if (accepted && state.mode === 'drift') {
-      window.clearTimeout(timerId);
-      frameRequested = false;
-      requestNextFrame(true);
     }
   });
 
@@ -181,7 +161,6 @@ async function start() {
     state.pointer.lastInput = -Infinity;
   });
 
-  requestNextFrame(true);
 }
 
 start().catch(showError);
