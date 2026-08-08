@@ -158,4 +158,16 @@ npm run check
 bash -n bin/animated-ocean-wallpaper scripts/kwin-rules.sh scripts/kwin-script.sh
 ```
 
+## 渲染性能 Probe
+
+在目标 Plasma Wayland 双屏会话中，可显式运行三种渲染调度策略的对比实验：
+
+```bash
+animated-ocean-wallpaper probe --duration 60
+```
+
+命令会为 `raf`、`timer` 和 `adaptive` 分别执行待机、持续交互和交互回归场景，输出目录默认位于系统临时目录，也可通过 `--output` 指定。每个场景应先预热 30 秒，再采样 60 秒；`--duration` 用于调整采样时长。实验不会自动修改默认策略，结束后会恢复服务原状态。
+
+交互场景要求有效绘制 FPS 不低于 57、回调间隔 p95 不超过 20 ms；漂移场景要求有效绘制 FPS 不低于 28.5、回调间隔 p95 不超过 40 ms。GPU 指标在本机没有兼容采集工具时会标记为 unavailable，不影响其他指标。
+
 项目设计和研究资料位于 `docs/`。

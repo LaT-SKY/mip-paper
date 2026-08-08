@@ -38,6 +38,7 @@ Commands:
   restart               Restart the user service
   status                Show the user service status
   doctor                Diagnose the installation and Plasma integration
+  probe [OPTION]        Compare renderer scheduling strategies on the live desktop
 EOF
   exit 2
 }
@@ -364,5 +365,6 @@ case "${1:-}" in
   uninstall) shift; uninstall_app "$@" ;;
   start|stop|restart|status) command_name=$1; shift; (($# == 0)) || usage; service_command "$command_name" ;;
   doctor) shift; (($# == 0)) || usage; doctor ;;
+  probe) shift; exec node "$SOURCE_ROOT/scripts/render-probe.mjs" "$@" ;;
   *) usage ;;
 esac
