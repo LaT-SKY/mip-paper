@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -41,7 +41,6 @@ export async function runProbe(args = process.argv.slice(2), env = process.env) 
   const metadataPath = path.join(options.output, 'metadata.json');
   await writeFile(metadataPath, `${JSON.stringify({ strategies, scenarios: SCENARIOS, duration: options.duration, electron: '43.3.0', machine: os.hostname(), session: env.XDG_SESSION_TYPE || 'unknown' }, null, 2)}\n`);
   const originalActive = (await systemctl('is-active', SERVICE).then(() => true).catch(() => false));
-  const originalEnabled = (await systemctl('is-enabled', SERVICE).then(() => true).catch(() => false));
   const restore = async () => {
     await systemctl('unset-environment', 'ANIMATED_WALLPAPER_PROBE_STRATEGY', 'ANIMATED_WALLPAPER_PROBE_SCENARIO', 'ANIMATED_WALLPAPER_PROBE_RESULT').catch(() => {});
     if (originalActive) await systemctl('restart', SERVICE).catch(() => {});
@@ -53,6 +52,7 @@ export async function runProbe(args = process.argv.slice(2), env = process.env) 
       for (const scenario of SCENARIOS) {
         await systemctl('set-environment', `ANIMATED_WALLPAPER_PROBE_STRATEGY=${strategy}`, `ANIMATED_WALLPAPER_PROBE_SCENARIO=${scenario}`, `ANIMATED_WALLPAPER_PROBE_RESULT=${rawPath}`);
         await systemctl('restart', SERVICE);
+        await new Promise((resolve) => setTimeout(resolve, 30 * 1000));
         await new Promise((resolve) => setTimeout(resolve, options.duration * 1000));
         resources.push({ strategy, scenario, resource: await sampleResource() });
       }

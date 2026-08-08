@@ -112,6 +112,20 @@ async function start() {
         if (event.type === 'missed-deadline') collector.recordMissedDeadline();
       },
     });
+    if (probe.scenario === 'sweep') {
+      let phase = 0;
+      window.setInterval(() => {
+        phase += 0.08;
+        applyPointerSample(
+          state.pointer,
+          (Math.sin(phase) * 0.45 + 0.5) * viewport.width,
+          (Math.cos(phase * 0.71) * 0.45 + 0.5) * viewport.height,
+          performance.now() / 1000,
+          config.motion.deadZonePx,
+          viewport,
+        );
+      }, 16);
+    }
     window.setInterval(() => {
       const summary = collector.flush();
       if (summary) void window.wallpaper.reportProbe(summary);
