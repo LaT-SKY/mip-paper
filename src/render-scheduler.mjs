@@ -33,6 +33,7 @@ export function createScheduler(name, dependencies = {}) {
   let drawAccumulatorMs = 0;
   let firstFrame = true;
   let previousIntervalMs = null;
+  let nextDeadlineMs = null;
   let generation = 0;
 
   function schedule(runGeneration = generation) {
@@ -64,6 +65,7 @@ export function createScheduler(name, dependencies = {}) {
     if (previousIntervalMs !== intervalMs) {
       drawAccumulatorMs = 0;
       firstFrame = true;
+      nextDeadlineMs = null;
       previousIntervalMs = intervalMs;
     }
 
@@ -78,9 +80,15 @@ export function createScheduler(name, dependencies = {}) {
       });
     }
 
-    let shouldDraw = name === 'raf' || firstFrame;
+    let shouldDraw = firstFrame;
     firstFrame = false;
-    if (name !== 'raf' && !shouldDraw) {
+    if (name === 'raf') {
+      if (nextDeadlineMs === null) nextDeadlineMs = frameTime + intervalMs;
+      if (!shouldDraw && frameTime + 1e-6 >= nextDeadlineMs) {
+        shouldDraw = true;
+        nextDeadlineMs = frameTime + intervalMs;
+      }
+    } else if (!shouldDraw) {
       drawAccumulatorMs += elapsedMs;
       if (drawAccumulatorMs + 1e-6 >= intervalMs) {
         shouldDraw = true;
@@ -114,6 +122,7 @@ export function createScheduler(name, dependencies = {}) {
       drawAccumulatorMs = 0;
       firstFrame = true;
       previousIntervalMs = null;
+      nextDeadlineMs = null;
       schedule(generation);
     },
     stop() {

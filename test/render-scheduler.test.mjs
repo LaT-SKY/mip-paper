@@ -88,11 +88,24 @@ test('adaptive drift mode skips alternate VSync callbacks at 30 FPS', () => {
   scheduler.stop();
 });
 
-test('raf draws every VSync callback, including drift mode', () => {
+test('raf honors the 30 FPS drift deadline', () => {
   const { clock, scheduler, draws } = setup('raf', 'drift');
   for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60]) clock.runRaf(time);
-  assert.equal(draws.length, 4);
+  assert.equal(draws.length, 2);
   scheduler.stop();
+});
+
+test('adaptive carries a late callback deadline while raf resets its fixed deadline', () => {
+  const raf = setup('raf', 'drift');
+  const adaptive = setup('adaptive', 'drift');
+  for (const time of [0, 100, 110]) {
+    raf.clock.runRaf(time);
+    adaptive.clock.runRaf(time);
+  }
+  assert.equal(raf.draws.length, 2);
+  assert.equal(adaptive.draws.length, 3);
+  raf.scheduler.stop();
+  adaptive.scheduler.stop();
 });
 
 test('timer routes frames through timers and never requests RAF', () => {
@@ -114,6 +127,31 @@ test('timer routes frames through timers and never requests RAF', () => {
   assert.equal(rafCalls, 0);
   assert.equal(clock.queuedTimers(), 1);
   scheduler.stop();
+});
+
+test('raf and adaptive route frames through RAF and never timers', () => {
+  for (const name of ['raf', 'adaptive']) {
+    const clock = createClock();
+    const scheduler = createScheduler(name, clock);
+    scheduler.start({
+      state: { mode: 'interactive' },
+      config: { frameRate: { interactive: 60, drift: 30 } },
+      viewport: {},
+      advance() {},
+      draw() {},
+    });
+    assert.equal(clock.queuedRaf(), 1);
+    assert.equal(clock.queuedTimers(), 0);
+    scheduler.stop();
+  }
+});
+
+test('stop makes queued RAF callbacks inert', () => {
+  const run = setup('raf');
+  run.scheduler.stop();
+  run.clock.runRaf(0);
+  assert.equal(run.advances.length, 0);
+  assert.equal(run.draws.length, 0);
 });
 
 test('restarting invalidates queued callbacks from the previous run', () => {
