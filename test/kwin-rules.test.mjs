@@ -64,6 +64,8 @@ test('install adds an exact project rule without replacing existing rules', asyn
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'skipswitcher'), 'true');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'acceptfocus'), 'false');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'noborder'), 'true');
+    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'fullscreen'), 'true');
+    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'fullscreenrule'), '2');
     assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'desktops'), '*');
   } finally {
     await rm(directory, { recursive: true, force: true });

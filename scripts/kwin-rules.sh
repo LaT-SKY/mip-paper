@@ -96,6 +96,8 @@ install_rule() {
   write_key "$RULE_ID" types 1
   write_key "$RULE_ID" noborder true --type bool
   write_key "$RULE_ID" noborderrule 2
+  write_key "$RULE_ID" fullscreen true --type bool
+  write_key "$RULE_ID" fullscreenrule 2
   write_key "$RULE_ID" below true --type bool
   write_key "$RULE_ID" belowrule 2
   write_key "$RULE_ID" skiptaskbar true --type bool
@@ -127,7 +129,8 @@ remove_rule() {
   local key
   for key in \
     Description wmclass wmclasscomplete wmclassmatch title titlematch types \
-    noborder noborderrule below belowrule skiptaskbar skiptaskbarrule \
+    noborder noborderrule fullscreen fullscreenrule below belowrule \
+    skiptaskbar skiptaskbarrule \
     skippager skippagerrule skipswitcher skipswitcherrule acceptfocus \
     acceptfocusrule desktops desktopsrule; do
     delete_key "$RULE_ID" "$key"
