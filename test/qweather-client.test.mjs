@@ -13,7 +13,12 @@ test('uses header authentication and normalizes current weather', async () => {
     credentials: { apiHost: 'weather.example.com', apiKey: 'secret' },
     fetch: async (url, options) => {
       calls.push({ url, options });
-      return response({ code: '200', current: { temperature: 31, condition: { text: 'Cloudy', icon: '101' }, humidity: 70 } });
+      return response({
+        metadata: { tag: 'test', attributions: ['QWeather'] },
+        condition: { text: 'Cloudy', code: '101', icon: '101' },
+        temperature: { value: 31, unit: 'celsius' },
+        humidity: 0.7,
+      });
     },
   });
   assert.deepEqual(await client.fetchCurrent({ latitude: 23.1, longitude: 113.2 }), {
@@ -28,7 +33,15 @@ test('normalizes daily, tide and fallback location responses', async () => {
   const client = createQWeatherClient({
     credentials: { apiHost: 'weather.example.com', apiKey: 'secret' },
     fetch: async (url) => {
-      if (url.includes('/daily/')) return response({ daily: [{ fxDate: '2026-08-09', tempMax: '33', tempMin: '26', textDay: 'Rain' }] });
+      if (url.includes('/daily/')) return response({
+        metadata: { tag: 'test', attributions: ['QWeather'] },
+        days: [{
+          forecastStartTime: '2026-08-09T00:00+08:00',
+          temperatureMax: { value: 33, unit: 'celsius' },
+          temperatureMin: { value: 26, unit: 'celsius' },
+          daytime: { condition: { text: 'Rain', icon: '305' } },
+        }],
+      });
       if (url.includes('/ocean/tide')) return response({ tideTable: [{ fxTime: '2026-08-09T04:00+08:00', height: '2.4', type: 'H' }] });
       return response({ location: [{ id: '101281601', lat: '23.02', lon: '113.75' }] });
     },

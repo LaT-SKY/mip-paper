@@ -11,6 +11,12 @@ function numeric(value) {
   return Number.isFinite(result) ? result : null;
 }
 
+function percentage(value) {
+  const result = numeric(value);
+  if (result === null) return null;
+  return result >= 0 && result <= 1 ? Math.round(result * 100) : result;
+}
+
 export function createQWeatherClient({ credentials, fetch: fetchImpl = globalThis.fetch, timeoutMs = 8000 }) {
   if (!/^[a-z0-9.-]+$/i.test(credentials?.apiHost ?? '')) throw new TypeError('Invalid weather apiHost');
   if (typeof credentials?.apiKey !== 'string' || !credentials.apiKey) throw new TypeError('Invalid weather apiKey');
@@ -48,27 +54,27 @@ export function createQWeatherClient({ credentials, fetch: fetchImpl = globalThi
     },
     async fetchCurrent({ latitude, longitude }) {
       const body = await request(`/weather/v1/current/${encodeURIComponent(latitude)}/${encodeURIComponent(longitude)}`);
-      const current = body.current ?? body.now;
+      const current = body.current ?? body.now ?? body;
       const condition = current?.condition?.text ?? current?.text;
-      const temperature = numeric(current?.temperature ?? current?.temp);
+      const temperature = numeric(current?.temperature?.value ?? current?.temperature ?? current?.temp);
       if (temperature === null || typeof condition !== 'string') throw new QWeatherError('INVALID_RESPONSE');
       return {
         temperature,
         condition,
         icon: String(current.condition?.icon ?? current.icon ?? ''),
-        humidity: numeric(current.humidity),
+        humidity: percentage(current.humidity),
       };
     },
     async fetchDaily({ latitude, longitude }) {
       const body = await request(`/weather/v1/daily/${encodeURIComponent(latitude)}/${encodeURIComponent(longitude)}`);
-      const rows = body.daily ?? body.dailyForecast;
+      const rows = body.days ?? body.daily ?? body.dailyForecast;
       if (!Array.isArray(rows)) throw new QWeatherError('INVALID_RESPONSE');
       return rows.map((row) => ({
-        date: row.fxDate ?? row.date,
-        temperatureMax: numeric(row.tempMax ?? row.temperatureMax),
-        temperatureMin: numeric(row.tempMin ?? row.temperatureMin),
-        condition: row.textDay ?? row.condition?.text ?? '',
-        icon: String(row.iconDay ?? row.condition?.icon ?? ''),
+        date: row.forecastStartTime?.slice(0, 10) ?? row.fxDate ?? row.date,
+        temperatureMax: numeric(row.temperatureMax?.value ?? row.tempMax ?? row.temperatureMax),
+        temperatureMin: numeric(row.temperatureMin?.value ?? row.tempMin ?? row.temperatureMin),
+        condition: row.daytime?.condition?.text ?? row.textDay ?? row.condition?.text ?? '',
+        icon: String(row.daytime?.condition?.icon ?? row.iconDay ?? row.condition?.icon ?? ''),
       }));
     },
     async fetchTide({ stationId, date }) {
