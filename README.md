@@ -11,7 +11,17 @@
 - Node.js、npm、Electron 43.3.0
 - `systemd --user`
 - `kreadconfig6`、`kwriteconfig6`
+- PipeWire、WirePlumber、`pw-cat`、`pw-metadata`
 - GeoClue（自动定位时需要）
+
+Arch Linux 安装音频依赖：
+
+```bash
+sudo pacman -S pipewire pipewire-audio wireplumber
+```
+
+其他发行版需要提供 PipeWire 和 WirePlumber，并确保 `pw-cat`、`pw-metadata` 可在
+当前图形会话的 `PATH` 中执行。音频可视化不可用时，壁纸和信息面板仍会正常运行。
 
 Arch Linux 安装并启动 GeoClue：
 
@@ -113,6 +123,8 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 
 - `status=203/EXEC`：安装快照缺少 Electron，重新执行 `install`。
 - `Wallpaper failed to start`：查看日志中的配置或 preload 错误，确认安装快照已更新。
+- 音频声带不显示：运行 `animated-ocean-wallpaper doctor`，确认 `command:pw-cat`、
+  `command:pw-metadata` 和 `audio-output` 均为 `PASS`，再检查当前默认输出设备。
 - 服务是 `active` 但桌面没有壁纸：确认 `doctor` 的 `KWin rule` 和 `KWin coordinator` 都为 `PASS`，然后执行 `restart`。规则文件是 `${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc`。
 - `start` 无任何窗口：这是预期行为；本项目没有普通应用窗口，检查桌面背景和 `systemctl --user is-active`。
 
@@ -125,6 +137,13 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 ```json
 {
   "interactionEnabled": true,
+  "audio": {
+    "enabled": true,
+    "gain": 1,
+    "silenceDelayMs": 600,
+    "fadeOutMs": 450,
+    "fadeInMs": 160
+  },
   "frameRate": { "interactive": 60, "drift": 30 },
   "motion": {
     "interactionSpeed": 1.15,
@@ -155,6 +174,18 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 }
 ```
 
+音频可视化自动跟随 PipeWire 的当前默认输出设备。悬浮声带的白色上曲线表示左声道，
+粉色下曲线表示右声道，青色中线表示左右声道逐频段合成的合并频谱。三条曲线直接透明
+悬浮在壁纸上，没有磨砂背景、边框或阴影。应用不会采集麦克风，也不会录制或保存 PCM 音频；
+原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、
+IPC 或 renderer。
+
+`audio.gain` 范围为 `0.25–4`。静音等待 `silenceDelayMs` 范围为 `0–5000 ms`，淡出
+`fadeOutMs` 和淡入 `fadeInMs` 的范围均为 `0–3000 ms`；时长 `0` 表示立即完成。
+`audio` 字段会实时热加载，无需重启壁纸服务。修改 `enabled` 会安全启动或停止采集，
+修改增益和三个时序值不会重启采集进程。已知 audio 字段的错误类型或越界数值会回退
+到默认值，未知字段仍会被拒绝。
+
 天气凭据与普通配置分开保存在 `~/.config/animated-ocean-wallpaper/weather-credentials.json`。安装器首次创建该文件并设置为 `0600`；重复安装和普通卸载会保留它，只有 `uninstall --purge` 会删除。第三期暂时需要手工填写：
 
 ```json
@@ -170,13 +201,14 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 
 实时天气每 30 分钟刷新，预报和潮汐每 6 小时刷新。缓存 6 小时内标记为 fresh，6 至 24 小时标记为 stale，超过 24 小时显示 unavailable。天气数据由和风天气提供。天气状态使用本地依赖 `qweather-icons@1.8.0` 映射为和风天气图标；其代码采用 MIT License，图标采用 CC BY 4.0 License。
 
-修改后执行：
+天气、面板、运动等其他配置修改后仍需重启服务：
 
 ```bash
 animated-ocean-wallpaper restart
 ```
 
-未知字段、错误类型或超出限制的数值会阻止启动，并在 service 日志中报告原因。普通配置或凭据修改后都需要重启服务。
+非 audio 配置中的未知字段、错误类型或超出限制的数值会阻止启动，并在 service 日志中
+报告原因。天气凭据修改后也需要重启服务。
 
 ## 卸载
 

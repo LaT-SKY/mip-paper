@@ -51,8 +51,9 @@ prefix=''
 while (($#)); do
   if [[ "$1" == '--prefix' ]]; then prefix=$2; shift 2; else shift; fi
 done
-mkdir -p "$prefix/node_modules/electron/dist" "$prefix/node_modules/.bin"
+mkdir -p "$prefix/node_modules/electron/dist" "$prefix/node_modules/fft.js" "$prefix/node_modules/.bin"
 printf '{"name":"electron","version":"43.3.0"}\n' > "$prefix/node_modules/electron/package.json"
+printf '{"name":"fft.js","version":"4.0.4"}\n' > "$prefix/node_modules/fft.js/package.json"
 printf "module.exports = require('path').join(__dirname, 'dist', 'electron');\n" > "$prefix/node_modules/electron/index.js"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$prefix/node_modules/.bin/electron"
 cp "$prefix/node_modules/.bin/electron" "$prefix/node_modules/electron/dist/electron"
@@ -124,12 +125,32 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.equal(await exists(path.join(fixture.installRoot, 'src', 'main.mjs')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'package.json')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'dist', 'electron')), true);
+    assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'fft.js', 'package.json')), true);
     assert.equal(await exists(fixture.launcher), true);
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.credentials), true);
     assert.equal((await stat(fixture.credentials)).mode & 0o777, 0o600);
     assert.equal(await exists(fixture.service), true);
     assert.equal(await exists(path.join(fixture.kwinScript, 'contents', 'code', 'main.js')), true);
+    for (const pathname of [
+      'src/audio-pcm.mjs',
+      'src/audio-analyzer.mjs',
+      'src/pipewire-audio.mjs',
+      'src/audio-spectrum-service.mjs',
+      'src/config-watcher.mjs',
+      'src/renderer/audio-ribbon.mjs',
+      'scripts/audio-probe.mjs',
+    ]) {
+      assert.equal(await exists(path.join(fixture.installRoot, pathname)), true, `missing ${pathname}`);
+    }
+    const installedConfig = JSON.parse(await readFile(fixture.config, 'utf8'));
+    assert.deepEqual(installedConfig.audio, {
+      enabled: true,
+      gain: 1,
+      silenceDelayMs: 600,
+      fadeOutMs: 450,
+      fadeInMs: 160,
+    });
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=true/);
     const service = await readFile(fixture.service, 'utf8');
     assert.doesNotMatch(service, new RegExp(repositoryRoot));
