@@ -80,11 +80,6 @@
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  border-top: 1px solid rgba(240, 255, 255, 0.34);
-  border-bottom: 1px solid rgba(43, 211, 207, 0.22);
-  background: rgba(8, 39, 47, 0.16);
-  box-shadow: 0 14px 32px rgba(7, 31, 37, 0.18);
-  backdrop-filter: blur(7px) saturate(1.08);
   transform: translate3d(-50%, 0, 66px) rotateX(1deg);
   transform-origin: center;
   will-change: opacity;

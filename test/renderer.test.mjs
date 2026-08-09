@@ -46,6 +46,11 @@ test('mounts the approved floating audio ribbon inside the real panel', async ()
   assert.match(html, /linearGradient[\s\S]*offset="14%"[\s\S]*offset="86%"/);
   assert.match(html, /mask="url\(#audio-ribbon-edge-mask\)"/);
   assert.match(panelCss, /\.audio-ribbon[\s\S]*pointer-events:\s*none/);
+  const ribbonRule = panelCss.match(/\.audio-ribbon\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.doesNotMatch(
+    ribbonRule,
+    /(?:^|\n)\s*(?:background(?:-[\w-]+)?|backdrop-filter|box-shadow|border(?:-[\w-]+)?):/,
+  );
   assert.match(panelCss, /stroke-linecap:\s*round/);
   assert.match(panelCss, /stroke-linejoin:\s*round/);
   assert.doesNotMatch(html, /switchBar|spectrum-bar|scanline|connector/);

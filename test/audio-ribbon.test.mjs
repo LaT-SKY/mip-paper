@@ -84,14 +84,17 @@ test('tapers both ends to a flat baseline and emits a finite smooth path', () =>
   assert.doesNotMatch(path, /NaN|Infinity/);
 });
 
-test('maps combined rms to a symmetric cyan energy curve', () => {
-  const silent = buildEnergyPoints(0);
-  const loud = buildEnergyPoints(1);
+test('maps merged stereo bands to a non-flat cyan energy curve', () => {
+  const silent = buildEnergyPoints(Array(72).fill(0), Array(72).fill(0));
+  const left = Array.from({ length: 72 }, (_, index) => (index === 24 ? 1 : 0));
+  const right = Array.from({ length: 72 }, (_, index) => (index === 48 ? 0.8 : 0));
+  const loud = buildEnergyPoints(left, right);
   assert.equal(silent.every((point) => point.y === 70), true);
   assert.deepEqual(loud[0], { x: 0, y: 70 });
   assert.deepEqual(loud.at(-1), { x: 1000, y: 70 });
-  assert.ok(loud[35].y < 65);
-  assert.ok(Math.abs(loud[20].y - loud.at(-21).y) < 1e-9);
+  assert.ok(loud[24].y < 70);
+  assert.ok(loud[48].y < 70);
+  assert.equal(loud[35].y, 70);
 });
 
 test('rejects malformed snapshots and invalid audio config', () => {

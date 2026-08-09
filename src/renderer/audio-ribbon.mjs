@@ -153,10 +153,18 @@ export function pointsToSmoothPath(points) {
   return path;
 }
 
-export function buildEnergyPoints(rms) {
-  return buildRibbonPoints(Array(BAND_COUNT).fill(clamp(rms)), {
+export function buildEnergyPoints(left, right) {
+  if (!validBands(left) || !validBands(right)) {
+    throw new TypeError('energy values must contain 72 stereo bands');
+  }
+  const energy = left.map((leftValue, index) => {
+    const normalizedLeft = clamp(leftValue);
+    const normalizedRight = clamp(right[index]);
+    return Math.sqrt((normalizedLeft ** 2 + normalizedRight ** 2) / 2);
+  });
+  return buildRibbonPoints(energy, {
     baseline: 70,
-    amplitude: 6,
+    amplitude: 10,
     direction: -1,
   });
 }
@@ -182,7 +190,7 @@ export function createAudioRibbonController({ root, config } = {}) {
       amplitude: 24,
       direction: -1,
     })));
-    paths.energy.setAttribute('d', pointsToSmoothPath(buildEnergyPoints(state.rms)));
+    paths.energy.setAttribute('d', pointsToSmoothPath(buildEnergyPoints(state.left, state.right)));
     paths.right.setAttribute('d', pointsToSmoothPath(buildRibbonPoints(state.right, {
       baseline: 92,
       amplitude: 24,
