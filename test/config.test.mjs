@@ -14,6 +14,13 @@ import {
 test('defaults match the approved v1 design', () => {
   assert.deepEqual(DEFAULT_CONFIG, {
     interactionEnabled: true,
+    audio: {
+      enabled: true,
+      gain: 1,
+      silenceDelayMs: 600,
+      fadeOutMs: 450,
+      fadeInMs: 160,
+    },
     frameRate: {
       interactive: 60,
       drift: 30,
@@ -39,6 +46,53 @@ test('defaults match the approved v1 design', () => {
       location: { mode: 'auto', latitude: null, longitude: null, fallbackLocationId: '101281601' },
       tideStationId: 'P2352',
     },
+  });
+});
+
+test('normalizes invalid audio values without weakening other config validation', () => {
+  assert.deepEqual(validateConfig({ audio: {
+    enabled: 'yes',
+    gain: Number.NaN,
+    silenceDelayMs: -1,
+    fadeOutMs: 3001,
+    fadeInMs: null,
+  } }).audio, DEFAULT_CONFIG.audio);
+  assert.deepEqual(validateConfig({ audio: null }).audio, DEFAULT_CONFIG.audio);
+  assert.throws(
+    () => validateConfig({ audio: { visualizer: 'bars' } }),
+    /Unknown configuration field: audio\.visualizer/,
+  );
+  assert.throws(
+    () => validateConfig({ motion: { deadZonePx: -1 } }),
+    /motion\.deadZonePx/,
+  );
+});
+
+test('accepts every audio boundary including immediate transitions', () => {
+  assert.deepEqual(validateConfig({ audio: {
+    enabled: false,
+    gain: 0.25,
+    silenceDelayMs: 0,
+    fadeOutMs: 0,
+    fadeInMs: 0,
+  } }).audio, {
+    enabled: false,
+    gain: 0.25,
+    silenceDelayMs: 0,
+    fadeOutMs: 0,
+    fadeInMs: 0,
+  });
+  assert.deepEqual(validateConfig({ audio: {
+    gain: 4,
+    silenceDelayMs: 5000,
+    fadeOutMs: 3000,
+    fadeInMs: 3000,
+  } }).audio, {
+    enabled: true,
+    gain: 4,
+    silenceDelayMs: 5000,
+    fadeOutMs: 3000,
+    fadeInMs: 3000,
   });
 });
 

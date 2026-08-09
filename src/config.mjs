@@ -3,6 +3,13 @@ import path from 'node:path';
 
 export const DEFAULT_CONFIG = Object.freeze({
   interactionEnabled: true,
+  audio: Object.freeze({
+    enabled: true,
+    gain: 1,
+    silenceDelayMs: 600,
+    fadeOutMs: 450,
+    fadeInMs: 160,
+  }),
   frameRate: Object.freeze({
     interactive: 60,
     drift: 30,
@@ -37,6 +44,13 @@ export const DEFAULT_CONFIG = Object.freeze({
 
 const SCHEMA = {
   interactionEnabled: 'boolean',
+  audio: {
+    enabled: 'boolean',
+    gain: 'positive',
+    silenceDelayMs: 'nonNegative',
+    fadeOutMs: 'nonNegative',
+    fadeInMs: 'nonNegative',
+  },
   frameRate: {
     interactive: 'frameRate',
     drift: 'frameRate',
@@ -74,6 +88,38 @@ const SCHEMA = {
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+const AUDIO_KEYS = new Set([
+  'enabled',
+  'gain',
+  'silenceDelayMs',
+  'fadeOutMs',
+  'fadeInMs',
+]);
+
+function normalizeAudioConfig(value) {
+  if (!isObject(value)) return { ...DEFAULT_CONFIG.audio };
+  for (const key of Object.keys(value)) {
+    if (!AUDIO_KEYS.has(key)) {
+      throw new TypeError(`Unknown configuration field: audio.${key}`);
+    }
+  }
+  const validRange = (candidate, min, max, fallback) => (
+    Number.isFinite(candidate) && candidate >= min && candidate <= max ? candidate : fallback
+  );
+  return {
+    enabled: typeof value.enabled === 'boolean' ? value.enabled : DEFAULT_CONFIG.audio.enabled,
+    gain: validRange(value.gain, 0.25, 4, DEFAULT_CONFIG.audio.gain),
+    silenceDelayMs: validRange(
+      value.silenceDelayMs,
+      0,
+      5000,
+      DEFAULT_CONFIG.audio.silenceDelayMs,
+    ),
+    fadeOutMs: validRange(value.fadeOutMs, 0, 3000, DEFAULT_CONFIG.audio.fadeOutMs),
+    fadeInMs: validRange(value.fadeInMs, 0, 3000, DEFAULT_CONFIG.audio.fadeInMs),
+  };
 }
 
 function validateShape(value, schema, prefix = '') {
@@ -132,6 +178,10 @@ function validateShape(value, schema, prefix = '') {
 function mergeConfig(value) {
   return {
     interactionEnabled: value.interactionEnabled ?? DEFAULT_CONFIG.interactionEnabled,
+    audio: {
+      ...DEFAULT_CONFIG.audio,
+      ...(value.audio ?? {}),
+    },
     frameRate: {
       ...DEFAULT_CONFIG.frameRate,
       ...(value.frameRate ?? {}),
@@ -160,8 +210,10 @@ function mergeConfig(value) {
 }
 
 export function validateConfig(value) {
-  validateShape(value, SCHEMA);
-  const result = mergeConfig(value);
+  if (!isObject(value)) validateShape(value, SCHEMA);
+  const normalized = { ...value, audio: normalizeAudioConfig(value.audio) };
+  validateShape(normalized, SCHEMA);
+  const result = mergeConfig(normalized);
   const { mode, latitude, longitude } = result.weather.location;
   if (mode === 'fixed' && (!Number.isFinite(latitude) || !Number.isFinite(longitude))) {
     throw new TypeError('weather.location fixed mode requires both latitude and longitude');

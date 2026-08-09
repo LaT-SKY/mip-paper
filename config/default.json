@@ -1,5 +1,12 @@
 {
   "interactionEnabled": true,
+  "audio": {
+    "enabled": true,
+    "gain": 1,
+    "silenceDelayMs": 600,
+    "fadeOutMs": 450,
+    "fadeInMs": 160
+  },
   "frameRate": {
     "interactive": 60,
     "drift": 30
