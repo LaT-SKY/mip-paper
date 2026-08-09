@@ -31,6 +31,39 @@ export function bandIndexForFrequency(frequency) {
   return Math.min(Math.floor(position * BAND_COUNT), BAND_COUNT - 1);
 }
 
+export function aggregateLogBands(binValues) {
+  if (!binValues || binValues.length !== FFT_SIZE / 2 + 1) {
+    throw new TypeError('bin values must contain finite FFT magnitudes');
+  }
+  for (const value of binValues) {
+    if (!Number.isFinite(value)) {
+      throw new TypeError('bin values must contain finite FFT magnitudes');
+    }
+  }
+
+  const binWidth = SAMPLE_RATE / FFT_SIZE;
+  return Array.from({ length: BAND_COUNT }, (_, band) => {
+    const low = MIN_FREQUENCY * Math.exp(LOG_FREQUENCY_SPAN * band / BAND_COUNT);
+    const high = MIN_FREQUENCY * Math.exp(LOG_FREQUENCY_SPAN * (band + 1) / BAND_COUNT);
+    const firstBin = Math.max(1, Math.ceil(low / binWidth));
+    const lastBin = Math.min(FFT_SIZE / 2, Math.ceil(high / binWidth) - 1);
+    if (firstBin <= lastBin) {
+      let maximum = 0;
+      for (let bin = firstBin; bin <= lastBin; bin += 1) {
+        maximum = Math.max(maximum, binValues[bin]);
+      }
+      return maximum;
+    }
+
+    const position = Math.sqrt(low * high) / binWidth;
+    const lower = Math.max(1, Math.min(Math.floor(position), FFT_SIZE / 2));
+    const upper = Math.max(1, Math.min(Math.ceil(position), FFT_SIZE / 2));
+    if (lower === upper) return binValues[lower];
+    const fraction = position - lower;
+    return binValues[lower] + (binValues[upper] - binValues[lower]) * fraction;
+  });
+}
+
 function spatiallySmooth(values) {
   return values.map((value, index) => {
     const previous = values[Math.max(0, index - 1)];
@@ -70,11 +103,8 @@ export function createSpectrumAnalyzer({ gain = 1, onFrame } = {}) {
     }
     const spectrum = fft.createComplexArray();
     fft.realTransform(spectrum, input);
-    const bands = Array(BAND_COUNT).fill(0);
+    const binValues = Array(FFT_SIZE / 2 + 1).fill(0);
     for (let bin = 1; bin <= FFT_SIZE / 2; bin += 1) {
-      const frequency = bin * SAMPLE_RATE / FFT_SIZE;
-      const band = bandIndexForFrequency(frequency);
-      if (band < 0) continue;
       const real = spectrum[bin * 2];
       const imaginary = spectrum[bin * 2 + 1];
       const magnitude = Math.hypot(real, imaginary) * WINDOW_AMPLITUDE_SCALE * currentGain;
@@ -82,8 +112,9 @@ export function createSpectrumAnalyzer({ gain = 1, onFrame } = {}) {
       const normalized = decibels <= NOISE_GATE_DB
         ? 0
         : clamp((decibels - NOISE_GATE_DB) / (DISPLAY_CEILING_DB - NOISE_GATE_DB));
-      bands[band] = Math.max(bands[band], normalized);
+      binValues[bin] = normalized;
     }
+    const bands = aggregateLogBands(binValues);
     return applyTemporalSmoothing(previous, spatiallySmooth(bands));
   }
 

@@ -5,6 +5,8 @@ import {
   BAND_COUNT,
   FFT_SIZE,
   HOP_SIZE,
+  SAMPLE_RATE,
+  aggregateLogBands,
   bandIndexForFrequency,
   createSpectrumAnalyzer,
 } from '../src/audio-analyzer.mjs';
@@ -14,6 +16,19 @@ function sine(frequency, amplitude, count, sampleRate = 48_000) {
     Math.sin(2 * Math.PI * frequency * index / sampleRate) * amplitude
   ));
 }
+
+test('interpolates logarithmic low-frequency bands that contain no FFT bin', () => {
+  const bins = Array(FFT_SIZE / 2 + 1).fill(0);
+  bins[1] = 0.4;
+  bins[2] = 0.8;
+  bins[3] = 0.2;
+  const bands = aggregateLogBands(bins);
+
+  assert.equal(bands.length, BAND_COUNT);
+  assert.ok(bands.slice(0, 10).every((value) => value > 0));
+  assert.equal(bands[bandIndexForFrequency(2 * SAMPLE_RATE / FFT_SIZE)], 0.8);
+  assert.equal(bands[bandIndexForFrequency(3 * SAMPLE_RATE / FFT_SIZE)], 0.2);
+});
 
 test('keeps left and right spectral peaks independent across overlapping windows', () => {
   const frames = [];
