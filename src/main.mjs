@@ -11,13 +11,46 @@ import {
   session,
 } from 'electron';
 
-import { configPath, loadConfig } from './config.mjs';
+import { configPath, informationCachePath, loadConfig, weatherCredentialsPath } from './config.mjs';
+import { loadWeatherCredentials } from './weather-credentials.mjs';
+import { readInformationCache, writeInformationCache } from './information-cache.mjs';
+import { createLocationProvider, createPortalLocationAdapter } from './location-provider.mjs';
+import { createQWeatherClient } from './qweather-client.mjs';
+import { createInformationService } from './information-service.mjs';
 import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
+let informationService;
+
+async function buildInformationService(config) {
+  const cachePathname = informationCachePath(process.env, os.homedir());
+  const cache = {
+    read: () => readInformationCache(cachePathname),
+    write: (snapshot) => writeInformationCache(cachePathname, snapshot),
+  };
+  try {
+    const credentials = await loadWeatherCredentials(weatherCredentialsPath(process.env, os.homedir()));
+    const qweatherClient = createQWeatherClient({ credentials });
+    const portal = config.weather.location.mode === 'auto' ? createPortalLocationAdapter() : null;
+    const locationProvider = createLocationProvider({
+      config: config.weather.location,
+      portal,
+      cache,
+      geoLookup: (id) => qweatherClient.resolveLocation(id),
+    });
+    return createInformationService({ config, locationProvider, qweatherClient, cache });
+  } catch {
+    return createInformationService({
+      config,
+      locationProvider: { resolve: async () => { throw new Error('Location unavailable'); } },
+      qweatherClient: {},
+      cache,
+    });
+  }
+}
 
 export function parseProbeOptions(env = process.env) {
   const strategy = env.ANIMATED_WALLPAPER_PROBE_STRATEGY;
@@ -42,6 +75,7 @@ async function run() {
     || configPath(process.env, os.homedir());
   const config = await loadConfig(pathname);
   const probe = parseProbeOptions(process.env);
+  informationService = await buildInformationService(config);
 
   manager = createWindowManager({
     BrowserWindow,
@@ -49,6 +83,7 @@ async function run() {
     ipcMain,
     defaultSession: session.defaultSession,
     config,
+    informationService,
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
     probe,
@@ -59,9 +94,13 @@ async function run() {
     } : null,
   });
   await manager.start();
+  informationService.start();
 }
 
-app.on('before-quit', () => manager?.stop());
+app.on('before-quit', () => {
+  informationService?.stop();
+  manager?.stop();
+});
 app.on('window-all-closed', () => {});
 
 run().catch((error) => {
