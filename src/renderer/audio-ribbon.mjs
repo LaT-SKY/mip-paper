@@ -112,24 +112,35 @@ export function buildRibbonPoints(values, {
   baseline,
   amplitude,
   direction,
+  responseExponent = 1,
 } = {}) {
   if (!Array.isArray(values) || values.length !== BAND_COUNT) {
     throw new TypeError('ribbon values must contain 72 bands');
   }
   const center = Number.isFinite(baseline) ? baseline : 70;
   const height = Number.isFinite(amplitude) ? amplitude : 20;
+  const exponent = Number.isFinite(responseExponent) && responseExponent > 0
+    ? responseExponent
+    : 1;
   const sign = direction === -1 ? -1 : 1;
   return values.map((rawValue, index) => {
     const t = index / (BAND_COUNT - 1);
     const edgeDistance = Math.min(t / 0.14, (1 - t) / 0.14);
     const taper = smoothstep(Math.max(0, Math.min(1, edgeDistance)));
-    const value = clamp(rawValue) * taper;
+    const value = clamp(rawValue) ** exponent * taper;
     const y = index < 2 || index >= BAND_COUNT - 2
       ? center
       : center + sign * height * value;
     return { x: (VIEWBOX_WIDTH * index) / (BAND_COUNT - 1), y };
   });
 }
+
+const MIRRORED_GEOMETRY = Object.freeze({
+  baseline: 70,
+  channelAmplitude: 52,
+  energyAmplitude: 40,
+  responseExponent: 0.68,
+});
 
 function rounded(value) {
   return Number(value.toFixed(3));
@@ -163,10 +174,29 @@ export function buildEnergyPoints(left, right) {
     return Math.sqrt((normalizedLeft ** 2 + normalizedRight ** 2) / 2);
   });
   return buildRibbonPoints(energy, {
-    baseline: 70,
-    amplitude: 10,
+    baseline: MIRRORED_GEOMETRY.baseline,
+    amplitude: MIRRORED_GEOMETRY.energyAmplitude,
     direction: -1,
+    responseExponent: MIRRORED_GEOMETRY.responseExponent,
   });
+}
+
+export function buildMirroredRibbonPoints(left, right) {
+  return {
+    left: buildRibbonPoints(left, {
+      baseline: MIRRORED_GEOMETRY.baseline,
+      amplitude: MIRRORED_GEOMETRY.channelAmplitude,
+      direction: -1,
+      responseExponent: MIRRORED_GEOMETRY.responseExponent,
+    }),
+    energy: buildEnergyPoints(left, right),
+    right: buildRibbonPoints(right, {
+      baseline: MIRRORED_GEOMETRY.baseline,
+      amplitude: MIRRORED_GEOMETRY.channelAmplitude,
+      direction: 1,
+      responseExponent: MIRRORED_GEOMETRY.responseExponent,
+    }),
+  };
 }
 
 export function createAudioRibbonController({ root, config } = {}) {
@@ -185,17 +215,10 @@ export function createAudioRibbonController({ root, config } = {}) {
   let destroyed = false;
 
   function render() {
-    paths.left.setAttribute('d', pointsToSmoothPath(buildRibbonPoints(state.left, {
-      baseline: 48,
-      amplitude: 24,
-      direction: -1,
-    })));
-    paths.energy.setAttribute('d', pointsToSmoothPath(buildEnergyPoints(state.left, state.right)));
-    paths.right.setAttribute('d', pointsToSmoothPath(buildRibbonPoints(state.right, {
-      baseline: 92,
-      amplitude: 24,
-      direction: 1,
-    })));
+    const points = buildMirroredRibbonPoints(state.left, state.right);
+    paths.energy.setAttribute('d', pointsToSmoothPath(points.energy));
+    paths.left.setAttribute('d', pointsToSmoothPath(points.left));
+    paths.right.setAttribute('d', pointsToSmoothPath(points.right));
     root.style.opacity = String(state.opacity);
     root.dataset.status = state.status;
   }

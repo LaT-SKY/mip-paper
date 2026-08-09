@@ -6,7 +6,7 @@ import {
   advanceAudioRibbon,
   applyAudioConfig,
   applySpectrumSnapshot,
-  buildEnergyPoints,
+  buildMirroredRibbonPoints,
   buildRibbonPoints,
   createAudioRibbonState,
   pointsToSmoothPath,
@@ -84,17 +84,28 @@ test('tapers both ends to a flat baseline and emits a finite smooth path', () =>
   assert.doesNotMatch(path, /NaN|Infinity/);
 });
 
-test('maps merged stereo bands to a non-flat cyan energy curve', () => {
-  const silent = buildEnergyPoints(Array(72).fill(0), Array(72).fill(0));
-  const left = Array.from({ length: 72 }, (_, index) => (index === 24 ? 1 : 0));
-  const right = Array.from({ length: 72 }, (_, index) => (index === 48 ? 0.8 : 0));
-  const loud = buildEnergyPoints(left, right);
-  assert.equal(silent.every((point) => point.y === 70), true);
-  assert.deepEqual(loud[0], { x: 0, y: 70 });
-  assert.deepEqual(loud.at(-1), { x: 1000, y: 70 });
-  assert.ok(loud[24].y < 70);
-  assert.ok(loud[48].y < 70);
-  assert.equal(loud[35].y, 70);
+test('builds the coaxial mirror from one baseline with expanded visual dynamics', () => {
+  const values = Array(72).fill(0.25);
+  const { left, energy, right } = buildMirroredRibbonPoints(values, values);
+  const center = 35;
+
+  for (const points of [left, energy, right]) {
+    assert.equal(points[0].y, 70);
+    assert.equal(points.at(-1).y, 70);
+  }
+  assert.ok(left[center].y < 70);
+  assert.ok(energy[center].y < 70);
+  assert.ok(right[center].y > 70);
+  assert.ok(70 - left[center].y > 52 * 0.25);
+  assert.ok(70 - energy[center].y > 40 * 0.25);
+});
+
+test('uses the full approved height for high-energy stereo bands', () => {
+  const loud = Array(72).fill(1);
+  const { left, energy, right } = buildMirroredRibbonPoints(loud, loud);
+  assert.ok(left[35].y <= 18);
+  assert.ok(energy[35].y <= 30);
+  assert.ok(right[35].y >= 122);
 });
 
 test('rejects malformed snapshots and invalid audio config', () => {
