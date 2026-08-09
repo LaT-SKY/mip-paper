@@ -9,4 +9,7 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.match(main, /preload\.cjs/);
   assert.match(preload, /contextBridge\.exposeInMainWorld\(['"]wallpaper['"]/);
   assert.match(preload, /getBootstrap\s*:\s*\(\)\s*=>\s*ipcRenderer\.invoke/);
+  assert.match(preload, /getInformationSnapshot\s*:\s*\(\)\s*=>\s*ipcRenderer\.invoke/);
+  assert.match(preload, /onInformationUpdated\s*:\s*\(listener\)/);
+  assert.match(preload, /removeListener/);
 });

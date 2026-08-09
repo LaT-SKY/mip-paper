@@ -5,6 +5,8 @@ import test from 'node:test';
 import { DEFAULT_CONFIG } from '../src/config.mjs';
 import {
   BOOTSTRAP_CHANNEL,
+  INFORMATION_CHANNEL,
+  INFORMATION_UPDATED_CHANNEL,
   createWindowManager,
   formatDisplayTargetTitle,
 } from '../src/window-manager.mjs';
@@ -17,11 +19,14 @@ class FakeWebContents extends EventEmitter {
     this.id = FakeWebContents.nextId;
     FakeWebContents.nextId += 1;
     this.openHandler = null;
+    this.sent = [];
   }
 
   setWindowOpenHandler(handler) {
     this.openHandler = handler;
   }
+
+  send(channel, value) { this.sent.push({ channel, value }); }
 }
 
 class FakeWindow extends EventEmitter {
@@ -130,16 +135,22 @@ function createFixture(config = DEFAULT_CONFIG) {
       defaultSession.requestHandler = handler;
     },
   };
+  const informationListeners = new Set();
+  const informationService = {
+    getSnapshot: () => ({ weather: { status: 'fresh' } }),
+    subscribe(listener) { informationListeners.add(listener); return () => informationListeners.delete(listener); },
+  };
   const manager = createWindowManager({
     BrowserWindow: FakeWindow,
     screen,
     ipcMain,
     defaultSession,
     config,
+    informationService,
     rendererPath: '/app/src/renderer/index.html',
     preloadPath: '/app/src/preload.mjs',
   });
-  return { manager, displays, screen, ipcMain, defaultSession };
+  return { manager, displays, screen, ipcMain, defaultSession, informationListeners };
 }
 
 test('creates hardened windows for full display bounds', async () => {
@@ -177,8 +188,26 @@ test('provides bootstrap data only to a managed renderer', async () => {
   assert.deepEqual(await handler({ sender: first.webContents }), {
     config: DEFAULT_CONFIG,
     display: displays[0],
+    information: { weather: { status: 'fresh' } },
   });
   await assert.rejects(handler({ sender: { id: 999 } }), /Unknown wallpaper renderer/);
+});
+
+test('streams information only to managed renderers and unsubscribes closed windows', async () => {
+  const { manager, ipcMain, informationListeners } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+  const informationHandler = ipcMain.handlers.get(INFORMATION_CHANNEL);
+  assert.deepEqual(await informationHandler({ sender: first.webContents }), { weather: { status: 'fresh' } });
+  await assert.rejects(informationHandler({ sender: { id: 999 } }), /Unknown wallpaper renderer/);
+  for (const listener of informationListeners) listener({ weather: { status: 'stale' } });
+  assert.deepEqual(first.webContents.sent.at(-1), {
+    channel: INFORMATION_UPDATED_CHANNEL,
+    value: { weather: { status: 'stale' } },
+  });
+  const before = informationListeners.size;
+  first.close();
+  assert.equal(informationListeners.size, before - 1);
 });
 
 test('blocks navigation, popup windows, downloads, permissions, and remote requests', async () => {
@@ -261,6 +290,7 @@ test('stop closes windows, removes IPC, and detaches display listeners', async (
 
   assert.equal(FakeWindow.instances.every((window) => window.destroyed), true);
   assert.equal(ipcMain.handlers.has(BOOTSTRAP_CHANNEL), false);
+  assert.equal(ipcMain.handlers.has(INFORMATION_CHANNEL), false);
   assert.equal(screen.listenerCount('display-added'), 0);
   assert.equal(screen.listenerCount('display-removed'), 0);
   assert.equal(screen.listenerCount('display-metrics-changed'), 0);

@@ -1,5 +1,7 @@
 export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
 export const PROBE_REPORT_CHANNEL = 'wallpaper:report-probe';
+export const INFORMATION_CHANNEL = 'wallpaper:get-information';
+export const INFORMATION_UPDATED_CHANNEL = 'wallpaper:information-updated';
 const APP_ID = 'animated-ocean-wallpaper';
 
 export function formatDisplayTargetTitle(display) {
@@ -17,9 +19,11 @@ export function createWindowManager({
   preloadPath,
   probe = null,
   onProbeReport = null,
+  informationService = null,
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
+  const informationUnsubscribers = new Map();
   let queue = Promise.resolve();
   let started = false;
 
@@ -69,8 +73,20 @@ export function createWindowManager({
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     window.once('ready-to-show', () => window.showInactive());
     windows.set(display.id, window);
-    bootstrapByWebContents.set(window.webContents.id, { config, display, ...(probe ? { probe } : {}) });
+    bootstrapByWebContents.set(window.webContents.id, {
+      config,
+      display,
+      ...(informationService ? { information: informationService.getSnapshot() } : {}),
+      ...(probe ? { probe } : {}),
+    });
+    if (informationService) {
+      informationUnsubscribers.set(window.webContents.id, informationService.subscribe((snapshot) => {
+        window.webContents.send(INFORMATION_UPDATED_CHANNEL, snapshot);
+      }));
+    }
     window.once('closed', () => {
+      informationUnsubscribers.get(window.webContents.id)?.();
+      informationUnsubscribers.delete(window.webContents.id);
       windows.delete(display.id);
       bootstrapByWebContents.delete(window.webContents.id);
     });
@@ -96,7 +112,12 @@ export function createWindowManager({
       }
       window.setTitle(formatDisplayTargetTitle(display));
       window.setBounds(display.bounds);
-      bootstrapByWebContents.set(window.webContents.id, { config, display, ...(probe ? { probe } : {}) });
+      bootstrapByWebContents.set(window.webContents.id, {
+        config,
+        display,
+        ...(informationService ? { information: informationService.getSnapshot() } : {}),
+        ...(probe ? { probe } : {}),
+      });
     }
   }
 
@@ -122,6 +143,12 @@ export function createWindowManager({
       }
       return bootstrap;
     });
+    if (informationService) {
+      ipcMain.handle(INFORMATION_CHANNEL, async (event) => {
+        if (!bootstrapByWebContents.has(event.sender.id)) throw new Error('Unknown wallpaper renderer');
+        return informationService.getSnapshot();
+      });
+    }
     if (probe && onProbeReport) {
       ipcMain.handle(PROBE_REPORT_CHANNEL, async (event, summary) => {
         if (!bootstrapByWebContents.has(event.sender.id)) throw new Error('Unknown wallpaper renderer');
@@ -143,12 +170,14 @@ export function createWindowManager({
     screen.off('display-removed', onDisplayRemoved);
     screen.off('display-metrics-changed', onDisplayMetricsChanged);
     ipcMain.removeHandler(BOOTSTRAP_CHANNEL);
+    if (informationService) ipcMain.removeHandler(INFORMATION_CHANNEL);
     if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);
     for (const window of [...windows.values()]) {
       window.close();
     }
     windows.clear();
     bootstrapByWebContents.clear();
+    informationUnsubscribers.clear();
   }
 
   return {
