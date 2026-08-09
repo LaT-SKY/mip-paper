@@ -286,7 +286,7 @@ doctor() {
   fi
 
   local command_name
-  for command_name in node npm systemctl kreadconfig6 kwriteconfig6; do
+  for command_name in node npm systemctl kreadconfig6 kwriteconfig6 pw-cat pw-metadata; do
     if command -v "$command_name" >/dev/null 2>&1; then
       check_pass "command:$command_name" "$(command -v "$command_name")"
     else
@@ -334,6 +334,12 @@ NODE
     check_pass weather-credentials "$WEATHER_CREDENTIALS_PATH"
   else
     check_fail weather-credentials 'credentials are missing, invalid, or not mode 0600'
+  fi
+  if [[ -f "$INSTALL_ROOT/scripts/audio-probe.mjs" ]] \
+    && node "$INSTALL_ROOT/scripts/audio-probe.mjs" >/dev/null 2>&1; then
+    check_pass audio-output 'default PipeWire sink capture is available'
+  else
+    check_fail audio-output 'default PipeWire sink capture is unavailable'
   fi
   if [[ -f "$SERVICE_PATH" ]]; then
     check_pass service-file "$SERVICE_PATH"

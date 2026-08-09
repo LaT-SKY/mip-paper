@@ -15,7 +15,12 @@ async function executable(pathname, contents) {
   await chmod(pathname, 0o755);
 }
 
-async function fixture({ invalidConfig = false, invalidCredentials = false, coordinator = 'valid' } = {}) {
+async function fixture({
+  invalidConfig = false,
+  invalidCredentials = false,
+  coordinator = 'valid',
+  audio = 'valid',
+} = {}) {
   const home = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-doctor-'));
   const fakeBin = path.join(home, 'fake-bin');
   const configHome = path.join(home, '.config');
@@ -32,6 +37,14 @@ async function fixture({ invalidConfig = false, invalidCredentials = false, coor
   await mkdir(path.join(configHome, 'systemd', 'user'), { recursive: true });
   await writeFile(path.join(installRoot, 'src', 'main.mjs'), 'export {};\n');
   await writeFile(path.join(installRoot, 'src', 'config.mjs'), "import { readFile } from 'node:fs/promises'; export async function loadConfig(pathname) { return JSON.parse(await readFile(pathname, 'utf8')); }\n");
+  await writeFile(
+    path.join(installRoot, 'src', 'pipewire-audio.mjs'),
+    await readFile(path.join(repositoryRoot, 'src', 'pipewire-audio.mjs'), 'utf8'),
+  );
+  await writeFile(
+    path.join(installRoot, 'scripts', 'audio-probe.mjs'),
+    await readFile(path.join(repositoryRoot, 'scripts', 'audio-probe.mjs'), 'utf8'),
+  );
   await executable(path.join(installRoot, 'node_modules', 'electron', 'dist', 'electron'), '#!/usr/bin/env bash\n');
   await writeFile(path.join(installRoot, 'assets', '161-2.jpeg'), Buffer.alloc(100001));
   await writeFile(path.join(installRoot, 'scripts', 'kwin-rules.sh'), '#!/usr/bin/env bash\nexit 0\n');
@@ -58,6 +71,14 @@ async function fixture({ invalidConfig = false, invalidCredentials = false, coor
 
   await executable(path.join(fakeBin, 'plasmashell'), '#!/usr/bin/env bash\nprintf "plasmashell 6.7.4\\n"\n');
   await executable(path.join(fakeBin, 'kwin_wayland'), '#!/usr/bin/env bash\nprintf "kwin 6.7.4\\n"\n');
+  await executable(path.join(fakeBin, 'pw-metadata'), `#!/bin/bash
+printf '%s\n' "update: id:0 key:'default.audio.sink' value:'{\\\"name\\\":\\\"sink.test\\\"}' type:'Spa:String:JSON'"
+`);
+  await executable(path.join(fakeBin, 'pw-cat'), audio === 'timeout'
+    ? '#!/bin/bash\nexec /bin/sleep 10\n'
+    : audio === 'missing'
+      ? '#!/bin/bash\nexit 127\n'
+      : "#!/bin/bash\nprintf '12345678'\n");
   await executable(path.join(fakeBin, 'systemctl'), `#!/usr/bin/env bash
 case "$*" in
   *'is-enabled'*) printf 'enabled\\n'; exit 0 ;;
@@ -85,6 +106,7 @@ exit 0
       XDG_DATA_HOME: path.join(home, '.local', 'share'),
       KWIN_CONFIG_FILE: path.join(configHome, 'kwinrc'),
       KWIN_SCRIPT_NO_RELOAD: '1',
+      AUDIO_PROBE_TIMEOUT_MS: '50',
     },
   };
 }
@@ -93,7 +115,10 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
   const fixtureData = await fixture();
   try {
     const { stdout } = await execFileAsync(cli, ['doctor'], { env: fixtureData.env });
-    for (const label of ['session', 'desktop', 'snapshot', 'config', 'weather-credentials', 'service', 'KWin rule', 'KWin coordinator']) {
+    for (const label of [
+      'session', 'desktop', 'command:pw-cat', 'command:pw-metadata', 'snapshot', 'config',
+      'weather-credentials', 'audio-output', 'service', 'KWin rule', 'KWin coordinator',
+    ]) {
       assert.match(stdout, new RegExp(`PASS .*${label}`));
     }
     for (const label of ['window stacking', 'panel visibility', 'Alt\\+Tab', 'mouse input', 'multi-display', 'lock/suspend', 'resource usage']) {
@@ -103,6 +128,36 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
     await rm(fixtureData.home, { recursive: true, force: true });
   }
 });
+
+test('installed audio probe succeeds inside the healthy doctor fixture', async () => {
+  const fixtureData = await fixture();
+  try {
+    const result = await execFileAsync(
+      process.execPath,
+      [path.join(fixtureData.installRoot, 'scripts', 'audio-probe.mjs')],
+      { env: fixtureData.env },
+    );
+    assert.deepEqual(JSON.parse(result.stdout), { status: 'available', sink: 'sink.test' });
+  } finally {
+    await rm(fixtureData.home, { recursive: true, force: true });
+  }
+});
+
+for (const [name, audio] of [['missing command', 'missing'], ['capture timeout', 'timeout']]) {
+  test(`doctor reports ${name} as unavailable audio output`, async () => {
+    const fixtureData = await fixture({ audio });
+    try {
+      await assert.rejects(execFileAsync(cli, ['doctor'], { env: fixtureData.env }), (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stdout, /FAIL .*audio-output/);
+        assert.doesNotMatch(`${error.stdout}${error.stderr}`, /12345678/);
+        return true;
+      });
+    } finally {
+      await rm(fixtureData.home, { recursive: true, force: true });
+    }
+  });
+}
 
 test('doctor returns non-zero for invalid weather credentials without printing values', async () => {
   const fixtureData = await fixture({ invalidCredentials: true });
