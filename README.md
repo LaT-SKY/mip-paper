@@ -121,9 +121,41 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
     "horizontalPanPercent": 4.6,
     "verticalPanPercent": 4.5,
     "maxRotationDegrees": 0.7
+  },
+  "panel": {
+    "autoExpandHide": true,
+    "expandTriggerDistancePx": 48,
+    "collapseDelaySeconds": 8,
+    "expanded": true,
+    "collapsedOpacity": 0.08,
+    "animation": { "staggerDelayMs": 60, "durationMs": 950 }
+  },
+  "weather": {
+    "location": {
+      "mode": "auto",
+      "latitude": null,
+      "longitude": null,
+      "fallbackLocationId": "101281601"
+    },
+    "tideStationId": "P2352"
   }
 }
 ```
+
+天气凭据与普通配置分开保存在 `~/.config/animated-ocean-wallpaper/weather-credentials.json`。安装器首次创建该文件并设置为 `0600`；重复安装和普通卸载会保留它，只有 `uninstall --purge` 会删除。第三期暂时需要手工填写：
+
+```json
+{
+  "apiHost": "your-project-host.qweatherapi.com",
+  "apiKey": "your-api-key"
+}
+```
+
+填写后执行 `chmod 600 ~/.config/animated-ocean-wallpaper/weather-credentials.json`。Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 仅由主进程读取，不会进入 renderer、URL、日志或缓存。
+
+`weather.location.mode` 为 `auto` 时，通过 XDG Desktop Portal 请求城市级位置；权限被拒绝或定位失败后，使用缓存位置，最后以 `fallbackLocationId` 对应的东莞坐标降级。改为 `fixed` 时必须同时提供数值型 `latitude` 和 `longitude`，并且不请求 Portal。潮汐默认使用观测站 `P2352`。
+
+实时天气每 30 分钟刷新，预报和潮汐每 6 小时刷新。缓存 6 小时内标记为 fresh，6 至 24 小时标记为 stale，超过 24 小时显示 unavailable。天气数据由和风天气提供。
 
 修改后执行：
 
@@ -131,17 +163,17 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 animated-ocean-wallpaper restart
 ```
 
-未知字段、错误类型或低于限制的帧率会阻止启动，并在 service 日志中报告原因。
+未知字段、错误类型或超出限制的数值会阻止启动，并在 service 日志中报告原因。普通配置或凭据修改后都需要重启服务。
 
 ## 卸载
 
-保留配置：
+保留普通配置和天气凭据：
 
 ```bash
 animated-ocean-wallpaper uninstall
 ```
 
-连配置一起删除：
+连普通配置和天气凭据一起删除：
 
 ```bash
 animated-ocean-wallpaper uninstall --purge

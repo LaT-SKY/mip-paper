@@ -11,6 +11,7 @@ readonly LAUNCHER_PATH="${ANIMATED_WALLPAPER_LAUNCHER_PATH:-$LOCAL_PREFIX/bin/$A
 readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 readonly CONFIG_DIRECTORY="$CONFIG_HOME/$APP_ID"
 readonly CONFIG_PATH="$CONFIG_DIRECTORY/config.json"
+readonly WEATHER_CREDENTIALS_PATH="$CONFIG_DIRECTORY/weather-credentials.json"
 readonly SERVICE_DIRECTORY="$CONFIG_HOME/systemd/user"
 readonly SERVICE_PATH="$SERVICE_DIRECTORY/$SERVICE_NAME"
 readonly KWIN_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -126,7 +127,7 @@ install_app() {
   stage=$(mktemp -d "$library_parent/.${APP_ID}-stage.XXXXXX")
   backup=$(mktemp -d "$library_parent/.${APP_ID}-backup.XXXXXX")
 
-  committed=0 mutated=0 kwin_mutated=0 config_created=0 had_install=0 had_launcher=0 had_service=0 had_rule=0
+  committed=0 mutated=0 kwin_mutated=0 config_created=0 credentials_created=0 had_install=0 had_launcher=0 had_service=0 had_rule=0
   had_kwin_package=0 prior_kwin_enabled=false
   cleanup_install() {
     local exit_code=$?
@@ -138,6 +139,7 @@ install_app() {
       [[ -e "$backup/launcher" ]] && mv -- "$backup/launcher" "$LAUNCHER_PATH"
       [[ -e "$backup/service" ]] && mv -- "$backup/service" "$SERVICE_PATH"
       if ((${config_created:-0} == 1)); then rm -f -- "$CONFIG_PATH"; fi
+      if ((${credentials_created:-0} == 1)); then rm -f -- "$WEATHER_CREDENTIALS_PATH"; fi
       if ((${had_rule:-0} == 1)); then
         "$SOURCE_ROOT/scripts/kwin-rules.sh" install >/dev/null 2>&1
       else
@@ -191,6 +193,10 @@ install_app() {
     install -m 644 "$INSTALL_ROOT/config/default.json" "$CONFIG_PATH"
     config_created=1
   fi
+  if [[ ! -e "$WEATHER_CREDENTIALS_PATH" ]]; then
+    install -m 600 /dev/null "$WEATHER_CREDENTIALS_PATH"
+    credentials_created=1
+  fi
 
   "$INSTALL_ROOT/scripts/kwin-rules.sh" install
   KWIN_SCRIPT_SOURCE="$INSTALL_ROOT/kwin/$APP_ID" \
@@ -243,7 +249,7 @@ uninstall_app() {
   rm -rf -- "$INSTALL_ROOT"
   systemctl --user daemon-reload
   if ((purge == 1)); then
-    rm -f -- "$CONFIG_PATH"
+    rm -f -- "$CONFIG_PATH" "$WEATHER_CREDENTIALS_PATH"
     rmdir -- "$CONFIG_DIRECTORY" 2>/dev/null || true
   fi
   printf 'Uninstallation complete.\n'
@@ -314,6 +320,21 @@ NODE
   else
     check_fail config 'configuration is missing or invalid'
   fi
+  if [[ -f "$WEATHER_CREDENTIALS_PATH" ]] \
+    && node --input-type=module - "$WEATHER_CREDENTIALS_PATH" <<'NODE'
+import { readFile, stat } from 'node:fs/promises';
+const pathname = process.argv[2];
+const metadata = await stat(pathname);
+if ((metadata.mode & 0o077) !== 0) process.exit(1);
+const value = JSON.parse(await readFile(pathname, 'utf8'));
+if (typeof value.apiHost !== 'string' || !/^[a-z0-9.-]+$/i.test(value.apiHost)) process.exit(1);
+if (typeof value.apiKey !== 'string' || value.apiKey.trim() === '') process.exit(1);
+NODE
+  then
+    check_pass weather-credentials "$WEATHER_CREDENTIALS_PATH"
+  else
+    check_fail weather-credentials 'credentials are missing, invalid, or not mode 0600'
+  fi
   if [[ -f "$SERVICE_PATH" ]]; then
     check_pass service-file "$SERVICE_PATH"
   else
@@ -356,6 +377,8 @@ NODE
   check_manual 'multi-display' 'verify independent windows, scaling, rotation, and hotplug'
   check_manual 'lock/suspend' 'verify lock, suspend, wake, and session restart recovery'
   check_manual 'resource usage' 'measure idle 30 FPS CPU/GPU/memory and battery impact'
+  check_manual 'information panel' 'verify nearest-card expansion, reverse collapse, and two rebounds'
+  check_manual 'weather data' 'verify Portal location, QWeather attribution, tide, stale, and unavailable states'
 
   return "$failures"
 }

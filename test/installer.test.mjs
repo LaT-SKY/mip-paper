@@ -7,6 +7,7 @@ import {
   mkdir,
   readFile,
   rm,
+  stat,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -97,6 +98,7 @@ exit 0
     installRoot: path.join(home, '.local', 'lib', 'animated-ocean-wallpaper'),
     launcher: path.join(home, '.local', 'bin', 'animated-ocean-wallpaper'),
     config: path.join(configHome, 'animated-ocean-wallpaper', 'config.json'),
+    credentials: path.join(configHome, 'animated-ocean-wallpaper', 'weather-credentials.json'),
     service: path.join(configHome, 'systemd', 'user', 'animated-ocean-wallpaper.service'),
     kwinScript: path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper'),
     kwinrc: path.join(configHome, 'kwinrc'),
@@ -124,6 +126,8 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'dist', 'electron')), true);
     assert.equal(await exists(fixture.launcher), true);
     assert.equal(await exists(fixture.config), true);
+    assert.equal(await exists(fixture.credentials), true);
+    assert.equal((await stat(fixture.credentials)).mode & 0o777, 0o600);
     assert.equal(await exists(fixture.service), true);
     assert.equal(await exists(path.join(fixture.kwinScript, 'contents', 'code', 'main.js')), true);
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=true/);
@@ -191,8 +195,11 @@ test('repeated install preserves the existing user configuration', async () => {
     await runCli(['install', '--no-start'], fixture);
     const custom = '{"interactionEnabled":false,"frameRate":{"interactive":75}}\n';
     await writeFile(fixture.config, custom);
+    const credentials = '{"apiHost":"example.invalid","apiKey":"private"}\n';
+    await writeFile(fixture.credentials, credentials, { mode: 0o600 });
     await runCli(['install', '--no-start'], fixture);
     assert.equal(await readFile(fixture.config, 'utf8'), custom);
+    assert.equal(await readFile(fixture.credentials, 'utf8'), credentials);
   } finally {
     await cleanup(fixture);
   }
@@ -248,10 +255,12 @@ test('normal uninstall preserves config and purge removes it', async () => {
     assert.equal(await exists(fixture.launcher), false);
     assert.equal(await exists(fixture.service), false);
     assert.equal(await exists(fixture.config), true);
+    assert.equal(await exists(fixture.credentials), true);
 
     await runCli(['install', '--no-start'], fixture);
     await runCli(['uninstall', '--purge'], fixture);
     assert.equal(await exists(fixture.config), false);
+    assert.equal(await exists(fixture.credentials), false);
   } finally {
     await cleanup(fixture);
   }

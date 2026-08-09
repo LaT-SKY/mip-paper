@@ -15,7 +15,7 @@ async function executable(pathname, contents) {
   await chmod(pathname, 0o755);
 }
 
-async function fixture({ invalidConfig = false, coordinator = 'valid' } = {}) {
+async function fixture({ invalidConfig = false, invalidCredentials = false, coordinator = 'valid' } = {}) {
   const home = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-doctor-'));
   const fakeBin = path.join(home, 'fake-bin');
   const configHome = path.join(home, '.config');
@@ -48,6 +48,8 @@ async function fixture({ invalidConfig = false, coordinator = 'valid' } = {}) {
     await writeFile(path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper', 'contents', 'code', 'main.js'), '{}');
   }
   await writeFile(path.join(configHome, 'animated-ocean-wallpaper', 'config.json'), invalidConfig ? '{broken' : JSON.stringify({ interactionEnabled: true }));
+  const credentialsPath = path.join(configHome, 'animated-ocean-wallpaper', 'weather-credentials.json');
+  await writeFile(credentialsPath, invalidCredentials ? '{}' : JSON.stringify({ apiHost: 'weather.example.com', apiKey: 'private' }), { mode: 0o600 });
   await writeFile(path.join(configHome, 'systemd', 'user', 'animated-ocean-wallpaper.service'), '[Service]\n');
   await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nanimated-ocean-wallpaperEnabled=${coordinator === 'valid'}\n`);
   await executable(path.join(home, '.local', 'bin', 'animated-ocean-wallpaper'), '#!/usr/bin/env bash\n');
@@ -91,12 +93,26 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
   const fixtureData = await fixture();
   try {
     const { stdout } = await execFileAsync(cli, ['doctor'], { env: fixtureData.env });
-    for (const label of ['session', 'desktop', 'snapshot', 'config', 'service', 'KWin rule', 'KWin coordinator']) {
+    for (const label of ['session', 'desktop', 'snapshot', 'config', 'weather-credentials', 'service', 'KWin rule', 'KWin coordinator']) {
       assert.match(stdout, new RegExp(`PASS .*${label}`));
     }
     for (const label of ['window stacking', 'panel visibility', 'Alt\\+Tab', 'mouse input', 'multi-display', 'lock/suspend', 'resource usage']) {
       assert.match(stdout, new RegExp(`MANUAL .*${label}`));
     }
+  } finally {
+    await rm(fixtureData.home, { recursive: true, force: true });
+  }
+});
+
+test('doctor returns non-zero for invalid weather credentials without printing values', async () => {
+  const fixtureData = await fixture({ invalidCredentials: true });
+  try {
+    await assert.rejects(execFileAsync(cli, ['doctor'], { env: fixtureData.env }), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout, /FAIL weather-credentials/);
+      assert.doesNotMatch(error.stdout, /private|weather\.example\.com/);
+      return true;
+    });
   } finally {
     await rm(fixtureData.home, { recursive: true, force: true });
   }
