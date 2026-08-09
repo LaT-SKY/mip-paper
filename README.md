@@ -11,6 +11,19 @@
 - Node.js、npm、Electron 43.3.0
 - `systemd --user`
 - `kreadconfig6`、`kwriteconfig6`
+- GeoClue（自动定位时需要）
+
+Arch Linux 安装并启动 GeoClue：
+
+```bash
+sudo pacman -S geoclue
+sudo systemctl enable --now geoclue
+gsettings set org.gnome.system.location enabled true
+```
+
+安装后重新登录一次，让桌面会话启动 GeoClue 授权代理；软件包是在当前会话中刚安装时，这一步尤其重要。GeoClue 是按需启动的 D-Bus 服务，空闲后显示 `inactive` 属于正常行为。
+
+其他发行版请安装对应的 GeoClue 软件包、启用全局定位并确保授权代理随桌面会话启动。应用仍通过 XDG Desktop Portal 请求位置，不会由 renderer 直接访问 GeoClue；桌面环境的定位权限设置也必须允许该请求。
 
 安装器只写入当前用户目录，不需要 `sudo`。
 
@@ -155,7 +168,7 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 
 `weather.location.mode` 为 `auto` 时，通过 XDG Desktop Portal 请求城市级位置；权限被拒绝或定位失败后，使用缓存位置，最后以 `fallbackLocationId` 对应的东莞坐标降级。改为 `fixed` 时必须同时提供数值型 `latitude` 和 `longitude`，并且不请求 Portal。潮汐默认使用观测站 `P2352`。
 
-实时天气每 30 分钟刷新，预报和潮汐每 6 小时刷新。缓存 6 小时内标记为 fresh，6 至 24 小时标记为 stale，超过 24 小时显示 unavailable。天气数据由和风天气提供。
+实时天气每 30 分钟刷新，预报和潮汐每 6 小时刷新。缓存 6 小时内标记为 fresh，6 至 24 小时标记为 stale，超过 24 小时显示 unavailable。天气数据由和风天气提供。天气状态使用本地依赖 `qweather-icons@1.8.0` 映射为和风天气图标；其代码采用 MIT License，图标采用 CC BY 4.0 License。
 
 修改后执行：
 
