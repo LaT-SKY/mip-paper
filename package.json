@@ -10,6 +10,7 @@
     "check": "find src test -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check"
   },
   "dependencies": {
+    "dbus-next": "0.10.2",
     "electron": "43.3.0"
   }
 }
