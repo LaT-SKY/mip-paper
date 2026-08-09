@@ -43,6 +43,10 @@ test('mounts the approved floating audio ribbon inside the real panel', async ()
   for (const pathName of ['left', 'right', 'energy']) {
     assert.match(html, new RegExp(`data-audio-path="${pathName}"`));
   }
+  assert.match(
+    html,
+    /data-audio-path="energy"[\s\S]*data-audio-path="left"[\s\S]*data-audio-path="right"/,
+  );
   assert.match(html, /linearGradient[\s\S]*offset="14%"[\s\S]*offset="86%"/);
   assert.match(html, /mask="url\(#audio-ribbon-edge-mask\)"/);
   assert.match(panelCss, /\.audio-ribbon[\s\S]*pointer-events:\s*none/);
@@ -53,6 +57,10 @@ test('mounts the approved floating audio ribbon inside the real panel', async ()
   );
   assert.match(panelCss, /stroke-linecap:\s*round/);
   assert.match(panelCss, /stroke-linejoin:\s*round/);
+  for (const [pathName, width] of [['left', '2.8'], ['right', '2.8'], ['energy', '4.2']]) {
+    const rule = new RegExp(`\\.audio-path-${pathName}[^}]*stroke-width:\\s*${width}[^}]*drop-shadow`);
+    assert.match(panelCss, rule);
+  }
   assert.doesNotMatch(html, /switchBar|spectrum-bar|scanline|connector/);
   assert.match(renderer, /createAudioRibbonController/);
   assert.match(renderer, /onAudioSpectrumUpdated/);
