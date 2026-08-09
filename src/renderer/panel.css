@@ -64,9 +64,6 @@
 .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 15px; font: 700 8px/1 ui-monospace, SFMono-Regular, monospace; text-align: center; }
 .calendar-grid span { min-width: 0; padding: 3px 0; }
 .calendar-grid .today { color: #fff; background: #ff3478; }
-.information-card[data-status="stale"] { filter: saturate(0.72); }
-.information-card[data-status="unavailable"] { filter: grayscale(0.45); }
-
 @media (max-width: 820px) {
   .information-card { box-shadow: 5px 6px 0 rgba(255, 51, 119, 0.72), 0 12px 28px rgba(13, 75, 88, 0.22); }
   .card-time, .card-weather { top: 14%; width: 38%; height: 21%; padding: 15px; }

@@ -2,16 +2,12 @@ function distance(left, right) {
   return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
-function smoothstep(value) {
-  return value * value * (3 - 2 * value);
-}
-
-function bounceCurve(value) {
-  if (value <= 0.62) return 1.12 * smoothstep(value / 0.62);
-  if (value <= 0.82) return 1.12 + (0.96 - 1.12) * smoothstep((value - 0.62) / 0.2);
-  if (value < 1) return 0.96 + 0.04 * smoothstep((value - 0.82) / 0.18);
-  return 1;
-}
+const COLLAPSE_VECTORS = Object.freeze([
+  Object.freeze({ x: -0.46, y: -0.28 }),
+  Object.freeze({ x: 0.46, y: -0.28 }),
+  Object.freeze({ x: -0.44, y: 0.18 }),
+  Object.freeze({ x: 0.44, y: 0.18 }),
+]);
 
 export function createPanelState(config, cardCenters) {
   const progress = config.expanded ? 1 : 0;
@@ -24,11 +20,14 @@ export function createPanelState(config, cardCenters) {
     lastPointerAt: 0,
     order: cardCenters.map(({ id }) => id),
     lastExpansionOrder: cardCenters.map(({ id }) => id),
-    cards: cardCenters.map((center) => ({
+    cards: cardCenters.map((center, index) => ({
       ...center,
+      collapseX: center.collapseX ?? COLLAPSE_VECTORS[index]?.x ?? 0,
+      collapseY: center.collapseY ?? COLLAPSE_VECTORS[index]?.y ?? 0,
       progress,
       startProgress: progress,
       target: progress,
+      pending: progress,
       activateAt: 0,
       velocity: 0,
       previousVelocity: 0,
@@ -44,7 +43,7 @@ function begin(state, order, target, now) {
   order.forEach((orderedCard, index) => {
     const card = state.cards.find(({ id }) => id === orderedCard.id);
     card.startProgress = card.progress;
-    card.target = target;
+    card.pending = target;
     card.activateAt = now + index * state.config.animation.staggerDelayMs;
     card.velocity = 0;
     card.previousVelocity = 0;
@@ -86,28 +85,53 @@ export function advancePanel(state, elapsedSeconds) {
     requestCollapsed(state, state.lastPointer, state.timeMs);
   }
   for (const card of state.cards) {
+    if (state.timeMs >= card.activateAt) card.target = card.pending;
     if (state.timeMs < card.activateAt || card.progress === card.target) continue;
-    const duration = state.config.animation.durationMs;
-    const normalized = Math.min(1, (state.timeMs - card.activateAt) / duration);
-    const curve = bounceCurve(normalized);
-    const next = card.startProgress + (card.target - card.startProgress) * curve;
-    const velocity = (next - card.progress) / Math.max(elapsedSeconds, 0.0001);
-    if (card.previousVelocity && velocity && Math.sign(velocity) !== Math.sign(card.previousVelocity)) {
-      card.bounceCount = Math.min(2, card.bounceCount + 1);
-      if (card.bounceCount === 2) card.settling = true;
+    const substepCount = Math.max(1, Math.ceil(elapsedSeconds * 60));
+    const substepSeconds = elapsedSeconds / substepCount;
+    const springElapsed = Math.min(0.03, substepSeconds * 650 / state.config.animation.durationMs);
+    const omega = Math.PI * 2 * 4.7;
+    for (let step = 0; step < substepCount; step += 1) {
+      const damping = card.settling ? 1.3 : 0.42;
+      const acceleration = omega * omega * (card.target - card.progress)
+        - 2 * damping * omega * card.velocity;
+      card.velocity += acceleration * springElapsed;
+      card.progress += card.velocity * springElapsed;
+      const reversed = card.previousVelocity !== 0
+        && Math.sign(card.velocity) !== Math.sign(card.previousVelocity);
+      if (!card.settling && reversed) {
+        card.bounceCount += 1;
+        if (card.bounceCount === 2) {
+          card.settling = true;
+          card.velocity *= 0.38;
+        }
+      }
+      card.previousVelocity = card.velocity;
     }
-    card.progress = normalized === 1 ? card.target : next;
-    card.velocity = normalized === 1 ? 0 : velocity;
-    if (velocity) card.previousVelocity = velocity;
+    if (Math.abs(card.target - card.progress) < 0.0005 && Math.abs(card.velocity) < 0.003) {
+      card.progress = card.target;
+      card.velocity = 0;
+      card.previousVelocity = 0;
+    }
   }
   return state;
 }
 
 export function getCardTransforms(state) {
-  return state.cards.map((card) => ({
-    id: card.id,
-    progress: card.progress,
-    opacity: Math.max(state.config.collapsedOpacity, Math.min(1, card.progress)),
-    translatePercent: (1 - card.progress) * 18,
-  }));
+  return state.cards.map((card) => {
+    const collapsed = 1 - card.progress;
+    const burst = Math.max(0, card.progress - 1);
+    const visibleProgress = Math.max(0, Math.min(1, card.progress));
+    return {
+      id: card.id,
+      progress: card.progress,
+      translateXFactor: card.collapseX * collapsed,
+      translateYFactor: card.collapseY * collapsed,
+      scale: 1 - 0.12 * collapsed + burst * 0.22,
+      opacity: state.config.collapsedOpacity
+        + (1 - state.config.collapsedOpacity) * visibleProgress,
+      brightness: 1 + burst * 0.95,
+      saturation: 1 + burst * 1.3,
+    };
+  });
 }

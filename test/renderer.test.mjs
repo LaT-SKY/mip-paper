@@ -26,6 +26,10 @@ test('information projection is pointer-transparent and wired to panel motion', 
   assert.match(html, /panel\.css/);
   assert.match(panelCss, /\.information-panel[\s\S]*pointer-events:\s*none/);
   assert.match(panel, /from '\.\.\/panel-motion\.mjs'/);
+  assert.match(panel, /transform\.translateXFactor/);
+  assert.match(panel, /transform\.translateYFactor/);
+  assert.match(panel, /transform\.brightness/);
+  assert.match(panel, /transform\.saturation/);
   assert.match(renderer, /getInformationSnapshot\(\)/);
   assert.match(renderer, /onInformationUpdated/);
   assert.doesNotMatch(panelCss, /repeating-linear-gradient/);

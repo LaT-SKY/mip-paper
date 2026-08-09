@@ -54,12 +54,13 @@ export function createPanelController({ root, cards, config, viewport }) {
       root.style.transform = `translate3d(${camera.x * 1.1}px, ${camera.y * 1.1 - 8}px, 42px) rotate(${camera.angle}rad) rotateX(${-pointer.normalizedY * 1.25}deg) rotateY(${pointer.normalizedX * 1.8}deg)`;
       for (const transform of getCardTransforms(state)) {
         const element = elements.get(transform.id);
-        const directionX = transform.id === 'time' || transform.id === 'tide' ? -1 : 1;
-        const directionY = transform.id === 'time' || transform.id === 'weather' ? -1 : 1;
-        element.style.setProperty('--panel-x', `${directionX * element.offsetWidth * transform.translatePercent / 100}px`);
-        element.style.setProperty('--panel-y', `${directionY * element.offsetHeight * transform.translatePercent / 100}px`);
-        element.style.setProperty('--panel-scale', String(0.88 + transform.progress * 0.12));
+        element.style.setProperty('--panel-x', `${element.offsetWidth * transform.translateXFactor}px`);
+        element.style.setProperty('--panel-y', `${element.offsetHeight * transform.translateYFactor}px`);
+        element.style.setProperty('--panel-scale', String(transform.scale));
         element.style.opacity = String(transform.opacity);
+        element.style.filter = transform.progress > 1
+          ? `brightness(${transform.brightness}) saturate(${transform.saturation})`
+          : 'none';
       }
     },
     setInformation(snapshot) {

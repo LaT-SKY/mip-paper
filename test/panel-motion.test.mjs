@@ -53,3 +53,33 @@ test('950ms animation has one strong and one weak rebound then settles', () => {
   assert.equal(getCardTransforms(state)[0].opacity, 1);
   assert.equal(state.cards[0].progress, 1);
 });
+
+test('matches the frozen spring trajectory at 60 FPS', () => {
+  const state = createPanelState(config, [centers[0]]);
+  requestExpanded(state, { x: 0, y: 0 }, 0);
+  for (let frame = 0; frame < 10; frame += 1) advancePanel(state, 1 / 60);
+  assert.ok(Math.abs(state.cards[0].progress - 1.195777945550905) < 1e-10);
+  assert.ok(Math.abs(state.cards[0].velocity - -0.9119418921296525) < 1e-10);
+  assert.equal(state.cards[0].bounceCount, 1);
+  for (let frame = 10; frame < 20; frame += 1) advancePanel(state, 1 / 60);
+  assert.ok(Math.abs(state.cards[0].progress - 0.9623548657483698) < 1e-10);
+  assert.equal(state.cards[0].bounceCount, 2);
+  assert.equal(state.cards[0].settling, true);
+});
+
+test('preserves frozen card-specific collapse and energy mapping', () => {
+  const state = createPanelState(config, centers);
+  const collapsed = getCardTransforms(state);
+  assert.deepEqual(collapsed.map(({ id, translateXFactor, translateYFactor, scale, opacity }) => ({ id, translateXFactor, translateYFactor, scale, opacity })), [
+    { id: 'a', translateXFactor: -0.46, translateYFactor: -0.28, scale: 0.88, opacity: 0.08 },
+    { id: 'b', translateXFactor: 0.46, translateYFactor: -0.28, scale: 0.88, opacity: 0.08 },
+    { id: 'c', translateXFactor: -0.44, translateYFactor: 0.18, scale: 0.88, opacity: 0.08 },
+    { id: 'd', translateXFactor: 0.44, translateYFactor: 0.18, scale: 0.88, opacity: 0.08 },
+  ]);
+  requestExpanded(state, { x: 0, y: 0 }, 0);
+  for (let frame = 0; frame < 10; frame += 1) advancePanel(state, 1 / 60);
+  const burst = getCardTransforms(state)[0];
+  assert.ok(Math.abs(burst.scale - 1.0665645014873077) < 1e-10);
+  assert.ok(Math.abs(burst.brightness - 1.1859890482733597) < 1e-10);
+  assert.ok(Math.abs(burst.saturation - 1.2545113292161765) < 1e-10);
+});
