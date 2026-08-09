@@ -17,6 +17,8 @@ import { readInformationCache, writeInformationCache } from './information-cache
 import { createLocationProvider, createPortalLocationAdapter } from './location-provider.mjs';
 import { createQWeatherClient } from './qweather-client.mjs';
 import { createInformationService } from './information-service.mjs';
+import { createAudioSpectrumService } from './audio-spectrum-service.mjs';
+import { createConfigWatcher } from './config-watcher.mjs';
 import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
@@ -24,6 +26,10 @@ import { validateProbeSummary } from './performance-probe.mjs';
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
 let informationService;
+let audioSpectrumService;
+let configWatcher;
+let quitInProgress = false;
+let quitReady = false;
 
 async function buildInformationService(config) {
   const cachePathname = informationCachePath(process.env, os.homedir());
@@ -76,6 +82,7 @@ async function run() {
   const config = await loadConfig(pathname);
   const probe = parseProbeOptions(process.env);
   informationService = await buildInformationService(config);
+  audioSpectrumService = createAudioSpectrumService({ config: config.audio });
 
   manager = createWindowManager({
     BrowserWindow,
@@ -84,6 +91,7 @@ async function run() {
     defaultSession: session.defaultSession,
     config,
     informationService,
+    audioSpectrumService,
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
     probe,
@@ -95,11 +103,39 @@ async function run() {
   });
   await manager.start();
   informationService.start();
+  await audioSpectrumService.start();
+  configWatcher = createConfigWatcher({
+    pathname,
+    load: loadConfig,
+    onConfig(nextConfig) {
+      manager.updateAudioConfig(nextConfig.audio);
+      void audioSpectrumService.updateConfig(nextConfig.audio).catch((error) => {
+        console.error(`Audio configuration update failed: ${error?.message || 'unknown error'}`);
+      });
+    },
+    onError(error) {
+      console.error(`Configuration reload failed: ${error?.message || 'unknown error'}`);
+    },
+  });
+  configWatcher.start();
 }
 
-app.on('before-quit', () => {
-  informationService?.stop();
-  manager?.stop();
+app.on('before-quit', (event) => {
+  if (quitReady) return;
+  event.preventDefault();
+  if (quitInProgress) return;
+  quitInProgress = true;
+  configWatcher?.stop();
+  void (async () => {
+    try {
+      await audioSpectrumService?.stop();
+    } finally {
+      informationService?.stop();
+      manager?.stop();
+      quitReady = true;
+      app.quit();
+    }
+  })();
 });
 app.on('window-all-closed', () => {});
 

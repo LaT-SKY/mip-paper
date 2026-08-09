@@ -2,6 +2,8 @@ export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
 export const PROBE_REPORT_CHANNEL = 'wallpaper:report-probe';
 export const INFORMATION_CHANNEL = 'wallpaper:get-information';
 export const INFORMATION_UPDATED_CHANNEL = 'wallpaper:information-updated';
+export const AUDIO_SPECTRUM_UPDATED_CHANNEL = 'wallpaper:audio-spectrum-updated';
+export const AUDIO_CONFIG_UPDATED_CHANNEL = 'wallpaper:audio-config-updated';
 const APP_ID = 'animated-ocean-wallpaper';
 
 export function formatDisplayTargetTitle(display) {
@@ -20,10 +22,13 @@ export function createWindowManager({
   probe = null,
   onProbeReport = null,
   informationService = null,
+  audioSpectrumService = null,
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
   const informationUnsubscribers = new Map();
+  const audioUnsubscribers = new Map();
+  let currentConfig = config;
   let queue = Promise.resolve();
   let started = false;
 
@@ -69,14 +74,15 @@ export function createWindowManager({
 
     secureWebContents(window.webContents);
     window.on('page-title-updated', (event) => event.preventDefault());
-    window.setIgnoreMouseEvents(!config.interactionEnabled);
+    window.setIgnoreMouseEvents(!currentConfig.interactionEnabled);
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     window.once('ready-to-show', () => window.showInactive());
     windows.set(display.id, window);
     bootstrapByWebContents.set(window.webContents.id, {
-      config,
+      config: currentConfig,
       display,
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
+      ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
       ...(probe ? { probe } : {}),
     });
     if (informationService) {
@@ -84,9 +90,16 @@ export function createWindowManager({
         window.webContents.send(INFORMATION_UPDATED_CHANNEL, snapshot);
       }));
     }
+    if (audioSpectrumService) {
+      audioUnsubscribers.set(window.webContents.id, audioSpectrumService.subscribe((snapshot) => {
+        window.webContents.send(AUDIO_SPECTRUM_UPDATED_CHANNEL, snapshot);
+      }));
+    }
     window.once('closed', () => {
       informationUnsubscribers.get(window.webContents.id)?.();
       informationUnsubscribers.delete(window.webContents.id);
+      audioUnsubscribers.get(window.webContents.id)?.();
+      audioUnsubscribers.delete(window.webContents.id);
       windows.delete(display.id);
       bootstrapByWebContents.delete(window.webContents.id);
     });
@@ -113,9 +126,10 @@ export function createWindowManager({
       window.setTitle(formatDisplayTargetTitle(display));
       window.setBounds(display.bounds);
       bootstrapByWebContents.set(window.webContents.id, {
-        config,
+        config: currentConfig,
         display,
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
+        ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
         ...(probe ? { probe } : {}),
       });
     }
@@ -178,11 +192,30 @@ export function createWindowManager({
     windows.clear();
     bootstrapByWebContents.clear();
     informationUnsubscribers.clear();
+    audioUnsubscribers.clear();
+  }
+
+  function updateAudioConfig(audioConfig) {
+    currentConfig = {
+      ...currentConfig,
+      audio: { ...audioConfig },
+    };
+    for (const window of windows.values()) {
+      const bootstrap = bootstrapByWebContents.get(window.webContents.id);
+      if (bootstrap) {
+        bootstrapByWebContents.set(window.webContents.id, {
+          ...bootstrap,
+          config: currentConfig,
+        });
+      }
+      window.webContents.send(AUDIO_CONFIG_UPDATED_CHANNEL, { ...audioConfig });
+    }
   }
 
   return {
     start,
     stop,
+    updateAudioConfig,
     whenIdle: () => queue,
   };
 }

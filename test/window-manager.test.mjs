@@ -4,6 +4,8 @@ import test from 'node:test';
 
 import { DEFAULT_CONFIG } from '../src/config.mjs';
 import {
+  AUDIO_CONFIG_UPDATED_CHANNEL,
+  AUDIO_SPECTRUM_UPDATED_CHANNEL,
   BOOTSTRAP_CHANNEL,
   INFORMATION_CHANNEL,
   INFORMATION_UPDATED_CHANNEL,
@@ -140,6 +142,22 @@ function createFixture(config = DEFAULT_CONFIG) {
     getSnapshot: () => ({ weather: { status: 'fresh' } }),
     subscribe(listener) { informationListeners.add(listener); return () => informationListeners.delete(listener); },
   };
+  const audioListeners = new Set();
+  const audioSnapshot = {
+    status: 'unavailable',
+    sequence: 0,
+    timestampMs: 0,
+    left: Array(72).fill(0),
+    right: Array(72).fill(0),
+    rms: 0,
+  };
+  const audioSpectrumService = {
+    getSnapshot: () => audioSnapshot,
+    subscribe(listener) {
+      audioListeners.add(listener);
+      return () => audioListeners.delete(listener);
+    },
+  };
   const manager = createWindowManager({
     BrowserWindow: FakeWindow,
     screen,
@@ -147,10 +165,20 @@ function createFixture(config = DEFAULT_CONFIG) {
     defaultSession,
     config,
     informationService,
+    audioSpectrumService,
     rendererPath: '/app/src/renderer/index.html',
     preloadPath: '/app/src/preload.mjs',
   });
-  return { manager, displays, screen, ipcMain, defaultSession, informationListeners };
+  return {
+    manager,
+    displays,
+    screen,
+    ipcMain,
+    defaultSession,
+    informationListeners,
+    audioListeners,
+    audioSnapshot,
+  };
 }
 
 test('creates hardened windows for full display bounds', async () => {
@@ -189,8 +217,48 @@ test('provides bootstrap data only to a managed renderer', async () => {
     config: DEFAULT_CONFIG,
     display: displays[0],
     information: { weather: { status: 'fresh' } },
+    audioSpectrum: {
+      status: 'unavailable',
+      sequence: 0,
+      timestampMs: 0,
+      left: Array(72).fill(0),
+      right: Array(72).fill(0),
+      rms: 0,
+    },
   });
   await assert.rejects(handler({ sender: { id: 999 } }), /Unknown wallpaper renderer/);
+});
+
+test('streams one spectrum service to every window and unsubscribes closed windows', async () => {
+  const { manager, audioListeners } = createFixture();
+  await manager.start();
+  const snapshot = {
+    status: 'active', sequence: 1, timestampMs: 10,
+    left: Array(72).fill(0.2), right: Array(72).fill(0.4), rms: 0.3,
+  };
+  for (const listener of audioListeners) listener(snapshot);
+  assert.deepEqual(FakeWindow.instances.map((window) => window.webContents.sent.at(-1)), [
+    { channel: AUDIO_SPECTRUM_UPDATED_CHANNEL, value: snapshot },
+    { channel: AUDIO_SPECTRUM_UPDATED_CHANNEL, value: snapshot },
+  ]);
+  const before = audioListeners.size;
+  FakeWindow.instances[0].close();
+  assert.equal(audioListeners.size, before - 1);
+});
+
+test('broadcasts only the validated audio subsection on runtime config changes', async () => {
+  const { manager, ipcMain } = createFixture();
+  await manager.start();
+  const audio = { ...DEFAULT_CONFIG.audio, fadeInMs: 0 };
+  manager.updateAudioConfig(audio);
+  assert.deepEqual(FakeWindow.instances.map((window) => window.webContents.sent.at(-1)), [
+    { channel: AUDIO_CONFIG_UPDATED_CHANNEL, value: audio },
+    { channel: AUDIO_CONFIG_UPDATED_CHANNEL, value: audio },
+  ]);
+  const bootstrap = await ipcMain.handlers.get(BOOTSTRAP_CHANNEL)({
+    sender: FakeWindow.instances[0].webContents,
+  });
+  assert.deepEqual(bootstrap.config.audio, audio);
 });
 
 test('streams information only to managed renderers and unsubscribes closed windows', async () => {
@@ -284,7 +352,9 @@ test('uses configuration to control mouse passthrough', async () => {
 });
 
 test('stop closes windows, removes IPC, and detaches display listeners', async () => {
-  const { manager, screen, ipcMain } = createFixture();
+  const {
+    manager, screen, ipcMain, informationListeners, audioListeners,
+  } = createFixture();
   await manager.start();
   manager.stop();
 
@@ -294,4 +364,6 @@ test('stop closes windows, removes IPC, and detaches display listeners', async (
   assert.equal(screen.listenerCount('display-added'), 0);
   assert.equal(screen.listenerCount('display-removed'), 0);
   assert.equal(screen.listenerCount('display-metrics-changed'), 0);
+  assert.equal(informationListeners.size, 0);
+  assert.equal(audioListeners.size, 0);
 });
