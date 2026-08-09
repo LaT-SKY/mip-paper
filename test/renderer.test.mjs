@@ -35,6 +35,33 @@ test('information projection is pointer-transparent and wired to panel motion', 
   assert.doesNotMatch(panelCss, /repeating-linear-gradient/);
 });
 
+test('separates frosted card surfaces from their animated 3D shells', async () => {
+  const html = await readFile('src/renderer/index.html', 'utf8');
+  const panelCss = await readFile('src/renderer/panel.css', 'utf8');
+  const surfaces = html.match(/class="information-card-surface"/g) ?? [];
+  const shellRule = panelCss.match(/\.information-card\s*\{([^}]*)\}/)?.[1] ?? '';
+  const surfaceRule = panelCss.match(/\.information-card-surface\s*\{([^}]*)\}/)?.[1] ?? '';
+
+  assert.equal(surfaces.length, 4);
+  for (const card of ['time', 'weather', 'tide', 'calendar']) {
+    assert.match(
+      html,
+      new RegExp(`data-panel-card="${card}"[\\s\\S]*?class="information-card-surface"`),
+    );
+  }
+  assert.match(shellRule, /rotateX\(var\(--panel-rx\)\)/);
+  assert.match(shellRule, /rotateY\(var\(--panel-ry\)\)/);
+  assert.match(shellRule, /box-shadow:/);
+  assert.doesNotMatch(shellRule, /backdrop-filter|background:|border:|overflow:\s*hidden|padding:/);
+  assert.match(surfaceRule, /backdrop-filter:\s*blur\(9px\)\s*saturate\(1\.08\)/);
+  assert.match(surfaceRule, /background:\s*rgba\(243,\s*255,\s*255,\s*0\.77\)/);
+  assert.match(surfaceRule, /border:\s*1px\s+solid/);
+  assert.match(surfaceRule, /overflow:\s*hidden/);
+  assert.match(surfaceRule, /padding:\s*var\(--card-padding\)/);
+  assert.doesNotMatch(surfaceRule, /transform:|will-change:/);
+  assert.doesNotMatch(panelCss, /backface-visibility|translateZ\(0\)/);
+});
+
 test('mounts the approved floating audio ribbon inside the real panel', async () => {
   const html = await readFile('src/renderer/index.html', 'utf8');
   const panelCss = await readFile('src/renderer/panel.css', 'utf8');
