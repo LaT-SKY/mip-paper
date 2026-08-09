@@ -5,6 +5,7 @@ import {
 } from '../motion.mjs';
 import { createScheduler } from '../render-scheduler.mjs';
 import { createProbeCollector } from '../performance-probe.mjs';
+import { createPanelController } from './panel.mjs';
 
 const canvas = document.getElementById('wallpaper');
 const errorOutput = document.getElementById('error');
@@ -75,13 +76,27 @@ async function loadImage() {
 }
 
 async function start() {
-  const [bootstrap, image] = await Promise.all([
+  const [bootstrap, image, information] = await Promise.all([
     window.wallpaper.getBootstrap(),
     loadImage(),
+    window.wallpaper.getInformationSnapshot(),
   ]);
   const { config, display } = bootstrap;
   const viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
   const state = createMotionState(config, viewport, displayPhase(display.id));
+  const panel = createPanelController({
+    root: document.getElementById('information-panel'),
+    cards: [...document.querySelectorAll('[data-panel-card]')],
+    config: config.panel,
+    viewport,
+  });
+  panel.setInformation(information ?? bootstrap.information);
+  const unsubscribeInformation = window.wallpaper.onInformationUpdated((snapshot) => panel.setInformation(snapshot));
+  window.addEventListener('pagehide', unsubscribeInformation, { once: true });
+  const advanceScene = (...args) => {
+    advanceMotion(...args);
+    panel.advance(args[1], state.camera, state.pointer);
+  };
   const probe = bootstrap.probe?.enabled ? bootstrap.probe : null;
   if (probe) {
     const collector = createProbeCollector({ clock: () => performance.now() / 1000 });
@@ -99,7 +114,7 @@ async function start() {
       viewport,
       advance: (...args) => {
         const started = performance.now();
-        advanceMotion(...args);
+        advanceScene(...args);
         collector.recordWork(performance.now() - started);
       },
       draw: (...args) => {
@@ -138,7 +153,7 @@ async function start() {
     state,
     config,
     viewport,
-    advance: advanceMotion,
+    advance: advanceScene,
     draw: (nextState, nextViewport) => draw(image, nextState, nextViewport),
   });
 
@@ -154,12 +169,18 @@ async function start() {
     );
     if (accepted && state.mode === 'drift') {
     }
+    if (accepted) panel.recordPointer(event.clientX - rect.left, event.clientY - rect.top, performance.now());
   });
 
   canvas.addEventListener('pointerleave', () => {
     state.pointer.initialized = false;
     state.pointer.lastInput = -Infinity;
   });
+
+  window.addEventListener('resize', () => panel.resize(
+    Math.max(canvas.clientWidth, 1),
+    Math.max(canvas.clientHeight, 1),
+  ));
 
 }
 

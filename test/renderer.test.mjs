@@ -9,9 +9,26 @@ test('renderer is a control-free full-screen Canvas page', async () => {
   assert.match(html, /<canvas id="wallpaper"><\/canvas>/);
   assert.match(html, /<script type="module" src="\.\/renderer\.mjs"><\/script>/);
   assert.doesNotMatch(html, /<input|<button|type="range"|type="number"/);
+  for (const card of ['time', 'weather', 'tide', 'calendar']) {
+    assert.match(html, new RegExp(`data-panel-card="${card}"`));
+  }
+  assert.doesNotMatch(html, /switchBar|scanline|connector/);
   assert.match(css, /width:\s*100vw/);
   assert.match(css, /height:\s*100vh/);
   assert.match(css, /overflow:\s*hidden/);
+});
+
+test('information projection is pointer-transparent and wired to panel motion', async () => {
+  const html = await readFile('src/renderer/index.html', 'utf8');
+  const panelCss = await readFile('src/renderer/panel.css', 'utf8');
+  const renderer = await readFile('src/renderer/renderer.mjs', 'utf8');
+  const panel = await readFile('src/renderer/panel.mjs', 'utf8');
+  assert.match(html, /panel\.css/);
+  assert.match(panelCss, /\.information-panel[\s\S]*pointer-events:\s*none/);
+  assert.match(panel, /from '\.\.\/panel-motion\.mjs'/);
+  assert.match(renderer, /getInformationSnapshot\(\)/);
+  assert.match(renderer, /onInformationUpdated/);
+  assert.doesNotMatch(panelCss, /repeating-linear-gradient/);
 });
 
 test('renderer uses a non-alpha high-DPI Canvas without blur effects', async () => {

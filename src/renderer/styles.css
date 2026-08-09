@@ -17,6 +17,8 @@ body {
 }
 
 #wallpaper {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100vw;
   height: 100vh;
@@ -32,6 +34,7 @@ body {
   background: #152229;
   font: 16px/1.5 system-ui, sans-serif;
   text-align: center;
+  z-index: 10;
 }
 
 #error[hidden] {

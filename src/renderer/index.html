@@ -5,9 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>animated-ocean-wallpaper</title>
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./panel.css">
   </head>
   <body>
     <canvas id="wallpaper"></canvas>
+    <main class="information-panel" id="information-panel" aria-label="桌面信息面板">
+      <section class="information-card card-time" data-panel-card="time">
+        <div class="card-kicker">LOCAL TIME / 01</div>
+        <time class="card-large" data-field="time">--:--</time>
+        <div class="card-sub" data-field="date">LOCAL</div>
+      </section>
+      <section class="information-card card-weather" data-panel-card="weather">
+        <div class="card-kicker">COASTAL WEATHER</div>
+        <div class="weather-line"><strong class="card-large" data-field="temperature">--°</strong><span class="weather-mark"></span></div>
+        <div class="card-sub" data-field="condition">UNAVAILABLE</div>
+      </section>
+      <section class="information-card card-tide" data-panel-card="tide">
+        <div class="card-kicker">TIDAL STATE / P2352</div>
+        <strong class="card-large" data-field="tide-state">--</strong>
+        <div class="card-sub" data-field="tide-next">UNAVAILABLE</div>
+        <div class="card-chips"><span data-field="tide-status">NO DATA</span></div>
+      </section>
+      <section class="information-card card-calendar" data-panel-card="calendar">
+        <div class="card-kicker" data-field="month">CALENDAR</div>
+        <div class="calendar-grid" data-field="calendar-grid"></div>
+      </section>
+    </main>
     <output id="error" hidden></output>
     <script type="module" src="./renderer.mjs"></script>
   </body>
