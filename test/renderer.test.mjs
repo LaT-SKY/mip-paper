@@ -44,10 +44,10 @@ test('separates frosted card surfaces from their animated 3D shells', async () =
 
   assert.equal(surfaces.length, 4);
   for (const card of ['time', 'weather', 'tide', 'calendar']) {
-    assert.match(
-      html,
-      new RegExp(`data-panel-card="${card}"[\\s\\S]*?class="information-card-surface"`),
-    );
+    const cardBody = html.match(
+      new RegExp(`<section\\b[^>]*data-panel-card="${card}"[^>]*>([\\s\\S]*?)</section>`),
+    )?.[1] ?? '';
+    assert.match(cardBody, /class="information-card-surface"/);
   }
   assert.match(shellRule, /rotateX\(var\(--panel-rx\)\)/);
   assert.match(shellRule, /rotateY\(var\(--panel-ry\)\)/);
