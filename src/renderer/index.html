@@ -6,18 +6,19 @@
     <title>animated-ocean-wallpaper</title>
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./panel.css">
+    <link rel="stylesheet" href="../../node_modules/qweather-icons/font/qweather-icons.css">
   </head>
   <body>
     <canvas id="wallpaper"></canvas>
     <main class="information-panel" id="information-panel" aria-label="桌面信息面板">
       <section class="information-card card-time" data-panel-card="time">
-        <div class="card-kicker">LOCAL TIME / 01</div>
+        <div class="card-kicker">LOCAL TIME</div>
         <time class="card-large" data-field="time">--:--</time>
         <div class="card-sub" data-field="date">LOCAL</div>
       </section>
       <section class="information-card card-weather" data-panel-card="weather">
         <div class="card-kicker">COASTAL WEATHER</div>
-        <div class="weather-line"><strong class="card-large" data-field="temperature">--°</strong><span class="weather-mark"></span></div>
+        <div class="weather-line"><strong class="card-large" data-field="temperature">--°</strong><i class="weather-icon qi-999" data-field="weather-icon" aria-hidden="true"></i></div>
         <div class="card-sub" data-field="condition">UNAVAILABLE</div>
       </section>
       <section class="information-card card-tide" data-panel-card="tide">
@@ -28,7 +29,8 @@
       </section>
       <section class="information-card card-calendar" data-panel-card="calendar">
         <div class="card-kicker" data-field="month">CALENDAR</div>
-        <div class="calendar-grid" data-field="calendar-grid"></div>
+        <div class="calendar-weekdays" data-field="calendar-weekdays"></div>
+        <div class="calendar-days" data-field="calendar-days"></div>
       </section>
     </main>
     <output id="error" hidden></output>

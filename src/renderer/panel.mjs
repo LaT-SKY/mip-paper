@@ -4,6 +4,8 @@ import {
   getCardTransforms,
   recordPointer,
 } from '../panel-motion.mjs';
+import { buildMonthCalendar } from '../month-calendar.mjs';
+import { qweatherIconClass } from '../weather-icon.mjs';
 
 const CARD_CENTERS = [
   { id: 'time', x: 0.22, y: 0.24 },
@@ -19,21 +21,32 @@ export function createPanelController({ root, cards, config, viewport }) {
   const state = createPanelState(config, centers);
   const elements = new Map(cards.map((element) => [element.dataset.panelCard, element]));
   let lastSecond = -1;
+  let lastCalendarDate = '';
   recordPointer(state, viewport.width / 2, viewport.height / 2, performance.now());
 
-  function renderTime() {
-    const now = new Date();
+  function renderClock(now) {
     if (now.getSeconds() === lastSecond) return;
     lastSecond = now.getSeconds();
     field(root, 'time').textContent = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
     field(root, 'date').textContent = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: '2-digit' }).format(now).toUpperCase();
+  }
+
+  function renderCalendar(now) {
+    const calendarDate = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+    if (calendarDate === lastCalendarDate) return;
+    lastCalendarDate = calendarDate;
+    const model = buildMonthCalendar(now);
     field(root, 'month').textContent = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(now).toUpperCase();
-    const grid = field(root, 'calendar-grid');
-    grid.replaceChildren(...Array.from({ length: 14 }, (_, offset) => {
+    field(root, 'calendar-weekdays').replaceChildren(...model.weekdays.map((weekday) => {
       const cell = document.createElement('span');
-      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + offset);
-      cell.textContent = String(date.getDate());
-      if (offset === 6) cell.className = 'today';
+      cell.textContent = weekday;
+      return cell;
+    }));
+    field(root, 'calendar-days').replaceChildren(...model.days.map((day) => {
+      const cell = document.createElement('span');
+      cell.textContent = String(day.day);
+      cell.classList.toggle('outside-month', !day.inCurrentMonth);
+      cell.classList.toggle('today', day.isToday);
       return cell;
     }));
   }
@@ -50,7 +63,9 @@ export function createPanelController({ root, cards, config, viewport }) {
     },
     advance(elapsedSeconds, camera, pointer) {
       advancePanel(state, elapsedSeconds);
-      renderTime();
+      const now = new Date();
+      renderClock(now);
+      renderCalendar(now);
       root.style.transform = `translate3d(${camera.x * 1.1}px, ${camera.y * 1.1 - 8}px, 42px) rotate(${camera.angle}rad) rotateX(${-pointer.normalizedY * 1.25}deg) rotateY(${pointer.normalizedX * 1.8}deg)`;
       for (const transform of getCardTransforms(state)) {
         const element = elements.get(transform.id);
@@ -68,6 +83,7 @@ export function createPanelController({ root, cards, config, viewport }) {
       const weather = snapshot?.weather ?? { status: 'unavailable' };
       weatherCard.dataset.status = weather.status;
       field(root, 'temperature').textContent = weather.current?.temperature == null ? '--°' : `${Math.round(weather.current.temperature)}°`;
+      field(root, 'weather-icon').className = `weather-icon ${qweatherIconClass(weather.current?.icon)}`;
       field(root, 'condition').textContent = weather.current
         ? `${weather.current.condition.toUpperCase()}${weather.current.humidity == null ? '' : ` · HUMIDITY ${weather.current.humidity}%`}`
         : 'UNAVAILABLE';

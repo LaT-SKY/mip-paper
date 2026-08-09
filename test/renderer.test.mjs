@@ -35,6 +35,24 @@ test('information projection is pointer-transparent and wired to panel motion', 
   assert.doesNotMatch(panelCss, /repeating-linear-gradient/);
 });
 
+test('information cards use official weather icons and a complete month grid', async () => {
+  const html = await readFile('src/renderer/index.html', 'utf8');
+  const panel = await readFile('src/renderer/panel.mjs', 'utf8');
+  const panelCss = await readFile('src/renderer/panel.css', 'utf8');
+  assert.match(html, />LOCAL TIME<\/div>/);
+  assert.doesNotMatch(html, /LOCAL TIME \/ 01|weather-mark/);
+  assert.match(html, /\.\.\/\.\.\/node_modules\/qweather-icons\/font\/qweather-icons\.css/);
+  assert.doesNotMatch(html, /cdn\.jsdelivr|https?:\/\//);
+  assert.match(html, /data-field="weather-icon"/);
+  assert.match(html, /data-field="calendar-weekdays"/);
+  assert.match(html, /data-field="calendar-days"/);
+  assert.match(panel, /buildMonthCalendar/);
+  assert.match(panel, /qweatherIconClass/);
+  assert.match(panel, /outside-month/);
+  assert.match(panelCss, /grid-template-columns:\s*repeat\(7/);
+  assert.doesNotMatch(panelCss, /\.weather-mark/);
+});
+
 test('renderer uses a non-alpha high-DPI Canvas without blur effects', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
 
