@@ -160,3 +160,57 @@ export function buildEnergyPoints(rms) {
     direction: -1,
   });
 }
+
+export function createAudioRibbonController({ root, config } = {}) {
+  if (!root || typeof root.querySelector !== 'function') {
+    throw new TypeError('audio ribbon root is required');
+  }
+  const paths = {
+    left: root.querySelector('[data-audio-path="left"]'),
+    energy: root.querySelector('[data-audio-path="energy"]'),
+    right: root.querySelector('[data-audio-path="right"]'),
+  };
+  if (!paths.left || !paths.energy || !paths.right) {
+    throw new TypeError('audio ribbon paths are required');
+  }
+  const state = createAudioRibbonState(config);
+  let destroyed = false;
+
+  function render() {
+    paths.left.setAttribute('d', pointsToSmoothPath(buildRibbonPoints(state.left, {
+      baseline: 48,
+      amplitude: 24,
+      direction: -1,
+    })));
+    paths.energy.setAttribute('d', pointsToSmoothPath(buildEnergyPoints(state.rms)));
+    paths.right.setAttribute('d', pointsToSmoothPath(buildRibbonPoints(state.right, {
+      baseline: 92,
+      amplitude: 24,
+      direction: 1,
+    })));
+    root.style.opacity = String(state.opacity);
+    root.dataset.status = state.status;
+  }
+
+  render();
+  return {
+    setSnapshot(snapshot, receivedAtMs = performance.now()) {
+      if (!destroyed) return applySpectrumSnapshot(state, snapshot, receivedAtMs);
+      return false;
+    },
+    setConfig(audioConfig) {
+      if (!destroyed) applyAudioConfig(state, audioConfig);
+    },
+    advance(elapsedMs, nowMs) {
+      if (destroyed) return;
+      advanceAudioRibbon(state, elapsedMs, nowMs);
+      render();
+    },
+    resize() {},
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      root.style.opacity = '0';
+    },
+  };
+}

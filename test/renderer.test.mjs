@@ -35,6 +35,27 @@ test('information projection is pointer-transparent and wired to panel motion', 
   assert.doesNotMatch(panelCss, /repeating-linear-gradient/);
 });
 
+test('mounts the approved floating audio ribbon inside the real panel', async () => {
+  const html = await readFile('src/renderer/index.html', 'utf8');
+  const panelCss = await readFile('src/renderer/panel.css', 'utf8');
+  const renderer = await readFile('src/renderer/renderer.mjs', 'utf8');
+  assert.match(html, /<main class="information-panel"[\s\S]*data-audio-ribbon[\s\S]*<\/main>/);
+  for (const pathName of ['left', 'right', 'energy']) {
+    assert.match(html, new RegExp(`data-audio-path="${pathName}"`));
+  }
+  assert.match(html, /linearGradient[\s\S]*offset="14%"[\s\S]*offset="86%"/);
+  assert.match(html, /mask="url\(#audio-ribbon-edge-mask\)"/);
+  assert.match(panelCss, /\.audio-ribbon[\s\S]*pointer-events:\s*none/);
+  assert.match(panelCss, /stroke-linecap:\s*round/);
+  assert.match(panelCss, /stroke-linejoin:\s*round/);
+  assert.doesNotMatch(html, /switchBar|spectrum-bar|scanline|connector/);
+  assert.match(renderer, /createAudioRibbonController/);
+  assert.match(renderer, /onAudioSpectrumUpdated/);
+  assert.match(renderer, /onAudioConfigUpdated/);
+  assert.match(renderer, /audioRibbon\.advance/);
+  assert.match(renderer, /createScheduler\('adaptive'\)/);
+});
+
 test('information cards use official weather icons and a complete month grid', async () => {
   const html = await readFile('src/renderer/index.html', 'utf8');
   const panel = await readFile('src/renderer/panel.mjs', 'utf8');

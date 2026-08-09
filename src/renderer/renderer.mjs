@@ -6,6 +6,7 @@ import {
 import { createScheduler } from '../render-scheduler.mjs';
 import { createProbeCollector } from '../performance-probe.mjs';
 import { createPanelController } from './panel.mjs';
+import { createAudioRibbonController } from './audio-ribbon.mjs';
 
 const canvas = document.getElementById('wallpaper');
 const errorOutput = document.getElementById('error');
@@ -90,12 +91,29 @@ async function start() {
     config: config.panel,
     viewport,
   });
+  const audioRibbon = createAudioRibbonController({
+    root: document.querySelector('[data-audio-ribbon]'),
+    config: config.audio,
+  });
   panel.setInformation(information ?? bootstrap.information);
+  audioRibbon.setSnapshot(bootstrap.audioSpectrum, performance.now());
   const unsubscribeInformation = window.wallpaper.onInformationUpdated((snapshot) => panel.setInformation(snapshot));
-  window.addEventListener('pagehide', unsubscribeInformation, { once: true });
+  const unsubscribeAudio = window.wallpaper.onAudioSpectrumUpdated((snapshot) => {
+    audioRibbon.setSnapshot(snapshot, performance.now());
+  });
+  const unsubscribeAudioConfig = window.wallpaper.onAudioConfigUpdated((audioConfig) => {
+    audioRibbon.setConfig(audioConfig);
+  });
+  window.addEventListener('pagehide', () => {
+    unsubscribeInformation();
+    unsubscribeAudio();
+    unsubscribeAudioConfig();
+    audioRibbon.destroy();
+  }, { once: true });
   const advanceScene = (...args) => {
     advanceMotion(...args);
     panel.advance(args[1], state.camera, state.pointer);
+    audioRibbon.advance(args[1] * 1000, args[2] * 1000);
   };
   const probe = bootstrap.probe?.enabled ? bootstrap.probe : null;
   if (probe) {
@@ -177,10 +195,13 @@ async function start() {
     state.pointer.lastInput = -Infinity;
   });
 
-  window.addEventListener('resize', () => panel.resize(
-    Math.max(canvas.clientWidth, 1),
-    Math.max(canvas.clientHeight, 1),
-  ));
+  window.addEventListener('resize', () => {
+    panel.resize(
+      Math.max(canvas.clientWidth, 1),
+      Math.max(canvas.clientHeight, 1),
+    );
+    audioRibbon.resize();
+  });
 
 }
 

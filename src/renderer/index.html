@@ -32,6 +32,26 @@
         <div class="calendar-weekdays" data-field="calendar-weekdays"></div>
         <div class="calendar-days" data-field="calendar-days"></div>
       </section>
+      <section class="audio-ribbon" data-audio-ribbon aria-hidden="true">
+        <svg viewBox="0 0 1000 140" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="audio-ribbon-edge-fade">
+              <stop offset="0%" stop-color="black"></stop>
+              <stop offset="14%" stop-color="white"></stop>
+              <stop offset="86%" stop-color="white"></stop>
+              <stop offset="100%" stop-color="black"></stop>
+            </linearGradient>
+            <mask id="audio-ribbon-edge-mask">
+              <rect width="1000" height="140" fill="url(#audio-ribbon-edge-fade)"></rect>
+            </mask>
+          </defs>
+          <g mask="url(#audio-ribbon-edge-mask)">
+            <path class="audio-path audio-path-left" data-audio-path="left"></path>
+            <path class="audio-path audio-path-energy" data-audio-path="energy"></path>
+            <path class="audio-path audio-path-right" data-audio-path="right"></path>
+          </g>
+        </svg>
+      </section>
     </main>
     <output id="error" hidden></output>
     <script type="module" src="./renderer.mjs"></script>

@@ -69,6 +69,47 @@
 .calendar-days span { min-width: 0; line-height: 14px; }
 .calendar-days .outside-month { opacity: 0.28; }
 .calendar-days .today { color: #fff; background: #ff3478; opacity: 1; }
+
+.audio-ribbon {
+  position: absolute;
+  top: 76%;
+  left: 50%;
+  width: min(64vw, 760px);
+  height: 104px;
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  border-top: 1px solid rgba(240, 255, 255, 0.34);
+  border-bottom: 1px solid rgba(43, 211, 207, 0.22);
+  background: rgba(8, 39, 47, 0.16);
+  box-shadow: 0 14px 32px rgba(7, 31, 37, 0.18);
+  backdrop-filter: blur(7px) saturate(1.08);
+  transform: translate3d(-50%, 0, 66px) rotateX(1deg);
+  transform-origin: center;
+  will-change: opacity;
+}
+
+.audio-ribbon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.audio-ribbon mask { mask-type: luminance; }
+
+.audio-path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.audio-path-left { stroke: rgba(246, 255, 255, 0.96); stroke-width: 1.8; }
+.audio-path-energy { stroke: rgba(43, 211, 207, 0.92); stroke-width: 1.35; }
+.audio-path-right { stroke: rgba(255, 52, 120, 0.9); stroke-width: 1.8; }
+
 @media (max-width: 820px) {
   .information-card { box-shadow: 5px 6px 0 rgba(255, 51, 119, 0.72), 0 12px 28px rgba(13, 75, 88, 0.22); }
   .card-time, .card-weather { top: 14%; width: 38%; height: 21%; padding: 15px; }
@@ -77,4 +118,5 @@
   .card-tide, .card-calendar { top: 56%; width: 38%; height: 20%; padding: 15px; }
   .card-tide { left: 2%; }
   .card-calendar { right: 2%; }
+  .audio-ribbon { top: 80%; width: 84vw; height: 88px; }
 }
