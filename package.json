@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "dbus-next": "0.10.2",
-    "electron": "43.3.0"
+    "electron": "43.3.0",
+    "qweather-icons": "1.8.0"
   }
 }
