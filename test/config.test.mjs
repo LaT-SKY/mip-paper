@@ -27,6 +27,18 @@ test('defaults match the approved v1 design', () => {
       verticalPanPercent: 4.5,
       maxRotationDegrees: 0.7,
     },
+    panel: {
+      autoExpandHide: true,
+      expandTriggerDistancePx: 48,
+      collapseDelaySeconds: 8,
+      expanded: true,
+      collapsedOpacity: 0.08,
+      animation: { staggerDelayMs: 60, durationMs: 950 },
+    },
+    weather: {
+      location: { mode: 'auto', latitude: null, longitude: null, fallbackLocationId: '101281601' },
+      tideStationId: 'P2352',
+    },
   });
 });
 
@@ -79,6 +91,12 @@ test('rejects non-finite and negative motion values', () => {
     () => validateConfig({ motion: { deadZonePx: -1 } }),
     /motion\.deadZonePx must be a finite number at least 0/,
   );
+});
+
+test('rejects invalid panel ranges and unpaired fixed coordinates', () => {
+  assert.throws(() => validateConfig({ panel: { collapsedOpacity: 1.1 } }), /panel\.collapsedOpacity/);
+  assert.throws(() => validateConfig({ panel: { animation: { durationMs: 399 } } }), /panel\.animation\.durationMs/);
+  assert.throws(() => validateConfig({ weather: { location: { mode: 'fixed', latitude: 23.1 } } }), /latitude.*longitude/);
 });
 
 test('loads and validates JSON from disk', async () => {

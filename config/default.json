@@ -12,5 +12,25 @@
     "horizontalPanPercent": 4.6,
     "verticalPanPercent": 4.5,
     "maxRotationDegrees": 0.7
+  },
+  "panel": {
+    "autoExpandHide": true,
+    "expandTriggerDistancePx": 48,
+    "collapseDelaySeconds": 8,
+    "expanded": true,
+    "collapsedOpacity": 0.08,
+    "animation": {
+      "staggerDelayMs": 60,
+      "durationMs": 950
+    }
+  },
+  "weather": {
+    "location": {
+      "mode": "auto",
+      "latitude": null,
+      "longitude": null,
+      "fallbackLocationId": "101281601"
+    },
+    "tideStationId": "P2352"
   }
 }
