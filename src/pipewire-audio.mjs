@@ -9,7 +9,7 @@ export const PW_CAT_ARGS = Object.freeze([
   '--latency=50ms',
   '--target=auto',
   '--properties',
-  '{"stream.capture.sink":true,"media.class":"Stream/Input/Audio/Internal","media.role":"Music","node.name":"animated-ocean-wallpaper-spectrum"}',
+  '{"stream.capture.sink":true,"media.class":"Stream/Input/Audio/Internal","media.role":"Music","node.name":"mip-paper-spectrum"}',
   '-',
 ]);
 
