@@ -50,23 +50,23 @@ test('install adds an exact project rule without replacing existing rules', asyn
   const { directory, file } = await fixture();
   try {
     const { stdout } = await runHelper('install', file);
-    assert.match(stdout, /Installed KWin rule: animated-ocean-wallpaper/);
-    assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide,animated-ocean-wallpaper');
+    assert.match(stdout, /Installed KWin rule: mip-paper/);
+    assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide,mip-paper');
     assert.equal(await readKey(file, 'General', 'count'), '2');
     assert.equal(await readKey(file, 'rustdesk-autohide', 'Description'), 'Unrelated existing rule');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'wmclass'), 'animated-ocean-wallpaper');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'wmclassmatch'), '1');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'title', 'missing'), 'missing');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'titlematch', 'missing'), 'missing');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'below'), 'true');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'skiptaskbar'), 'true');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'skippager'), 'true');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'skipswitcher'), 'true');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'acceptfocus'), 'false');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'noborder'), 'true');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'fullscreen', 'missing'), 'true');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'fullscreenrule', 'missing'), '2');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'desktops'), '*');
+    assert.equal(await readKey(file, 'mip-paper', 'wmclass'), 'mip-paper');
+    assert.equal(await readKey(file, 'mip-paper', 'wmclassmatch'), '1');
+    assert.equal(await readKey(file, 'mip-paper', 'title', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'titlematch', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'below'), 'true');
+    assert.equal(await readKey(file, 'mip-paper', 'skiptaskbar'), 'true');
+    assert.equal(await readKey(file, 'mip-paper', 'skippager'), 'true');
+    assert.equal(await readKey(file, 'mip-paper', 'skipswitcher'), 'true');
+    assert.equal(await readKey(file, 'mip-paper', 'acceptfocus'), 'false');
+    assert.equal(await readKey(file, 'mip-paper', 'noborder'), 'true');
+    assert.equal(await readKey(file, 'mip-paper', 'fullscreen', 'missing'), 'true');
+    assert.equal(await readKey(file, 'mip-paper', 'fullscreenrule', 'missing'), '2');
+    assert.equal(await readKey(file, 'mip-paper', 'desktops'), '*');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -77,7 +77,7 @@ test('install is idempotent and check detects the project rule', async () => {
   try {
     await runHelper('install', file);
     await runHelper('install', file);
-    assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide,animated-ocean-wallpaper');
+    assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide,mip-paper');
     assert.equal(await readKey(file, 'General', 'count'), '2');
     const { stdout } = await runHelper('check', file);
     assert.match(stdout, /KWin rule is installed/);
@@ -91,16 +91,16 @@ test('install removes legacy exact-title matching keys', async () => {
   try {
     await writeFile(file, [
       '',
-      '[animated-ocean-wallpaper]',
-      'title=animated-ocean-wallpaper',
+      '[mip-paper]',
+      'title=mip-paper',
       'titlematch=1',
       '',
     ].join('\n'), { flag: 'a' });
 
     await runHelper('install', file);
 
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'title', 'missing'), 'missing');
-    assert.equal(await readKey(file, 'animated-ocean-wallpaper', 'titlematch', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'title', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'titlematch', 'missing'), 'missing');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -111,12 +111,12 @@ test('remove deletes only project keys and preserves unrelated rules', async () 
   try {
     await runHelper('install', file);
     const { stdout } = await runHelper('remove', file);
-    assert.match(stdout, /Removed KWin rule: animated-ocean-wallpaper/);
+    assert.match(stdout, /Removed KWin rule: mip-paper/);
     assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide');
     assert.equal(await readKey(file, 'General', 'count'), '1');
     assert.equal(await readKey(file, 'rustdesk-autohide', 'Description'), 'Unrelated existing rule');
     const contents = await readFile(file, 'utf8');
-    const projectSection = contents.match(/\[animated-ocean-wallpaper\]([\s\S]*?)(?:\n\[|$)/)?.[1] ?? '';
+    const projectSection = contents.match(/\[mip-paper\]([\s\S]*?)(?:\n\[|$)/)?.[1] ?? '';
     assert.doesNotMatch(projectSection, /=/);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -148,7 +148,7 @@ test('uses the user kwinrulesrc file when no override is configured', async () =
         KWIN_RULES_NO_RELOAD: '1',
       },
     });
-    assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide,animated-ocean-wallpaper');
+    assert.equal(await readKey(file, 'General', 'rules'), 'rustdesk-autohide,mip-paper');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

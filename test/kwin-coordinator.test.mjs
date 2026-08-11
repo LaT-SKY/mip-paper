@@ -22,7 +22,7 @@ function output(name, geometry) {
 function wallpaper(id, title, currentOutput) {
   return {
     internalId: id,
-    resourceClass: 'animated-ocean-wallpaper',
+    resourceClass: 'mip-paper',
     caption: title,
     output: currentOutput,
     frameGeometry: null,
@@ -50,7 +50,7 @@ async function runCoordinator({ outputs, windows }) {
     },
     raiseWindow(window) { raises.push(window); },
   };
-  const source = await readFile('kwin/animated-ocean-wallpaper/contents/code/main.js', 'utf8');
+  const source = await readFile('kwin/mip-paper/contents/code/main.js', 'utf8');
   vm.runInNewContext(source, { workspace, console: { info: (line) => logs.push(line) } });
   return { workspace, moves, raises, logs };
 }
@@ -59,8 +59,8 @@ test('moves duplicate-output wallpaper windows to their declared targets', async
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
   const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
   const windows = [
-    wallpaper('one', 'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960', secondary),
-    wallpaper('two', 'animated-ocean-wallpaper|display=22|bounds=1536,0,1932,1087', secondary),
+    wallpaper('one', 'mip-paper|display=11|bounds=0,0,1536,960', secondary),
+    wallpaper('two', 'mip-paper|display=22|bounds=1536,0,1932,1087', secondary),
   ];
 
   const { moves, raises } = await runCoordinator({ outputs: [primary, secondary], windows });
@@ -76,7 +76,7 @@ test('moves duplicate-output wallpaper windows to their declared targets', async
 test('does not move a correctly assigned wallpaper window', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
   const windows = [
-    wallpaper('one', 'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960', primary),
+    wallpaper('one', 'mip-paper|display=11|bounds=0,0,1536,960', primary),
   ];
 
   const { moves } = await runCoordinator({ outputs: [primary], windows });
@@ -87,7 +87,7 @@ test('does not move a correctly assigned wallpaper window', async () => {
 test('pins wallpaper geometry to the declared output and removes client borders', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
   const windows = [
-    wallpaper('one', 'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960', primary),
+    wallpaper('one', 'mip-paper|display=11|bounds=0,0,1536,960', primary),
   ];
 
   await runCoordinator({ outputs: [primary], windows });
@@ -98,7 +98,7 @@ test('pins wallpaper geometry to the declared output and removes client borders'
 
 test('ignores windows outside the project WM class', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
-  const other = wallpaper('other', 'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960', null);
+  const other = wallpaper('other', 'mip-paper|display=11|bounds=0,0,1536,960', null);
   other.resourceClass = 'unrelated-application';
 
   const { moves, logs } = await runCoordinator({ outputs: [primary], windows: [other] });
@@ -111,7 +111,7 @@ test('matches output geometry with a one-DIP rounding difference', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
   const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
   const windows = [
-    wallpaper('one', 'animated-ocean-wallpaper|display=11|bounds=1,-1,1535,961', secondary),
+    wallpaper('one', 'mip-paper|display=11|bounds=1,-1,1535,961', secondary),
   ];
 
   const { moves } = await runCoordinator({ outputs: [primary, secondary], windows });
@@ -122,7 +122,7 @@ test('matches output geometry with a one-DIP rounding difference', async () => {
 
 test('leaves an invalid target unresolved', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
-  const windows = [wallpaper('one', 'animated-ocean-wallpaper', null)];
+  const windows = [wallpaper('one', 'mip-paper', null)];
 
   const { moves, logs } = await runCoordinator({ outputs: [primary], windows });
 
@@ -133,7 +133,7 @@ test('leaves an invalid target unresolved', async () => {
 test('refuses a second window that declares an already claimed output', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
   const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
-  const target = 'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960';
+  const target = 'mip-paper|display=11|bounds=0,0,1536,960';
   const windows = [
     wallpaper('first', target, primary),
     wallpaper('duplicate', target, secondary),
@@ -148,7 +148,7 @@ test('refuses a second window that declares an already claimed output', async ()
 test('reassigns a duplicate target when the previous claimant closes', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
   const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
-  const target = 'animated-ocean-wallpaper|display=22|bounds=1536,0,1932,1087';
+  const target = 'mip-paper|display=22|bounds=1536,0,1932,1087';
   const previous = wallpaper('previous', target, secondary);
   const replacement = wallpaper('replacement', target, primary);
   const windows = [previous, replacement];
@@ -166,7 +166,7 @@ test('reconciles when the declared output appears', async () => {
   const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
   const outputs = [secondary];
   const windows = [
-    wallpaper('one', 'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960', secondary),
+    wallpaper('one', 'mip-paper|display=11|bounds=0,0,1536,960', secondary),
   ];
   const { workspace, moves } = await runCoordinator({ outputs, windows });
 
@@ -182,7 +182,7 @@ test('reconciles when screen order changes', async () => {
   const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
   const outputs = [primary];
   const windows = [
-    wallpaper('two', 'animated-ocean-wallpaper|display=22|bounds=1536,0,1932,1087', primary),
+    wallpaper('two', 'mip-paper|display=22|bounds=1536,0,1932,1087', primary),
   ];
   const { workspace, moves } = await runCoordinator({ outputs, windows });
 
@@ -200,7 +200,7 @@ test('tracks and reconciles a newly added wallpaper window once', async () => {
   const { workspace, moves } = await runCoordinator({ outputs: [primary, secondary], windows });
   const added = wallpaper(
     'added',
-    'animated-ocean-wallpaper|display=11|bounds=0,0,1536,960',
+    'mip-paper|display=11|bounds=0,0,1536,960',
     secondary,
   );
 

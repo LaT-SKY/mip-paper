@@ -57,7 +57,7 @@ class FakeWindow extends EventEmitter {
 
   async loadFile(pathname) {
     this.loadedFile = pathname;
-    this.title = 'animated-ocean-wallpaper';
+    this.title = 'mip-paper';
   }
 
   setBounds(bounds) {
@@ -100,7 +100,7 @@ test('formats a display target title from its identity and bounds', () => {
   assert.equal(formatDisplayTargetTitle({
     id: 22,
     bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
-  }), 'animated-ocean-wallpaper|display=22|bounds=1920,0,2560,1440');
+  }), 'mip-paper|display=22|bounds=1920,0,2560,1440');
 });
 
 class FakeScreen extends EventEmitter {
@@ -212,7 +212,7 @@ test('creates hardened windows for full display bounds', async () => {
     options: { visibleOnFullScreen: true },
   });
   assert.equal(first.loadedFile, '/app/src/renderer/index.html');
-  assert.equal(first.title, 'animated-ocean-wallpaper|display=11|bounds=0,0,1920,1080');
+  assert.equal(first.title, 'mip-paper|display=11|bounds=0,0,1920,1080');
 });
 
 test('provides bootstrap data only to a managed renderer', async () => {
@@ -338,7 +338,7 @@ test('refreshes the display target title when display metrics change', async () 
   screen.emit('display-metrics-changed', {}, displays[0], ['bounds']);
   await manager.whenIdle();
 
-  assert.equal(first.title, 'animated-ocean-wallpaper|display=11|bounds=-1600,0,1600,900');
+  assert.equal(first.title, 'mip-paper|display=11|bounds=-1600,0,1600,900');
 });
 
 test('prevents the renderer page title from replacing the display target', async () => {
@@ -346,9 +346,9 @@ test('prevents the renderer page title from replacing the display target', async
   await manager.start();
   const first = FakeWindow.instances[0];
 
-  first.updatePageTitle('animated-ocean-wallpaper');
+  first.updatePageTitle('mip-paper');
 
-  assert.equal(first.title, 'animated-ocean-wallpaper|display=11|bounds=0,0,1920,1080');
+  assert.equal(first.title, 'mip-paper|display=11|bounds=0,0,1920,1080');
 });
 
 test('uses configuration to control mouse passthrough', async () => {

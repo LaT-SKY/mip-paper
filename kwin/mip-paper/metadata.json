@@ -1,8 +1,8 @@
 {
   "KPackageStructure": "KWin/Script",
   "KPlugin": {
-    "Id": "animated-ocean-wallpaper",
-    "Name": "Animated Ocean Wallpaper Display Coordinator",
+    "Id": "mip-paper",
+    "Name": "Mip-Paper Display Coordinator",
     "Description": "Assigns each wallpaper window to its declared display",
     "Version": "0.2.0",
     "License": "MIT",

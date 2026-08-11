@@ -4,7 +4,7 @@ export const INFORMATION_CHANNEL = 'wallpaper:get-information';
 export const INFORMATION_UPDATED_CHANNEL = 'wallpaper:information-updated';
 export const AUDIO_SPECTRUM_UPDATED_CHANNEL = 'wallpaper:audio-spectrum-updated';
 export const AUDIO_CONFIG_UPDATED_CHANNEL = 'wallpaper:audio-config-updated';
-const APP_ID = 'animated-ocean-wallpaper';
+const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
   const { x, y, width, height } = display.bounds;

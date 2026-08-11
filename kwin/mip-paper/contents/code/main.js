@@ -1,6 +1,6 @@
-const APP_ID = 'animated-ocean-wallpaper';
-const LOG_PREFIX = 'animated-ocean-coordinator:';
-const TARGET_PATTERN = /^animated-ocean-wallpaper\|display=(-?\d+)\|bounds=(-?\d+),(-?\d+),(\d+),(\d+)$/;
+const APP_ID = 'mip-paper';
+const LOG_PREFIX = 'mip-paper-coordinator:';
+const TARGET_PATTERN = /^mip-paper\|display=(-?\d+)\|bounds=(-?\d+),(-?\d+),(\d+),(\d+)$/;
 const tracked = new Map();
 let reconciling = false;
 
