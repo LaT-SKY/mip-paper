@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly APP_ID='animated-ocean-wallpaper'
+readonly APP_ID='mip-paper'
 readonly SCRIPT_DIRECTORY=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SOURCE="${KWIN_SCRIPT_SOURCE:-$SCRIPT_DIRECTORY/../kwin/$APP_ID}"
 readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"

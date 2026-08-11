@@ -35,10 +35,10 @@ async function fixture() {
       XDG_CONFIG_HOME: configHome,
       XDG_DATA_HOME: dataHome,
       KWIN_CONFIG_FILE: kwinrc,
-      KWIN_SCRIPT_SOURCE: path.join(repositoryRoot, 'kwin', 'animated-ocean-wallpaper'),
+      KWIN_SCRIPT_SOURCE: path.join(repositoryRoot, 'kwin', 'mip-paper'),
       KWIN_SCRIPT_NO_RELOAD: '1',
     },
-    destination: path.join(dataHome, 'kwin', 'scripts', 'animated-ocean-wallpaper'),
+    destination: path.join(dataHome, 'kwin', 'scripts', 'mip-paper'),
     kwinrc,
   };
 }
@@ -58,14 +58,14 @@ test('installs, checks, idempotently reinstalls, and removes only the project pa
     assert.equal(await exists(path.join(data.destination, 'metadata.json')), true);
     assert.equal(await exists(path.join(data.destination, 'contents', 'code', 'main.js')), true);
     await runHelper('check', data.env);
-    assert.match(await readFile(data.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=true/);
+    assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=true/);
 
     await runHelper('install', data.env);
     assert.equal(await readFile(unrelated, 'utf8'), 'keep');
 
     await runHelper('remove', data.env);
     assert.equal(await exists(data.destination), false);
-    assert.match(await readFile(data.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=false/);
+    assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=false/);
     assert.equal(await readFile(unrelated, 'utf8'), 'keep');
   } finally {
     await rm(data.directory, { recursive: true, force: true });

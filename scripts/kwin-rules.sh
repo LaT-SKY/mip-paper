@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly RULE_ID='animated-ocean-wallpaper'
-readonly RULE_DESCRIPTION='Animated Ocean Wallpaper'
+readonly RULE_ID='mip-paper'
+readonly RULE_DESCRIPTION='Mip-Paper'
 
 config_args=()
 if [[ -n "${KWIN_RULES_FILE:-}" ]]; then
