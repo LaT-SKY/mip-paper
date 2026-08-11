@@ -1,29 +1,101 @@
 # Mip-Paper
 
-面向 KDE Plasma 6、KWin 6 和 Wayland 的动态桌面壁纸运行器。程序使用 Electron 创建每显示器一个的全屏 Canvas 窗口，绘制 `assets/161-2.jpeg`，并提供缓慢漂移与鼠标视差交互。
+[English](README.en.md)
 
-这是一个 Electron 壁纸运行器，不是 Plasma 原生 wallpaper plugin，也不是会弹出主窗口的桌面应用。执行 `start` 后，壁纸应直接出现在桌面背景层；不会出现在任务栏、Alt+Tab 或应用启动器中。
+Mip-Paper 是面向 KDE Plasma 6、KWin 6 和 Wayland 的动态桌面壁纸引擎。它把用户自己的图片以覆盖方式绘制到每台显示器的全屏 Canvas 上，并加入缓慢漂移、鼠标视差、立体悬浮信息面板和媒体音频频谱。
 
-## 要求
+Mip-Paper 不是 Plasma 原生 wallpaper plugin，也不会打开普通应用窗口。它由 Electron 创建受 KWin 管理的桌面层窗口；窗口不会进入任务栏、分页器、Alt+Tab 或应用启动器。
 
-- KDE Plasma 6 和 KWin 6
-- Wayland 会话
-- Node.js、npm、Electron 43.3.0
-- `systemd --user`
-- `kreadconfig6`、`kwriteconfig6`
-- PipeWire、WirePlumber、`pw-cat`、`pw-metadata`
-- GeoClue（自动定位时需要）
+## 功能
 
-Arch Linux 安装音频依赖：
+- 每台显示器独立渲染，支持不同分辨率、缩放、布局和热插拔。
+- 指针移动驱动平移、缩放与轻微旋转；停止交互后平滑回归并进入缓慢漂移。
+- 时间、天气、潮汐和月历四块悬浮信息面板根据鼠标距离依次展开，并按相反顺序收起。
+- 天气使用和风天气数据与官方图标，可通过 XDG Desktop Portal 自动定位，也可使用固定经纬度。
+- 音频声带显示左声道、右声道和合并频谱，只响应当前默认输出设备正在播放的媒体音频。
+- systemd 用户服务随 Plasma 工作区启动，并在注销、关机和重启时完成有序清理。
 
-```bash
-sudo pacman -S pipewire pipewire-audio wireplumber
+## 图片与版权
+
+Mip-Paper 不附带默认或第三方壁纸图片，也不会自动下载或链接某张图片。首次设置时必须导入本地 JPEG、PNG 或 WebP 文件。图片会被验证并原子复制到：
+
+```text
+${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/wallpaper
 ```
 
-其他发行版需要提供 PipeWire 和 WirePlumber，并确保 `pw-cat`、`pw-metadata` 可在
-当前图形会话的 `PATH` 中执行。音频可视化不可用时，壁纸和信息面板仍会正常运行。
+原文件之后可以移动或删除。用户应确保自己有权使用所选图片；程序的 GPL 许可证不适用于用户导入的图片。
 
-Arch Linux 安装并启动 GeoClue：
+设置或更换图片：
+
+```bash
+mip-paper wallpaper set /path/to/image.png
+mip-paper wallpaper status
+```
+
+替换失败时会保留上一张有效图片。若服务正在运行，成功更换后会自动重启壁纸。
+
+## 隐私：只响应媒体输出
+
+音频可视化通过 PipeWire 跟随当前默认输出设备。实现使用 `stream.capture.sink=true` 连接输出设备的 monitor 端口，并把流标记为 `Stream/Input/Audio/Internal`。它不会连接麦克风，不会录制或保存 PCM 音频，也不会作为录音应用出现在 Plasma 麦克风列表中。
+
+原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、缓存、IPC 或 renderer。白色曲线向上显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在共同基线后层显示总体能量；曲线没有辉光、磨砂背景、边框或面板阴影。
+
+## 环境要求
+
+- Arch Linux 或兼容环境
+- KDE Plasma 6、KWin 6、Wayland 会话
+- systemd 用户管理器
+- PipeWire、WirePlumber、`pw-cat`、`pw-metadata`
+- GeoClue（仅自动定位需要）
+
+## 通过 AUR 安装
+
+使用 yay：
+
+```bash
+yay -S mip-paper
+```
+
+或使用 paru：
+
+```bash
+paru -S mip-paper
+```
+
+软件包只安装系统文件，不会以 root 身份修改某个用户的主目录。每位用户首次安装后运行：
+
+```bash
+mip-paper setup --image /path/to/image.png
+```
+
+`setup` 创建缺失的配置与天气凭据、安装当前用户的 KWin 规则、启用系统 KWin coordinator，并启动 `mip-paper.service`。已有配置、凭据和受管理图片不会被覆盖；已有图片时可直接运行 `mip-paper setup`。
+
+## 管理壁纸与服务
+
+```bash
+mip-paper start
+mip-paper stop
+mip-paper restart
+mip-paper status
+mip-paper doctor
+```
+
+查看服务日志：
+
+```bash
+journalctl --user -u mip-paper.service -n 100 --no-pager
+```
+
+`start` 只启动桌面背景服务，不会弹出窗口。确认登录自启动：
+
+```bash
+systemctl --user is-enabled mip-paper.service
+systemctl --user is-active mip-paper.service
+```
+
+## 天气服务
+
+自动定位依赖 GeoClue：
 
 ```bash
 sudo pacman -S geoclue
@@ -31,108 +103,24 @@ sudo systemctl enable --now geoclue
 gsettings set org.gnome.system.location enabled true
 ```
 
-安装后重新登录一次，让桌面会话启动 GeoClue 授权代理；软件包是在当前会话中刚安装时，这一步尤其重要。GeoClue 是按需启动的 D-Bus 服务，空闲后显示 `inactive` 属于正常行为。
+安装后重新登录一次，使桌面会话启动 GeoClue 授权代理。应用通过 XDG Desktop Portal 请求城市级位置，不允许 renderer 直接访问 GeoClue。
 
-其他发行版请安装对应的 GeoClue 软件包、启用全局定位并确保授权代理随桌面会话启动。应用仍通过 XDG Desktop Portal 请求位置，不会由 renderer 直接访问 GeoClue；桌面环境的定位权限设置也必须允许该请求。
+天气凭据独立保存在 `~/.config/mip-paper/weather-credentials.json`，权限必须为 `0600`：
 
-安装器只写入当前用户目录，不需要 `sudo`。
-
-## 安装或更新
-
-在仓库根目录执行：
-
-```bash
-./bin/mip-paper install
+```json
+{
+  "apiHost": "your-project-host.qweatherapi.com",
+  "apiKey": "your-api-key"
+}
 ```
 
-这会完成以下操作：
+Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 只由主进程读取，不进入 renderer、URL、日志或缓存。修改凭据后运行 `mip-paper restart`。
 
-1. 将当前源码复制到 `~/.local/lib/mip-paper/`。
-2. 在安装快照中执行 `npm ci --omit=dev`，准备 Electron 运行时。
-3. 安装命令入口 `~/.local/bin/mip-paper`。
-4. 写入 systemd 用户服务、KWin 壁纸窗口规则和多显示器 coordinator。
-5. 执行 `systemctl --user enable --now`，立即启动并设置登录自启。
+实时天气每 30 分钟刷新，预报和潮汐每 6 小时刷新。缓存 6 小时内为 fresh，6 至 24 小时为 stale，超过 24 小时为 unavailable。天气数据由和风天气提供；`qweather-icons@1.8.0` 代码采用 MIT，图标采用 CC BY 4.0。
 
-KWin 规则负责移除窗口边框，以及桌面层级、任务栏、分页器和 Alt+Tab 隔离。coordinator 读取每个 Electron 窗口标题中的目标显示器描述，并把窗口移动到唯一匹配的输出；KWin 保留每个输出的实际缩放和窗口几何。显示器重连后会创建新的 Electron 窗口，因此该屏幕会从独立的运动状态重新开始。
+## 配置文件
 
-安装完成后，自动启动状态可以这样确认：
-
-```bash
-systemctl --user is-enabled mip-paper.service
-```
-
-输出 `enabled` 即表示下次登录会自动启动。若曾手动禁用，可重新启用：
-
-```bash
-systemctl --user enable --now mip-paper.service
-```
-
-只更新文件、不启动服务：
-
-```bash
-./bin/mip-paper install --no-start
-```
-
-修改源码后，必须重新执行 `install`，因为服务运行的是 `~/.local/lib` 中的安装快照，不是仓库目录。重复安装也会更新本项目已有的 KWin 规则。
-
-## 启动、停止和查看状态
-
-```bash
-mip-paper start
-mip-paper stop
-mip-paper restart
-mip-paper status
-```
-
-如果 shell 找不到命令，使用完整路径：
-
-```bash
-~/.local/bin/mip-paper start
-```
-
-`start` 只启动后台用户服务，不会打开普通应用窗口；当前版本会打印一行服务请求确认。确认是否真的启动：
-
-```bash
-systemctl --user is-active mip-paper.service
-systemctl --user status mip-paper.service --no-pager -l
-```
-
-第一个命令应输出 `active`。壁纸窗口被 KWin 放在桌面层，因此不能通过 Alt+Tab 找到。
-
-## 排错
-
-先运行诊断：
-
-```bash
-mip-paper doctor
-```
-
-查看本次服务日志：
-
-```bash
-journalctl --user -u mip-paper.service -n 100 --no-pager
-```
-
-查看 KWin coordinator 的定位日志：
-
-```bash
-journalctl --user -b --no-pager | grep mip-paper-coordinator
-```
-
-常见情况：
-
-- `status=203/EXEC`：安装快照缺少 Electron，重新执行 `install`。
-- `Wallpaper failed to start`：查看日志中的配置或 preload 错误，确认安装快照已更新。
-- 音频声带不显示：运行 `mip-paper doctor`，确认 `command:pw-cat`、
-  `command:pw-metadata` 和 `audio-output` 均为 `PASS`，再检查当前默认输出设备。
-- 服务是 `active` 但桌面没有壁纸：确认 `doctor` 的 `KWin rule` 和 `KWin coordinator` 都为 `PASS`，然后执行 `restart`。规则文件是 `${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc`。
-- `start` 无任何窗口：这是预期行为；本项目没有普通应用窗口，检查桌面背景和 `systemctl --user is-active`。
-
-`doctor` 会自动检查环境、配置、Electron 快照、服务、KWin 规则和 coordinator；窗口层级、面板遮挡、鼠标输入、多显示器热插拔、锁屏恢复和资源占用仍需人工确认。
-
-## 配置
-
-配置文件：`~/.config/mip-paper/config.json`。
+配置位于 `~/.config/mip-paper/config.json`。完整默认值：
 
 ```json
 {
@@ -144,7 +132,10 @@ journalctl --user -b --no-pager | grep mip-paper-coordinator
     "fadeOutMs": 450,
     "fadeInMs": 160
   },
-  "frameRate": { "interactive": 60, "drift": 30 },
+  "frameRate": {
+    "interactive": 60,
+    "drift": 30
+  },
   "motion": {
     "interactionSpeed": 1.15,
     "returnSpeed": 0.3,
@@ -160,7 +151,10 @@ journalctl --user -b --no-pager | grep mip-paper-coordinator
     "collapseDelaySeconds": 8,
     "expanded": true,
     "collapsedOpacity": 0.08,
-    "animation": { "staggerDelayMs": 60, "durationMs": 950 }
+    "animation": {
+      "staggerDelayMs": 60,
+      "durationMs": 950
+    }
   },
   "weather": {
     "location": {
@@ -174,64 +168,90 @@ journalctl --user -b --no-pager | grep mip-paper-coordinator
 }
 ```
 
-音频可视化自动跟随 PipeWire 的当前默认输出设备。三条曲线使用共同基线：白色曲线向上
-显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在后层显示逐频段总体能量。
-三条曲线直接透明悬浮在壁纸上，没有磨砂背景、边框或面板阴影；曲线没有辉光，纯色
-矢量描边在远离屏幕观察时仍保持锐利。应用不会采集麦克风，也不会录制或保存 PCM 音频；
-原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、
-IPC 或 renderer。
+未知字段会被拒绝。`audio.*` 字段支持实时热加载；其他配置修改后需要重启壁纸服务，请运行 `mip-paper restart`。除 `audio.*` 外，错误类型或越界值会阻止服务启动并写入日志；音频字段的错误值会回退到默认值。
 
-PipeWire 实现使用 `stream.capture.sink=true` 连接当前输出设备的 monitor 端口，并将
-频谱实现流标记为 `Stream/Input/Audio/Internal`。因此它不会连接麦克风输入，也不会作为
-录音应用出现在 Plasma 麦克风列表中；音频可视化仍只响应系统正在播放的媒体音频。
+### 顶层与帧率
 
-`audio.gain` 范围为 `0.25–4`。静音等待 `silenceDelayMs` 范围为 `0–5000 ms`，淡出
-`fadeOutMs` 和淡入 `fadeInMs` 的范围均为 `0–3000 ms`；时长 `0` 表示立即完成。
-`audio` 字段会实时热加载，无需重启壁纸服务。修改 `enabled` 会安全启动或停止采集，
-修改增益和三个时序值不会重启采集进程。已知 audio 字段的错误类型或越界数值会回退
-到默认值，未知字段仍会被拒绝。
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 重启 |
+| `frameRate.interactive` | 数值，`>= 30` FPS | `60` | 交互与回归阶段目标帧率 | 重启 |
+| `frameRate.drift` | 数值，`>= 30` FPS | `30` | 待机漂移阶段目标帧率 | 重启 |
 
-天气凭据与普通配置分开保存在 `~/.config/mip-paper/weather-credentials.json`。安装器首次创建该文件并设置为 `0600`；重复安装和普通卸载会保留它，只有 `uninstall --purge` 会删除。第三期暂时需要手工填写：
+### 音频可视化
 
-```json
-{
-  "apiHost": "your-project-host.qweatherapi.com",
-  "apiKey": "your-api-key"
-}
-```
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `audio.enabled` | boolean | `true` | 启用或停止输出 monitor 频谱 | 实时热加载 |
+| `audio.gain` | `0.25–4` | `1` | 频谱增益 | 实时热加载 |
+| `audio.silenceDelayMs` | `0–5000 ms` | `600` | 静音后保持曲线的等待时间 | 实时热加载 |
+| `audio.fadeOutMs` | `0–3000 ms` | `450` | 静音或不可用时淡出时长；`0` 为立即完成 | 实时热加载 |
+| `audio.fadeInMs` | `0–3000 ms` | `160` | 音频恢复后的淡入时长；`0` 为立即完成 | 实时热加载 |
 
-填写后执行 `chmod 600 ~/.config/mip-paper/weather-credentials.json`。Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 仅由主进程读取，不会进入 renderer、URL、日志或缓存。
+### 运动与视差
 
-`weather.location.mode` 为 `auto` 时，通过 XDG Desktop Portal 请求城市级位置；权限被拒绝或定位失败后，使用缓存位置，最后以 `fallbackLocationId` 对应的东莞坐标降级。改为 `fixed` 时必须同时提供数值型 `latitude` 和 `longitude`，并且不请求 Portal。潮汐默认使用观测站 `P2352`。
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `motion.interactionSpeed` | 有限数值，`> 0` | `1.15` | 指针交互追随速度 | 重启 |
+| `motion.returnSpeed` | 有限数值，`> 0` | `0.3` | 从交互姿态返回漂移轨迹的速度 | 重启 |
+| `motion.driftSpeed` | 有限数值，`> 0` | `1` | 待机漂移速度倍率 | 重启 |
+| `motion.deadZonePx` | 有限数值，`>= 0` px | `2` | 过滤细小指针抖动的滑动死区 | 重启 |
+| `motion.horizontalPanPercent` | 有限数值，`>= 0` % | `4.6` | 最大水平平移占视口宽度的比例 | 重启 |
+| `motion.verticalPanPercent` | 有限数值，`>= 0` % | `4.5` | 最大垂直平移占视口高度的比例 | 重启 |
+| `motion.maxRotationDegrees` | 有限数值，`>= 0` 度 | `0.7` | 最大画面旋转角度 | 重启 |
 
-实时天气每 30 分钟刷新，预报和潮汐每 6 小时刷新。缓存 6 小时内标记为 fresh，6 至 24 小时标记为 stale，超过 24 小时显示 unavailable。天气数据由和风天气提供。天气状态使用本地依赖 `qweather-icons@1.8.0` 映射为和风天气图标；其代码采用 MIT License，图标采用 CC BY 4.0 License。
+### 悬浮信息面板
 
-天气、面板、运动等其他配置修改后仍需重启服务：
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `panel.autoExpandHide` | boolean | `true` | 按鼠标距离自动展开并延迟收起 | 重启 |
+| `panel.expandTriggerDistancePx` | 有限数值，`>= 0` px | `48` | 触发下一块面板展开所需的累计指针移动 | 重启 |
+| `panel.collapseDelaySeconds` | 有限数值，`>= 0` 秒 | `8` | 无交互后开始收起的等待时间 | 重启 |
+| `panel.expanded` | boolean | `true` | 禁用自动模式时使用的固定展开状态 | 重启 |
+| `panel.collapsedOpacity` | `0–1` | `0.08` | 收起面板的最低不透明度 | 重启 |
+| `panel.animation.staggerDelayMs` | 有限数值，`>= 0` ms | `60` | 多块面板依次动画的错开时间 | 重启 |
+| `panel.animation.durationMs` | 有限数值，`>= 400` ms | `950` | 包含两次回弹的单块面板动画时长 | 重启 |
+
+### 天气、定位与潮汐
+
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `weather.location.mode` | `auto` 或 `fixed` | `auto` | 自动 Portal 定位或固定坐标 | 重启 |
+| `weather.location.latitude` | `null` 或 `-90–90` | `null` | fixed 模式纬度；必须与经度同时提供 | 重启 |
+| `weather.location.longitude` | `null` 或 `-180–180` | `null` | fixed 模式经度；必须与纬度同时提供 | 重启 |
+| `weather.location.fallbackLocationId` | 非空字符串 | `101281601` | 自动定位和缓存均失败时使用的和风 LocationID | 重启 |
+| `weather.tideStationId` | 非空字符串 | `P2352` | 潮汐观测站 ID | 重启 |
+
+`auto` 模式先请求 Portal，失败后使用缓存位置，最后使用 fallback LocationID。`fixed` 模式必须同时提供数值型纬度和经度，并且不会请求 Portal。
+
+## 诊断与常见问题
 
 ```bash
-mip-paper restart
+mip-paper doctor
+journalctl --user -u mip-paper.service -n 100 --no-pager
 ```
 
-非 audio 配置中的未知字段、错误类型或超出限制的数值会阻止启动，并在 service 日志中
-报告原因。天气凭据修改后也需要重启服务。
+- 服务 active 但没有画面：运行 `mip-paper wallpaper status`，再检查 doctor 的 KWin rule 与 KWin coordinator。
+- 音频声带不显示：确认 `command:pw-cat`、`command:pw-metadata` 和 `audio-output` 为 PASS，并检查默认输出设备。
+- 天气 unavailable：检查凭据权限、Portal 定位权限和网络，日志不会打印 Key。
+- `start` 没有普通窗口：这是预期行为，壁纸位于桌面层。
 
-## 卸载
+## 从源码安装与开发验证
 
-保留普通配置和天气凭据：
+源码安装仍使用系统的 `electron43`，不会复制 npm Electron：
 
 ```bash
-mip-paper uninstall
+sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
+./bin/mip-paper install --image /path/to/image.png
 ```
 
-连普通配置和天气凭据一起删除：
+只准备文件、不启动服务：
 
 ```bash
-mip-paper uninstall --purge
+./bin/mip-paper install --no-start
 ```
 
-卸载会停止并禁用服务，删除安装快照、命令入口、服务文件和本项目 KWin 规则，不会删除其他 KWin 规则。
-
-## 开发验证
+开发检查：
 
 ```bash
 npm ci
@@ -240,16 +260,31 @@ npm run check
 bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
 ```
 
-## 渲染性能 Probe
-
-在目标 Plasma Wayland 双屏会话中，可显式运行三种渲染调度策略的对比实验：
+渲染调度性能实验：
 
 ```bash
 mip-paper probe --duration 60
 ```
 
-命令会为 `raf`、`timer` 和 `adaptive` 分别执行待机、持续交互和交互回归场景，输出目录默认位于系统临时目录，也可通过 `--output` 指定。每个场景应先预热 30 秒，再采样 60 秒；`--duration` 用于调整采样时长。实验不会自动修改默认策略，结束后会恢复服务原状态。
+## 卸载
 
-交互场景要求有效绘制 FPS 不低于 57、回调间隔 p95 不超过 20 ms；漂移场景要求有效绘制 FPS 不低于 28.5、回调间隔 p95 不超过 40 ms。GPU 指标在本机没有兼容采集工具时会标记为 unavailable，不影响其他指标。
+AUR 安装先清理当前用户集成，再由 pacman 删除系统文件：
 
-项目设计和研究资料位于 `docs/`。
+```bash
+mip-paper teardown
+sudo pacman -R mip-paper
+```
+
+普通 teardown 保留配置、天气凭据和用户图片。显式清除所有 Mip-Paper 用户数据：
+
+```bash
+mip-paper teardown --purge
+```
+
+源码安装使用 `mip-paper uninstall` 或 `mip-paper uninstall --purge`。
+
+## 许可证与第三方组件
+
+Mip-Paper 程序代码采用 `GPL-3.0-only`，详见 [LICENSE](LICENSE)。Copyright (C) 2026 LaT-SKY。
+
+随包保留的 JavaScript 依赖代码采用各自许可证，主要为 MIT；和风天气图标采用 CC BY 4.0。AUR 的 PKGBUILD 与安装脚本单独采用 0BSD。用户导入图片的权利与许可证由用户自行负责。
