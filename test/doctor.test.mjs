@@ -21,6 +21,7 @@ async function fixture({
   invalidCredentials = false,
   coordinator = 'valid',
   audio = 'valid',
+  packaged = false,
 } = {}) {
   const home = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-doctor-'));
   const fakeBin = path.join(home, 'fake-bin');
@@ -85,6 +86,7 @@ async function fixture({
 
   await executable(path.join(fakeBin, 'plasmashell'), '#!/usr/bin/env bash\nprintf "plasmashell 6.7.4\\n"\n');
   await executable(path.join(fakeBin, 'kwin_wayland'), '#!/usr/bin/env bash\nprintf "kwin 6.7.4\\n"\n');
+  await executable(path.join(fakeBin, 'electron43'), '#!/usr/bin/env bash\nexit 0\n');
   await executable(path.join(fakeBin, 'pw-metadata'), `#!/bin/bash
 printf '%s\n' "update: id:0 key:'default.audio.sink' value:'{\\\"name\\\":\\\"sink.test\\\"}' type:'Spa:String:JSON'"
 `);
@@ -102,6 +104,7 @@ esac
 exit 0
 `);
 
+  const servicePath = path.join(configHome, 'systemd', 'user', 'mip-paper.service');
   return {
     home,
     installRoot,
@@ -115,6 +118,12 @@ exit 0
       XDG_SESSION_TYPE: 'wayland',
       MIP_PAPER_SOURCE_ROOT: repositoryRoot,
       MIP_PAPER_INSTALL_ROOT: installRoot,
+      ...(packaged ? {
+        MIP_PAPER_MODE: 'packaged',
+        MIP_PAPER_SOURCE_ROOT: installRoot,
+        MIP_PAPER_SERVICE_PATH: servicePath,
+        MIP_PAPER_KWIN_SOURCE: path.join(installRoot, 'kwin', 'mip-paper'),
+      } : {}),
       KWIN_RULES_FILE: rulesFile,
       KWIN_RULES_NO_RELOAD: '1',
       XDG_DATA_HOME: path.join(home, '.local', 'share'),
@@ -139,6 +148,21 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
     for (const label of ['window stacking', 'panel visibility', 'Alt\\+Tab', 'mouse input', 'multi-display', 'lock/suspend', 'resource usage']) {
       assert.match(stdout, new RegExp(`MANUAL .*${label}`));
     }
+  } finally {
+    await rm(fixtureData.home, { recursive: true, force: true });
+  }
+});
+
+test('packaged doctor uses system Electron and system KWin paths without npm', async () => {
+  const fixtureData = await fixture({ packaged: true });
+  try {
+    const npmPath = path.join(fixtureData.home, 'fake-bin', 'npm');
+    await rm(npmPath, { force: true });
+    const { stdout } = await execFileAsync(cli, ['doctor'], { env: fixtureData.env });
+    assert.match(stdout, /PASS .*mode.*packaged/);
+    assert.match(stdout, /PASS .*command:electron43/);
+    assert.doesNotMatch(stdout, /command:npm/);
+    assert.match(stdout, /PASS .*KWin coordinator/);
   } finally {
     await rm(fixtureData.home, { recursive: true, force: true });
   }

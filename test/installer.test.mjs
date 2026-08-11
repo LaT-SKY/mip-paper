@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import {
   access,
   chmod,
+  cp,
   mkdtemp,
   mkdir,
   readFile,
@@ -109,6 +110,30 @@ exit 0
     dataDirectory: path.join(home, '.local', 'share', 'mip-paper'),
     wallpaper: path.join(home, '.local', 'share', 'mip-paper', 'wallpaper'),
     kwinrc: path.join(configHome, 'kwinrc'),
+  };
+}
+
+async function createPackagedFixture() {
+  const fixture = await createFixture();
+  const systemRoot = path.join(fixture.home, 'usr', 'lib', 'mip-paper');
+  const systemService = path.join(fixture.home, 'usr', 'lib', 'systemd', 'user', 'mip-paper.service');
+  const systemKwin = path.join(fixture.home, 'usr', 'share', 'kwin', 'scripts', 'mip-paper');
+  await mkdir(path.dirname(systemService), { recursive: true });
+  await writeFile(systemService, '[Service]\nExecStart=/usr/bin/electron43 /usr/lib/mip-paper\n');
+  await mkdir(path.dirname(systemKwin), { recursive: true });
+  await cp(path.join(repositoryRoot, 'kwin', 'mip-paper'), systemKwin, { recursive: true });
+  return {
+    ...fixture,
+    systemRoot,
+    systemService,
+    systemKwin,
+    env: {
+      ...fixture.env,
+      MIP_PAPER_MODE: 'packaged',
+      MIP_PAPER_INSTALL_ROOT: systemRoot,
+      MIP_PAPER_SERVICE_PATH: systemService,
+      MIP_PAPER_KWIN_SOURCE: systemKwin,
+    },
   };
 }
 
@@ -336,6 +361,86 @@ test('normal uninstall preserves config and purge removes it', async () => {
     assert.equal(await exists(fixture.config), false);
     assert.equal(await exists(fixture.credentials), false);
     assert.equal(await exists(fixture.dataDirectory), false);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('packaged setup imports an image and enables per-user integration', async () => {
+  const fixture = await createPackagedFixture();
+  try {
+    await runCli(['setup', '--image', fixture.sourceImage], fixture);
+    assert.deepEqual(await readFile(fixture.wallpaper), png);
+    assert.equal(await exists(fixture.config), true);
+    assert.equal(await exists(fixture.credentials), true);
+    assert.equal((await stat(fixture.credentials)).mode & 0o777, 0o600);
+    assert.equal(await exists(fixture.kwinScript), false);
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
+    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user enable --now mip-paper\.service/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('packaged setup reuses an image and preserves config and credentials', async () => {
+  const fixture = await createPackagedFixture();
+  try {
+    await runCli(['setup', '--image', fixture.sourceImage], fixture);
+    const custom = '{"interactionEnabled":false}\n';
+    const credentials = '{"apiHost":"example.invalid","apiKey":"private"}\n';
+    await writeFile(fixture.config, custom);
+    await writeFile(fixture.credentials, credentials, { mode: 0o600 });
+    await runCli(['setup'], fixture);
+    assert.equal(await readFile(fixture.config, 'utf8'), custom);
+    assert.equal(await readFile(fixture.credentials, 'utf8'), credentials);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('packaged setup refuses a first start without an image', async () => {
+  const fixture = await createPackagedFixture();
+  try {
+    await assert.rejects(runCli(['setup'], fixture), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /setup --image/);
+      return true;
+    });
+    assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /enable --now/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('packaged teardown preserves user data and purge removes exact app directories', async () => {
+  const fixture = await createPackagedFixture();
+  try {
+    await runCli(['setup', '--image', fixture.sourceImage], fixture);
+    await runCli(['teardown'], fixture);
+    assert.equal(await exists(fixture.config), true);
+    assert.equal(await exists(fixture.credentials), true);
+    assert.equal(await exists(fixture.wallpaper), true);
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=false/);
+
+    await runCli(['setup'], fixture);
+    await runCli(['teardown', '--purge'], fixture);
+    assert.equal(await exists(path.dirname(fixture.config)), false);
+    assert.equal(await exists(fixture.dataDirectory), false);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('packaged mode refuses commands that mutate pacman-owned files', async () => {
+  const fixture = await createPackagedFixture();
+  try {
+    for (const command of ['install', 'uninstall']) {
+      await assert.rejects(runCli([command], fixture), (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /managed by pacman/);
+        return true;
+      });
+    }
   } finally {
     await cleanup(fixture);
   }
