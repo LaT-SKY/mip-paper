@@ -24,3 +24,15 @@ test('uses one mip-paper identity across Electron and KWin', async () => {
   assert.match(coordinator, /const APP_ID = 'mip-paper'/);
   assert.equal(metadata.KPlugin.Id, 'mip-paper');
 });
+
+test('uses mip-paper configuration and probe namespaces', async () => {
+  const config = await readFile('src/config.mjs', 'utf8');
+  const main = await readFile('src/main.mjs', 'utf8');
+  const probe = await readFile('scripts/render-probe.mjs', 'utf8');
+
+  assert.match(config, /path\.join\(base, 'mip-paper'/);
+  assert.match(main, /process\.env\.MIP_PAPER_CONFIG/);
+  assert.match(main, /env\.MIP_PAPER_PROBE_STRATEGY/);
+  assert.match(probe, /const SERVICE = 'mip-paper\.service'/);
+  assert.match(probe, /MIP_PAPER_PROBE_STRATEGY/);
+});

@@ -223,17 +223,17 @@ export function validateConfig(value) {
 
 export function weatherCredentialsPath(env = process.env, homedir) {
   const base = env.XDG_CONFIG_HOME || path.join(homedir, '.config');
-  return path.join(base, 'animated-ocean-wallpaper', 'weather-credentials.json');
+  return path.join(base, 'mip-paper', 'weather-credentials.json');
 }
 
 export function informationCachePath(env = process.env, homedir) {
   const base = env.XDG_CACHE_HOME || path.join(homedir, '.cache');
-  return path.join(base, 'animated-ocean-wallpaper', 'information.json');
+  return path.join(base, 'mip-paper', 'information.json');
 }
 
 export function configPath(env = process.env, homedir) {
   const base = env.XDG_CONFIG_HOME || path.join(homedir, '.config');
-  return path.join(base, 'animated-ocean-wallpaper', 'config.json');
+  return path.join(base, 'mip-paper', 'config.json');
 }
 
 export async function loadConfig(pathname) {

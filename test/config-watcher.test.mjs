@@ -53,7 +53,7 @@ function createFixture({ loads = [] } = {}) {
   const errors = [];
   let loadCount = 0;
   const watcher = createConfigWatcher({
-    pathname: '/config/animated-ocean-wallpaper/config.json',
+    pathname: '/config/mip-paper/config.json',
     load: async () => {
       const result = loads[loadCount] ?? { audio: { enabled: true } };
       loadCount += 1;
@@ -92,7 +92,7 @@ test('debounces directory events and reloads atomic replacements', async () => {
   fixture.emit('rename', 'config.json');
   fixture.emit('change', 'config.json');
   fixture.emit('change', 'unrelated.json');
-  assert.deepEqual(fixture.watchCalls, ['/config/animated-ocean-wallpaper']);
+  assert.deepEqual(fixture.watchCalls, ['/config/mip-paper']);
   fixture.clock.advance(99);
   assert.equal(fixture.loadCount, 0);
   fixture.clock.advance(1);

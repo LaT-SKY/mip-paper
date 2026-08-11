@@ -72,15 +72,15 @@ async function buildInformationService(config) {
 }
 
 export function parseProbeOptions(env = process.env) {
-  const strategy = env.ANIMATED_WALLPAPER_PROBE_STRATEGY;
+  const strategy = env.MIP_PAPER_PROBE_STRATEGY;
   if (!strategy) return null;
   if (!SCHEDULER_NAMES.includes(strategy)) throw new RangeError(`Unknown probe strategy: ${strategy}`);
-  const resultPath = env.ANIMATED_WALLPAPER_PROBE_RESULT;
+  const resultPath = env.MIP_PAPER_PROBE_RESULT;
   if (!resultPath || !path.isAbsolute(resultPath)) throw new TypeError('Probe result path must be absolute');
   return Object.freeze({
     enabled: true,
     strategy,
-    scenario: env.ANIMATED_WALLPAPER_PROBE_SCENARIO || 'idle',
+    scenario: env.MIP_PAPER_PROBE_SCENARIO || 'idle',
     resultPath,
   });
 }
@@ -90,7 +90,7 @@ app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 
 async function run() {
   await app.whenReady();
-  const pathname = process.env.ANIMATED_OCEAN_WALLPAPER_CONFIG
+  const pathname = process.env.MIP_PAPER_CONFIG
     || configPath(process.env, os.homedir());
   const config = await loadConfig(pathname);
   const probe = parseProbeOptions(process.env);
