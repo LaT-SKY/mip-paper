@@ -19,6 +19,7 @@ export function createWindowManager({
   config,
   rendererPath,
   preloadPath,
+  wallpaperUrl,
   probe = null,
   onProbeReport = null,
   informationService = null,
@@ -82,6 +83,7 @@ export function createWindowManager({
     bootstrapByWebContents.set(webContentsId, {
       config: currentConfig,
       display,
+      wallpaperUrl,
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
       ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
       ...(probe ? { probe } : {}),
@@ -129,6 +131,7 @@ export function createWindowManager({
       bootstrapByWebContents.set(window.webContents.id, {
         config: currentConfig,
         display,
+        wallpaperUrl,
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
         ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
         ...(probe ? { probe } : {}),
