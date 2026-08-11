@@ -2,6 +2,73 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+const configurationFields = [
+  'interactionEnabled',
+  'audio.enabled',
+  'audio.gain',
+  'audio.silenceDelayMs',
+  'audio.fadeOutMs',
+  'audio.fadeInMs',
+  'frameRate.interactive',
+  'frameRate.drift',
+  'motion.interactionSpeed',
+  'motion.returnSpeed',
+  'motion.driftSpeed',
+  'motion.deadZonePx',
+  'motion.horizontalPanPercent',
+  'motion.verticalPanPercent',
+  'motion.maxRotationDegrees',
+  'panel.autoExpandHide',
+  'panel.expandTriggerDistancePx',
+  'panel.collapseDelaySeconds',
+  'panel.expanded',
+  'panel.collapsedOpacity',
+  'panel.animation.staggerDelayMs',
+  'panel.animation.durationMs',
+  'weather.location.mode',
+  'weather.location.latitude',
+  'weather.location.longitude',
+  'weather.location.fallbackLocationId',
+  'weather.tideStationId',
+];
+
+test('publishes complete linked Chinese and English guides', async () => {
+  const [chinese, english] = await Promise.all([
+    readFile('README.md', 'utf8'),
+    readFile('README.en.md', 'utf8'),
+  ]);
+  assert.match(chinese, /\[English\]\(README\.en\.md\)/);
+  assert.match(english, /\[中文\]\(README\.md\)/);
+
+  for (const readme of [chinese, english]) {
+    for (const required of [
+      'yay -S mip-paper',
+      'paru -S mip-paper',
+      'mip-paper setup --image',
+      'mip-paper wallpaper set',
+      'mip-paper wallpaper status',
+      'GPL-3.0-only',
+      'JPEG',
+      'PNG',
+      'WebP',
+    ]) {
+      assert.ok(readme.includes(required), `README is missing: ${required}`);
+    }
+    for (const field of configurationFields) {
+      assert.ok(readme.includes(`\`${field}\``), `README is missing configuration field: ${field}`);
+    }
+    assert.doesNotMatch(readme, /161-2\.jpeg|assets\/161-2/);
+  }
+
+  assert.match(chinese, /不.{0,10}(附带|包含).{0,12}(默认|第三方).{0,8}(图片|壁纸)/);
+  assert.match(english, /does not (?:bundle|include).{0,30}(?:default|third-party).{0,20}(?:image|wallpaper)/i);
+});
+
+test('declares the application license in package metadata', async () => {
+  const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
+  assert.equal(packageJson.license, 'GPL-3.0-only');
+});
+
 test('documents GeoClue setup and QWeather Icons attribution', async () => {
   const readme = await readFile('README.md', 'utf8');
 

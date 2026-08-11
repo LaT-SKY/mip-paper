@@ -1,0 +1,274 @@
+# Mip-Paper
+
+[中文](README.md)
+
+Mip-Paper is a dynamic desktop wallpaper engine for KDE Plasma 6, KWin 6, and Wayland. It cover-renders a user-provided image into a full-screen Canvas on every display, with idle drift, pointer parallax, floating information panels, and a media-audio spectrum.
+
+Mip-Paper is not a native Plasma wallpaper plugin and does not open a normal application window. Electron windows are managed by KWin on the desktop layer and are excluded from the taskbar, pager, Alt+Tab, and application launcher.
+
+## Features
+
+- Independent rendering for displays with different resolutions, scales, layouts, and hot-plug events.
+- Pointer-driven pan, zoom, and slight rotation, followed by a smooth return to idle drift.
+- Four proximity-driven panels for time, weather, tides, and a complete month calendar.
+- QWeather data and official icons, with XDG Desktop Portal or fixed-coordinate location.
+- A stereo audio ribbon that reacts only to media playing through the current default output device.
+- A Plasma-owned systemd user service with orderly cleanup during logout, shutdown, and restart.
+
+## Images and Copyright
+
+Mip-Paper does not bundle or include a default or third-party wallpaper image, and it does not automatically download one. Initial setup requires a local JPEG, PNG, or WebP file. The validated image is atomically copied to:
+
+```text
+${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/wallpaper
+```
+
+The original file can then be moved or deleted. You are responsible for having the right to use the selected image. The program's GPL license does not cover user-imported images.
+
+Set, replace, or inspect the managed image:
+
+```bash
+mip-paper wallpaper set /path/to/image.png
+mip-paper wallpaper status
+```
+
+A failed replacement preserves the previous valid image. A successful replacement restarts the service when it is active.
+
+## Privacy: Media Output Only
+
+The visualizer follows the current default PipeWire output device. It connects to sink monitor ports with `stream.capture.sink=true` and identifies the stream as `Stream/Input/Audio/Internal`. It never connects to a microphone, never records audio, and does not appear as a recording application in Plasma's microphone list.
+
+Raw PCM exists only briefly inside the main-process FFT pipeline. It is never written to disk, logs, cache, IPC, or the renderer. A white upward curve represents the left channel, a mirrored pink downward curve represents the right channel, and a wider cyan combined spectrum shows overall energy behind their shared baseline. The strokes have no glow, frosted background, border, or panel shadow.
+
+## Requirements
+
+- Arch Linux or a compatible environment
+- KDE Plasma 6 and KWin 6 in a Wayland session
+- A systemd user manager
+- PipeWire, WirePlumber, `pw-cat`, and `pw-metadata`
+- GeoClue for automatic location only
+
+## Install from AUR
+
+With yay:
+
+```bash
+yay -S mip-paper
+```
+
+Or with paru:
+
+```bash
+paru -S mip-paper
+```
+
+The package installs only system files and never changes a particular user's home as root. Each user completes setup once:
+
+```bash
+mip-paper setup --image /path/to/image.png
+```
+
+Setup creates missing configuration and weather credentials, installs the user's KWin rule, enables the system KWin coordinator, and starts `mip-paper.service`. Existing configuration, credentials, and managed images are preserved. When an image already exists, `mip-paper setup` is sufficient.
+
+## Manage the Wallpaper and Service
+
+```bash
+mip-paper start
+mip-paper stop
+mip-paper restart
+mip-paper status
+mip-paper doctor
+```
+
+Read service logs:
+
+```bash
+journalctl --user -u mip-paper.service -n 100 --no-pager
+```
+
+`start` launches only the desktop background service. Verify login startup with:
+
+```bash
+systemctl --user is-enabled mip-paper.service
+systemctl --user is-active mip-paper.service
+```
+
+## Weather Service
+
+Automatic location uses GeoClue:
+
+```bash
+sudo pacman -S geoclue
+sudo systemctl enable --now geoclue
+gsettings set org.gnome.system.location enabled true
+```
+
+Log in again after installation so the desktop session starts its GeoClue authorization agent. Mip-Paper requests city-level location through XDG Desktop Portal; the renderer cannot access GeoClue directly.
+
+Weather credentials are stored separately at `~/.config/mip-paper/weather-credentials.json` and must have mode `0600`:
+
+```json
+{
+  "apiHost": "your-project-host.qweatherapi.com",
+  "apiKey": "your-api-key"
+}
+```
+
+The host is an HTTPS domain without scheme, path, query, or user information. Only the main process reads the key; it never enters the renderer, URLs, logs, or cache. Run `mip-paper restart` after changing credentials.
+
+Current weather refreshes every 30 minutes; forecasts and tides refresh every 6 hours. Cache state is fresh through 6 hours, stale from 6 to 24 hours, and unavailable after 24 hours. Weather data comes from QWeather. `qweather-icons@1.8.0` code is MIT and its icons are CC BY 4.0.
+
+## Configuration
+
+The configuration file is `~/.config/mip-paper/config.json`. Complete defaults:
+
+```json
+{
+  "interactionEnabled": true,
+  "audio": {
+    "enabled": true,
+    "gain": 1,
+    "silenceDelayMs": 600,
+    "fadeOutMs": 450,
+    "fadeInMs": 160
+  },
+  "frameRate": { "interactive": 60, "drift": 30 },
+  "motion": {
+    "interactionSpeed": 1.15,
+    "returnSpeed": 0.3,
+    "driftSpeed": 1,
+    "deadZonePx": 2,
+    "horizontalPanPercent": 4.6,
+    "verticalPanPercent": 4.5,
+    "maxRotationDegrees": 0.7
+  },
+  "panel": {
+    "autoExpandHide": true,
+    "expandTriggerDistancePx": 48,
+    "collapseDelaySeconds": 8,
+    "expanded": true,
+    "collapsedOpacity": 0.08,
+    "animation": { "staggerDelayMs": 60, "durationMs": 950 }
+  },
+  "weather": {
+    "location": {
+      "mode": "auto",
+      "latitude": null,
+      "longitude": null,
+      "fallbackLocationId": "101281601"
+    },
+    "tideStationId": "P2352"
+  }
+}
+```
+
+Unknown fields are rejected. Outside `audio.*`, invalid types or ranges prevent startup and are reported in the service log. Invalid audio values fall back to their defaults.
+
+### Top Level and Frame Rates
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Restart |
+| `frameRate.interactive` | number, `>= 30` FPS | `60` | Target rate during interaction and return | Restart |
+| `frameRate.drift` | number, `>= 30` FPS | `30` | Target rate during idle drift | Restart |
+
+### Audio Visualization
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `audio.enabled` | boolean | `true` | Start or stop output-monitor visualization | Live reload |
+| `audio.gain` | `0.25–4` | `1` | Spectrum gain | Live reload |
+| `audio.silenceDelayMs` | `0–5000 ms` | `600` | Hold time after silence begins | Live reload |
+| `audio.fadeOutMs` | `0–3000 ms` | `450` | Fade-out time; `0` is immediate | Live reload |
+| `audio.fadeInMs` | `0–3000 ms` | `160` | Fade-in time; `0` is immediate | Live reload |
+
+### Motion and Parallax
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `motion.interactionSpeed` | finite number, `> 0` | `1.15` | Pointer-follow response speed | Restart |
+| `motion.returnSpeed` | finite number, `> 0` | `0.3` | Speed returning from interaction to drift | Restart |
+| `motion.driftSpeed` | finite number, `> 0` | `1` | Idle drift speed multiplier | Restart |
+| `motion.deadZonePx` | finite number, `>= 0` px | `2` | Sliding dead zone for pointer noise | Restart |
+| `motion.horizontalPanPercent` | finite number, `>= 0` % | `4.6` | Maximum horizontal pan as viewport percentage | Restart |
+| `motion.verticalPanPercent` | finite number, `>= 0` % | `4.5` | Maximum vertical pan as viewport percentage | Restart |
+| `motion.maxRotationDegrees` | finite number, `>= 0` degrees | `0.7` | Maximum image rotation | Restart |
+
+### Floating Information Panels
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `panel.autoExpandHide` | boolean | `true` | Expand by pointer proximity and collapse after delay | Restart |
+| `panel.expandTriggerDistancePx` | finite number, `>= 0` px | `48` | Accumulated pointer travel before the next panel expands | Restart |
+| `panel.collapseDelaySeconds` | finite number, `>= 0` seconds | `8` | Idle delay before collapse starts | Restart |
+| `panel.expanded` | boolean | `true` | Fixed state when automatic behavior is disabled | Restart |
+| `panel.collapsedOpacity` | `0–1` | `0.08` | Minimum opacity of collapsed panels | Restart |
+| `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `60` | Delay between panel animations | Restart |
+| `panel.animation.durationMs` | finite number, `>= 400` ms | `950` | Single-panel animation including two rebounds | Restart |
+
+### Weather, Location, and Tides
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `weather.location.mode` | `auto` or `fixed` | `auto` | Portal location or configured coordinates | Restart |
+| `weather.location.latitude` | `null` or `-90–90` | `null` | Fixed latitude; must be paired with longitude | Restart |
+| `weather.location.longitude` | `null` or `-180–180` | `null` | Fixed longitude; must be paired with latitude | Restart |
+| `weather.location.fallbackLocationId` | non-empty string | `101281601` | QWeather LocationID used after Portal and cache fail | Restart |
+| `weather.tideStationId` | non-empty string | `P2352` | Tide observation station ID | Restart |
+
+Auto mode tries the Portal, then cached coordinates, then the fallback LocationID. Fixed mode requires numeric latitude and longitude and does not request the Portal.
+
+## Diagnostics and Common Problems
+
+```bash
+mip-paper doctor
+journalctl --user -u mip-paper.service -n 100 --no-pager
+```
+
+- Active service but no wallpaper: run `mip-paper wallpaper status`, then inspect the KWin rule and coordinator doctor checks.
+- Missing audio ribbon: require PASS for `command:pw-cat`, `command:pw-metadata`, and `audio-output`, then check the default output device.
+- Unavailable weather: check credential mode, Portal permission, and network access. The key is never printed.
+- No normal window after `start`: expected; the windows live on the desktop layer.
+
+## Source Installation and Development
+
+Source installs also use system `electron43` and do not copy npm Electron:
+
+```bash
+sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
+./bin/mip-paper install --image /path/to/image.png
+```
+
+Prepare without starting:
+
+```bash
+./bin/mip-paper install --no-start
+```
+
+Development checks:
+
+```bash
+npm ci
+npm test
+npm run check
+bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
+```
+
+Run the renderer scheduling probe with `mip-paper probe --duration 60`.
+
+## Uninstall
+
+For AUR installs, remove per-user integration before pacman-owned files:
+
+```bash
+mip-paper teardown
+sudo pacman -R mip-paper
+```
+
+Normal teardown preserves configuration, credentials, and the managed image. Explicitly remove all Mip-Paper user data with `mip-paper teardown --purge`. Source installs use `mip-paper uninstall` or `mip-paper uninstall --purge`.
+
+## Licenses and Third-Party Components
+
+Mip-Paper program code is `GPL-3.0-only`; see [LICENSE](LICENSE). Copyright (C) 2026 LaT-SKY.
+
+Bundled JavaScript dependencies retain their own licenses, primarily MIT. QWeather icons are CC BY 4.0. AUR package-source files use 0BSD. You remain responsible for the rights and license of any imported image.
