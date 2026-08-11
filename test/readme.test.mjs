@@ -43,6 +43,8 @@ test('documents PipeWire audio visualization, live timing config and privacy bou
     '粉色曲线向下',
     '青色合并频谱',
     '没有辉光',
+    'Stream/Input/Audio/Internal',
+    'Plasma 麦克风列表',
     'animated-ocean-wallpaper doctor',
   ]) {
     assert.ok(readme.includes(required), `README is missing: ${required}`);

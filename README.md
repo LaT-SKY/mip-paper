@@ -181,6 +181,10 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、
 IPC 或 renderer。
 
+PipeWire 实现使用 `stream.capture.sink=true` 连接当前输出设备的 monitor 端口，并将
+频谱实现流标记为 `Stream/Input/Audio/Internal`。因此它不会连接麦克风输入，也不会作为
+录音应用出现在 Plasma 麦克风列表中；音频可视化仍只响应系统正在播放的媒体音频。
+
 `audio.gain` 范围为 `0.25–4`。静音等待 `silenceDelayMs` 范围为 `0–5000 ms`，淡出
 `fadeOutMs` 和淡入 `fadeInMs` 的范围均为 `0–3000 ms`；时长 `0` 表示立即完成。
 `audio` 字段会实时热加载，无需重启壁纸服务。修改 `enabled` 会安全启动或停止采集，
