@@ -1,5 +1,5 @@
 [Unit]
-Description=Animated Ocean Wallpaper
+Description=Mip-Paper
 After=plasma-workspace.target
 PartOf=graphical-session.target
 

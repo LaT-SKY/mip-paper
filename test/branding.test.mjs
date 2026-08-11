@@ -36,3 +36,14 @@ test('uses mip-paper configuration and probe namespaces', async () => {
   assert.match(probe, /const SERVICE = 'mip-paper\.service'/);
   assert.match(probe, /MIP_PAPER_PROBE_STRATEGY/);
 });
+
+test('ships mip-paper command and service assets', async () => {
+  await access('bin/mip-paper');
+  await access('resources/mip-paper.service.in');
+  const launcher = await readFile('bin/mip-paper', 'utf8');
+  const unit = await readFile('resources/mip-paper.service.in', 'utf8');
+
+  assert.match(launcher, /readonly APP_ID='mip-paper'/);
+  assert.match(launcher, /readonly SERVICE_NAME='mip-paper\.service'/);
+  assert.match(unit, /Description=Mip-Paper/);
+});

@@ -8,7 +8,7 @@ import test from 'node:test';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve('.');
-const cli = path.join(repositoryRoot, 'bin', 'animated-ocean-wallpaper');
+const cli = path.join(repositoryRoot, 'bin', 'mip-paper');
 
 async function executable(pathname, contents) {
   await writeFile(pathname, contents);
@@ -24,16 +24,16 @@ async function fixture({
   const home = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-doctor-'));
   const fakeBin = path.join(home, 'fake-bin');
   const configHome = path.join(home, '.config');
-  const installRoot = path.join(home, '.local', 'lib', 'animated-ocean-wallpaper');
+  const installRoot = path.join(home, '.local', 'lib', 'mip-paper');
   const rulesFile = path.join(configHome, 'kwinrulesrc');
   await mkdir(path.join(fakeBin), { recursive: true });
   await mkdir(path.join(installRoot, 'src'), { recursive: true });
   await mkdir(path.join(installRoot, 'scripts'), { recursive: true });
-  await mkdir(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper'), { recursive: true });
+  await mkdir(path.join(installRoot, 'kwin', 'mip-paper'), { recursive: true });
   await mkdir(path.join(installRoot, 'assets'), { recursive: true });
   await mkdir(path.join(installRoot, 'node_modules', 'electron', 'dist'), { recursive: true });
   await mkdir(path.join(home, '.local', 'bin'), { recursive: true });
-  await mkdir(path.join(configHome, 'animated-ocean-wallpaper'), { recursive: true });
+  await mkdir(path.join(configHome, 'mip-paper'), { recursive: true });
   await mkdir(path.join(configHome, 'systemd', 'user'), { recursive: true });
   await writeFile(path.join(installRoot, 'src', 'main.mjs'), 'export {};\n');
   await writeFile(path.join(installRoot, 'src', 'config.mjs'), "import { readFile } from 'node:fs/promises'; export async function loadConfig(pathname) { return JSON.parse(await readFile(pathname, 'utf8')); }\n");
@@ -53,21 +53,21 @@ async function fixture({
   await writeFile(path.join(installRoot, 'scripts', 'kwin-script.sh'), coordinatorHelper);
   await chmod(path.join(installRoot, 'scripts', 'kwin-script.sh'), 0o755);
   if (coordinator !== 'missing') {
-    await writeFile(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper', 'metadata.json'), '{}');
-    await mkdir(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper', 'contents', 'code'), { recursive: true });
-    await writeFile(path.join(installRoot, 'kwin', 'animated-ocean-wallpaper', 'contents', 'code', 'main.js'), '{}');
-    await mkdir(path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper', 'contents', 'code'), { recursive: true });
-    await writeFile(path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper', 'metadata.json'), '{}');
-    await writeFile(path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper', 'contents', 'code', 'main.js'), '{}');
+    await writeFile(path.join(installRoot, 'kwin', 'mip-paper', 'metadata.json'), '{}');
+    await mkdir(path.join(installRoot, 'kwin', 'mip-paper', 'contents', 'code'), { recursive: true });
+    await writeFile(path.join(installRoot, 'kwin', 'mip-paper', 'contents', 'code', 'main.js'), '{}');
+    await mkdir(path.join(home, '.local', 'share', 'kwin', 'scripts', 'mip-paper', 'contents', 'code'), { recursive: true });
+    await writeFile(path.join(home, '.local', 'share', 'kwin', 'scripts', 'mip-paper', 'metadata.json'), '{}');
+    await writeFile(path.join(home, '.local', 'share', 'kwin', 'scripts', 'mip-paper', 'contents', 'code', 'main.js'), '{}');
   }
-  await writeFile(path.join(configHome, 'animated-ocean-wallpaper', 'config.json'), invalidConfig ? '{broken' : JSON.stringify({ interactionEnabled: true }));
-  const credentialsPath = path.join(configHome, 'animated-ocean-wallpaper', 'weather-credentials.json');
+  await writeFile(path.join(configHome, 'mip-paper', 'config.json'), invalidConfig ? '{broken' : JSON.stringify({ interactionEnabled: true }));
+  const credentialsPath = path.join(configHome, 'mip-paper', 'weather-credentials.json');
   await writeFile(credentialsPath, invalidCredentials ? '{}' : JSON.stringify({ apiHost: 'weather.example.com', apiKey: 'private' }), { mode: 0o600 });
-  await writeFile(path.join(configHome, 'systemd', 'user', 'animated-ocean-wallpaper.service'), '[Service]\n');
-  await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nanimated-ocean-wallpaperEnabled=${coordinator === 'valid'}\n`);
-  await executable(path.join(home, '.local', 'bin', 'animated-ocean-wallpaper'), '#!/usr/bin/env bash\n');
+  await writeFile(path.join(configHome, 'systemd', 'user', 'mip-paper.service'), '[Service]\n');
+  await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nmip-paperEnabled=${coordinator === 'valid'}\n`);
+  await executable(path.join(home, '.local', 'bin', 'mip-paper'), '#!/usr/bin/env bash\n');
   await mkdir(path.dirname(rulesFile), { recursive: true });
-  await writeFile(rulesFile, '[General]\ncount=1\nrules=animated-ocean-wallpaper\n\n[animated-ocean-wallpaper]\nDescription=Animated Ocean Wallpaper\n');
+  await writeFile(rulesFile, '[General]\ncount=1\nrules=mip-paper\n\n[mip-paper]\nDescription=Mip-Paper\n');
 
   await executable(path.join(fakeBin, 'plasmashell'), '#!/usr/bin/env bash\nprintf "plasmashell 6.7.4\\n"\n');
   await executable(path.join(fakeBin, 'kwin_wayland'), '#!/usr/bin/env bash\nprintf "kwin 6.7.4\\n"\n');
@@ -99,8 +99,8 @@ exit 0
       XDG_CONFIG_HOME: configHome,
       XDG_CURRENT_DESKTOP: 'KDE',
       XDG_SESSION_TYPE: 'wayland',
-      ANIMATED_WALLPAPER_SOURCE_ROOT: repositoryRoot,
-      ANIMATED_WALLPAPER_INSTALL_ROOT: installRoot,
+      MIP_PAPER_SOURCE_ROOT: repositoryRoot,
+      MIP_PAPER_INSTALL_ROOT: installRoot,
       KWIN_RULES_FILE: rulesFile,
       KWIN_RULES_NO_RELOAD: '1',
       XDG_DATA_HOME: path.join(home, '.local', 'share'),
