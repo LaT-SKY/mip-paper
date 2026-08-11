@@ -40,7 +40,7 @@ mip-paper wallpaper status
 
 音频可视化通过 PipeWire 跟随当前默认输出设备。实现使用 `stream.capture.sink=true` 连接输出设备的 monitor 端口，并把流标记为 `Stream/Input/Audio/Internal`。它不会连接麦克风，不会录制或保存 PCM 音频，也不会作为录音应用出现在 Plasma 麦克风列表中。
 
-原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、缓存、IPC 或 renderer。白色曲线向上显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在共同基线后层显示总体能量；曲线没有辉光、磨砂背景、边框或面板阴影。
+原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、缓存、IPC 或 renderer。白色曲线向上显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在共同基线后层显示总体能量。
 
 ## 环境要求
 

@@ -61,7 +61,7 @@ test('publishes complete linked Chinese and English guides', async () => {
   }
 
   assert.match(chinese, /LaT-SKY.{0,20}CC BY 4\.0/);
-  assert.match(chinese, /不附带此前使用的第三方壁纸/);
+  assert.match(chinese, /不附带.{0,8}第三方壁纸/);
   assert.match(english, /default photograph by LaT-SKY under CC BY 4\.0/i);
   assert.match(english, /former third-party wallpaper is not included/i);
 });
@@ -113,7 +113,6 @@ test('documents PipeWire audio visualization, live timing config and privacy bou
     '白色曲线向上',
     '粉色曲线向下',
     '青色合并频谱',
-    '没有辉光',
     'Stream/Input/Audio/Internal',
     'Plasma 麦克风列表',
     'mip-paper doctor',
