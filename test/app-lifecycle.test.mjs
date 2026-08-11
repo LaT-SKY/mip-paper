@@ -95,6 +95,7 @@ test('Electron before-quit and SIGTERM share the coordinator', () => {
 
 test('main installs the shared application shutdown handlers', async () => {
   const main = await readFile('src/main.mjs', 'utf8');
+  assert.match(main, /app\.setName\('Mip-Paper'\)/);
   assert.match(main, /createShutdownCoordinator/);
   assert.match(main, /installShutdownHandlers\(\{\s*app,\s*processTarget:\s*process,/);
   assert.doesNotMatch(main, /quitInProgress|quitReady/);

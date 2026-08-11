@@ -85,7 +85,7 @@ export function parseProbeOptions(env = process.env) {
   });
 }
 
-app.setName('animated-ocean-wallpaper');
+app.setName('Mip-Paper');
 app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 
 async function run() {
