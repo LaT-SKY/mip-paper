@@ -99,14 +99,14 @@ test('accepts every audio boundary including immediate transitions', () => {
 test('uses XDG_CONFIG_HOME when resolving the user config path', () => {
   assert.equal(
     configPath({ XDG_CONFIG_HOME: '/tmp/custom-config' }, '/home/tester'),
-    '/tmp/custom-config/animated-ocean-wallpaper/config.json',
+    '/tmp/custom-config/mip-paper/config.json',
   );
 });
 
 test('falls back to the home config directory', () => {
   assert.equal(
     configPath({}, '/home/tester'),
-    '/home/tester/.config/animated-ocean-wallpaper/config.json',
+    '/home/tester/.config/mip-paper/config.json',
   );
 });
 

@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const SERVICE = 'animated-ocean-wallpaper.service';
+const SERVICE = 'mip-paper.service';
 const STRATEGIES = ['raf', 'timer', 'adaptive'];
 const SCENARIOS = ['idle', 'sweep', 'return'];
 
@@ -30,7 +30,7 @@ function parseArgs(args) {
   const options = {
     duration: 60,
     warmup: 0,
-    output: path.join(os.tmpdir(), `animated-ocean-probe-${Date.now()}`),
+    output: path.join(os.tmpdir(), `mip-paper-probe-${Date.now()}`),
     strategy: null,
   };
   for (let index = 0; index < args.length; index += 1) {
@@ -113,7 +113,7 @@ export async function runProbe(args = process.argv.slice(2), env = process.env) 
   await writeFile(metadataPath, `${JSON.stringify({ strategies, scenarios: SCENARIOS, duration: options.duration, warmup: options.warmup, electron: '43.3.0', machine: os.hostname(), session: env.XDG_SESSION_TYPE || 'unknown' }, null, 2)}\n`);
   const originalActive = (await systemctl('is-active', SERVICE).then(() => true).catch(() => false));
   const restore = async () => {
-    await systemctl('unset-environment', 'ANIMATED_WALLPAPER_PROBE_STRATEGY', 'ANIMATED_WALLPAPER_PROBE_SCENARIO', 'ANIMATED_WALLPAPER_PROBE_RESULT').catch(() => {});
+    await systemctl('unset-environment', 'MIP_PAPER_PROBE_STRATEGY', 'MIP_PAPER_PROBE_SCENARIO', 'MIP_PAPER_PROBE_RESULT').catch(() => {});
     if (originalActive) await systemctl('restart', SERVICE).catch(() => {});
     else await systemctl('stop', SERVICE).catch(() => {});
   };
@@ -122,7 +122,7 @@ export async function runProbe(args = process.argv.slice(2), env = process.env) 
   try {
     for (const strategy of strategies) {
       for (const scenario of SCENARIOS) {
-        await systemctl('set-environment', `ANIMATED_WALLPAPER_PROBE_STRATEGY=${strategy}`, `ANIMATED_WALLPAPER_PROBE_SCENARIO=${scenario}`, `ANIMATED_WALLPAPER_PROBE_RESULT=${rawPath}`);
+        await systemctl('set-environment', `MIP_PAPER_PROBE_STRATEGY=${strategy}`, `MIP_PAPER_PROBE_SCENARIO=${scenario}`, `MIP_PAPER_PROBE_RESULT=${rawPath}`);
         await systemctl('restart', SERVICE);
         if (options.warmup > 0) await new Promise((resolve) => setTimeout(resolve, options.warmup * 1000));
         const start = await sampleResource();
