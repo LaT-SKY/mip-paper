@@ -62,7 +62,7 @@ chmod +x "$prefix/node_modules/.bin/electron" "$prefix/node_modules/electron/dis
 
   await writeExecutable(path.join(fakeBin, 'systemctl'), `#!/usr/bin/env bash
 printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
-if [[ "\${FAKE_SYSTEMCTL_FAIL_ENABLE:-0}" == 1 && "$*" == *'enable --now'* ]]; then exit 8; fi
+if [[ "\${FAKE_SYSTEMCTL_FAIL_ENABLE:-0}" == 1 && "$*" == *'reenable --now'* ]]; then exit 8; fi
 case "$*" in
   *'is-enabled'*) exit 1 ;;
   *'is-active'*) exit 1 ;;
@@ -156,8 +156,12 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.doesNotMatch(service, new RegExp(repositoryRoot));
     assert.match(service, /ExecStart=.*\/node_modules\/electron\/dist\/electron /);
     assert.doesNotMatch(service, /node_modules\/\.bin\/electron/);
-    assert.match(service, /KillSignal=SIGKILL/);
-    assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /enable --now/);
+    assert.match(service, /After=plasma-workspace\.target/);
+    assert.match(service, /PartOf=graphical-session\.target/);
+    assert.match(service, /WantedBy=plasma-workspace\.target/);
+    assert.doesNotMatch(service, /WantedBy=default\.target/);
+    assert.doesNotMatch(service, /KillSignal=/);
+    assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /(?:enable|reenable) --now/);
   } finally {
     await cleanup(fixture);
   }
@@ -200,11 +204,14 @@ test('failed KWin activation restores the prior package and enabled state', asyn
   }
 });
 
-test('install enables and starts the user service by default', async () => {
+test('install re-enables and starts the Plasma session service by default', async () => {
   const fixture = await createFixture();
   try {
     await runCli(['install'], fixture);
-    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user enable --now animated-ocean-wallpaper\.service/);
+    assert.match(
+      await readFile(fixture.systemctlLog, 'utf8'),
+      /--user reenable --now animated-ocean-wallpaper\.service/,
+    );
   } finally {
     await cleanup(fixture);
   }

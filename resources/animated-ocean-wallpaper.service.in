@@ -1,6 +1,6 @@
 [Unit]
 Description=Animated Ocean Wallpaper
-After=graphical-session.target plasma-workspace.target
+After=plasma-workspace.target
 PartOf=graphical-session.target
 
 [Service]
@@ -8,9 +8,8 @@ Type=simple
 ExecStart=@INSTALL_ROOT@/node_modules/electron/dist/electron @INSTALL_ROOT@
 WorkingDirectory=@INSTALL_ROOT@
 Environment=ELECTRON_OZONE_PLATFORM_HINT=auto
-KillSignal=SIGKILL
 Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=default.target
+WantedBy=plasma-workspace.target
