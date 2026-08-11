@@ -1,4 +1,4 @@
-# Animated Ocean Wallpaper
+# Mip-Paper
 
 面向 KDE Plasma 6、KWin 6 和 Wayland 的动态桌面壁纸运行器。程序使用 Electron 创建每显示器一个的全屏 Canvas 窗口，绘制 `assets/161-2.jpeg`，并提供缓慢漂移与鼠标视差交互。
 
@@ -42,14 +42,14 @@ gsettings set org.gnome.system.location enabled true
 在仓库根目录执行：
 
 ```bash
-./bin/animated-ocean-wallpaper install
+./bin/mip-paper install
 ```
 
 这会完成以下操作：
 
-1. 将当前源码复制到 `~/.local/lib/animated-ocean-wallpaper/`。
+1. 将当前源码复制到 `~/.local/lib/mip-paper/`。
 2. 在安装快照中执行 `npm ci --omit=dev`，准备 Electron 运行时。
-3. 安装命令入口 `~/.local/bin/animated-ocean-wallpaper`。
+3. 安装命令入口 `~/.local/bin/mip-paper`。
 4. 写入 systemd 用户服务、KWin 壁纸窗口规则和多显示器 coordinator。
 5. 执行 `systemctl --user enable --now`，立即启动并设置登录自启。
 
@@ -58,19 +58,19 @@ KWin 规则负责移除窗口边框，以及桌面层级、任务栏、分页器
 安装完成后，自动启动状态可以这样确认：
 
 ```bash
-systemctl --user is-enabled animated-ocean-wallpaper.service
+systemctl --user is-enabled mip-paper.service
 ```
 
 输出 `enabled` 即表示下次登录会自动启动。若曾手动禁用，可重新启用：
 
 ```bash
-systemctl --user enable --now animated-ocean-wallpaper.service
+systemctl --user enable --now mip-paper.service
 ```
 
 只更新文件、不启动服务：
 
 ```bash
-./bin/animated-ocean-wallpaper install --no-start
+./bin/mip-paper install --no-start
 ```
 
 修改源码后，必须重新执行 `install`，因为服务运行的是 `~/.local/lib` 中的安装快照，不是仓库目录。重复安装也会更新本项目已有的 KWin 规则。
@@ -78,23 +78,23 @@ systemctl --user enable --now animated-ocean-wallpaper.service
 ## 启动、停止和查看状态
 
 ```bash
-animated-ocean-wallpaper start
-animated-ocean-wallpaper stop
-animated-ocean-wallpaper restart
-animated-ocean-wallpaper status
+mip-paper start
+mip-paper stop
+mip-paper restart
+mip-paper status
 ```
 
 如果 shell 找不到命令，使用完整路径：
 
 ```bash
-~/.local/bin/animated-ocean-wallpaper start
+~/.local/bin/mip-paper start
 ```
 
 `start` 只启动后台用户服务，不会打开普通应用窗口；当前版本会打印一行服务请求确认。确认是否真的启动：
 
 ```bash
-systemctl --user is-active animated-ocean-wallpaper.service
-systemctl --user status animated-ocean-wallpaper.service --no-pager -l
+systemctl --user is-active mip-paper.service
+systemctl --user status mip-paper.service --no-pager -l
 ```
 
 第一个命令应输出 `active`。壁纸窗口被 KWin 放在桌面层，因此不能通过 Alt+Tab 找到。
@@ -104,26 +104,26 @@ systemctl --user status animated-ocean-wallpaper.service --no-pager -l
 先运行诊断：
 
 ```bash
-animated-ocean-wallpaper doctor
+mip-paper doctor
 ```
 
 查看本次服务日志：
 
 ```bash
-journalctl --user -u animated-ocean-wallpaper.service -n 100 --no-pager
+journalctl --user -u mip-paper.service -n 100 --no-pager
 ```
 
 查看 KWin coordinator 的定位日志：
 
 ```bash
-journalctl --user -b --no-pager | grep animated-ocean-coordinator
+journalctl --user -b --no-pager | grep mip-paper-coordinator
 ```
 
 常见情况：
 
 - `status=203/EXEC`：安装快照缺少 Electron，重新执行 `install`。
 - `Wallpaper failed to start`：查看日志中的配置或 preload 错误，确认安装快照已更新。
-- 音频声带不显示：运行 `animated-ocean-wallpaper doctor`，确认 `command:pw-cat`、
+- 音频声带不显示：运行 `mip-paper doctor`，确认 `command:pw-cat`、
   `command:pw-metadata` 和 `audio-output` 均为 `PASS`，再检查当前默认输出设备。
 - 服务是 `active` 但桌面没有壁纸：确认 `doctor` 的 `KWin rule` 和 `KWin coordinator` 都为 `PASS`，然后执行 `restart`。规则文件是 `${XDG_CONFIG_HOME:-$HOME/.config}/kwinrulesrc`。
 - `start` 无任何窗口：这是预期行为；本项目没有普通应用窗口，检查桌面背景和 `systemctl --user is-active`。
@@ -132,7 +132,7 @@ journalctl --user -b --no-pager | grep animated-ocean-coordinator
 
 ## 配置
 
-配置文件：`~/.config/animated-ocean-wallpaper/config.json`。
+配置文件：`~/.config/mip-paper/config.json`。
 
 ```json
 {
@@ -191,7 +191,7 @@ PipeWire 实现使用 `stream.capture.sink=true` 连接当前输出设备的 mon
 修改增益和三个时序值不会重启采集进程。已知 audio 字段的错误类型或越界数值会回退
 到默认值，未知字段仍会被拒绝。
 
-天气凭据与普通配置分开保存在 `~/.config/animated-ocean-wallpaper/weather-credentials.json`。安装器首次创建该文件并设置为 `0600`；重复安装和普通卸载会保留它，只有 `uninstall --purge` 会删除。第三期暂时需要手工填写：
+天气凭据与普通配置分开保存在 `~/.config/mip-paper/weather-credentials.json`。安装器首次创建该文件并设置为 `0600`；重复安装和普通卸载会保留它，只有 `uninstall --purge` 会删除。第三期暂时需要手工填写：
 
 ```json
 {
@@ -200,7 +200,7 @@ PipeWire 实现使用 `stream.capture.sink=true` 连接当前输出设备的 mon
 }
 ```
 
-填写后执行 `chmod 600 ~/.config/animated-ocean-wallpaper/weather-credentials.json`。Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 仅由主进程读取，不会进入 renderer、URL、日志或缓存。
+填写后执行 `chmod 600 ~/.config/mip-paper/weather-credentials.json`。Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 仅由主进程读取，不会进入 renderer、URL、日志或缓存。
 
 `weather.location.mode` 为 `auto` 时，通过 XDG Desktop Portal 请求城市级位置；权限被拒绝或定位失败后，使用缓存位置，最后以 `fallbackLocationId` 对应的东莞坐标降级。改为 `fixed` 时必须同时提供数值型 `latitude` 和 `longitude`，并且不请求 Portal。潮汐默认使用观测站 `P2352`。
 
@@ -209,7 +209,7 @@ PipeWire 实现使用 `stream.capture.sink=true` 连接当前输出设备的 mon
 天气、面板、运动等其他配置修改后仍需重启服务：
 
 ```bash
-animated-ocean-wallpaper restart
+mip-paper restart
 ```
 
 非 audio 配置中的未知字段、错误类型或超出限制的数值会阻止启动，并在 service 日志中
@@ -220,13 +220,13 @@ animated-ocean-wallpaper restart
 保留普通配置和天气凭据：
 
 ```bash
-animated-ocean-wallpaper uninstall
+mip-paper uninstall
 ```
 
 连普通配置和天气凭据一起删除：
 
 ```bash
-animated-ocean-wallpaper uninstall --purge
+mip-paper uninstall --purge
 ```
 
 卸载会停止并禁用服务，删除安装快照、命令入口、服务文件和本项目 KWin 规则，不会删除其他 KWin 规则。
@@ -237,7 +237,7 @@ animated-ocean-wallpaper uninstall --purge
 npm ci
 npm test
 npm run check
-bash -n bin/animated-ocean-wallpaper scripts/kwin-rules.sh scripts/kwin-script.sh
+bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
 ```
 
 ## 渲染性能 Probe
@@ -245,7 +245,7 @@ bash -n bin/animated-ocean-wallpaper scripts/kwin-rules.sh scripts/kwin-script.s
 在目标 Plasma Wayland 双屏会话中，可显式运行三种渲染调度策略的对比实验：
 
 ```bash
-animated-ocean-wallpaper probe --duration 60
+mip-paper probe --duration 60
 ```
 
 命令会为 `raf`、`timer` 和 `adaptive` 分别执行待机、持续交互和交互回归场景，输出目录默认位于系统临时目录，也可通过 `--output` 指定。每个场景应先预热 30 秒，再采样 60 秒；`--duration` 用于调整采样时长。实验不会自动修改默认策略，结束后会恢复服务原状态。
