@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('renderer is a control-free full-screen Canvas page', async () => {
@@ -126,12 +126,11 @@ test('renderer uses a non-alpha high-DPI Canvas without blur effects', async () 
   assert.doesNotMatch(script, /motionBlur|filter\s*=|shadowBlur/);
 });
 
-test('renderer loads only the installed local wallpaper image', async () => {
+test('renderer loads only the user-managed bootstrap wallpaper image', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
-  const image = await stat('assets/161-2.jpeg');
 
-  assert.match(script, /new URL\('\.\.\/\.\.\/assets\/161-2\.jpeg',\s*import\.meta\.url\)/);
-  assert.ok(image.size > 6_000_000);
+  assert.match(script, /loadImage\(bootstrap\.wallpaperUrl\)/);
+  assert.doesNotMatch(script, /assets\/161-2\.jpeg/);
 });
 
 test('renderer consumes the motion core and read-only preload bootstrap', async () => {

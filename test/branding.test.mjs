@@ -36,6 +36,9 @@ test('uses mip-paper configuration and probe namespaces', async () => {
 
   assert.match(config, /path\.join\(base, 'mip-paper'/);
   assert.match(main, /process\.env\.MIP_PAPER_CONFIG/);
+  assert.match(main, /app\.setPath\('userData',\s*configDirectory\)/);
+  assert.match(main, /wallpaperPath\(process\.env,\s*os\.homedir\(\)\)/);
+  assert.match(main, /pathToFileURL\(wallpaperPathname\)\.href/);
   assert.match(main, /env\.MIP_PAPER_PROBE_STRATEGY/);
   assert.match(probe, /const SERVICE = 'mip-paper\.service'/);
   assert.match(probe, /MIP_PAPER_PROBE_STRATEGY/);

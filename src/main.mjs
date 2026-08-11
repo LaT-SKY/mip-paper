@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { appendFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   app,
@@ -23,6 +23,7 @@ import { createConfigWatcher } from './config-watcher.mjs';
 import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
+import { inspectWallpaper, wallpaperPath } from './wallpaper-image.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
@@ -86,6 +87,8 @@ export function parseProbeOptions(env = process.env) {
 }
 
 app.setName('Mip-Paper');
+const configDirectory = path.dirname(configPath(process.env, os.homedir()));
+app.setPath('userData', configDirectory);
 app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
 
 async function run() {
@@ -93,6 +96,9 @@ async function run() {
   const pathname = process.env.MIP_PAPER_CONFIG
     || configPath(process.env, os.homedir());
   const config = await loadConfig(pathname);
+  const wallpaperPathname = wallpaperPath(process.env, os.homedir());
+  await inspectWallpaper(wallpaperPathname);
+  const wallpaperUrl = pathToFileURL(wallpaperPathname).href;
   const probe = parseProbeOptions(process.env);
   informationService = await buildInformationService(config);
   audioSpectrumService = createAudioSpectrumService({ config: config.audio });
@@ -107,6 +113,7 @@ async function run() {
     audioSpectrumService,
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
+    wallpaperUrl,
     probe,
     onProbeReport: probe ? async (summary) => {
       const validated = validateProbeSummary(summary);

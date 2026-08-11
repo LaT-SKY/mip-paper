@@ -176,6 +176,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     audioSpectrumService,
     rendererPath: '/app/src/renderer/index.html',
     preloadPath: '/app/src/preload.mjs',
+    wallpaperUrl: 'file:///home/test/.local/share/mip-paper/wallpaper',
   });
   return {
     manager,
@@ -224,6 +225,7 @@ test('provides bootstrap data only to a managed renderer', async () => {
   assert.deepEqual(await handler({ sender: first.webContents }), {
     config: DEFAULT_CONFIG,
     display: displays[0],
+    wallpaperUrl: 'file:///home/test/.local/share/mip-paper/wallpaper',
     information: { weather: { status: 'fresh' } },
     audioSpectrum: {
       status: 'unavailable',

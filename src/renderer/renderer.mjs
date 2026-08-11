@@ -69,17 +69,17 @@ function draw(image, state, viewport) {
   context.restore();
 }
 
-async function loadImage() {
+async function loadImage(url) {
   const image = new Image();
-  image.src = new URL('../../assets/161-2.jpeg', import.meta.url).href;
+  image.src = url;
   await image.decode();
   return image;
 }
 
 async function start() {
-  const [bootstrap, image, information] = await Promise.all([
-    window.wallpaper.getBootstrap(),
-    loadImage(),
+  const bootstrap = await window.wallpaper.getBootstrap();
+  const [image, information] = await Promise.all([
+    loadImage(bootstrap.wallpaperUrl),
     window.wallpaper.getInformationSnapshot(),
   ]);
   const { config, display } = bootstrap;
