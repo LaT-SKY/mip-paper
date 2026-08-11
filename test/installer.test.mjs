@@ -17,7 +17,7 @@ import test from 'node:test';
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve('.');
-const cli = path.join(repositoryRoot, 'bin', 'animated-ocean-wallpaper');
+const cli = path.join(repositoryRoot, 'bin', 'mip-paper');
 
 async function exists(pathname) {
   try {
@@ -88,7 +88,7 @@ exit 0
     XDG_DATA_HOME: path.join(home, '.local', 'share'),
     KWIN_CONFIG_FILE: path.join(configHome, 'kwinrc'),
     KWIN_SCRIPT_NO_RELOAD: '1',
-    ANIMATED_WALLPAPER_SOURCE_ROOT: repositoryRoot,
+    MIP_PAPER_SOURCE_ROOT: repositoryRoot,
   };
 
   return {
@@ -96,12 +96,12 @@ exit 0
     env,
     rulesFile,
     systemctlLog,
-    installRoot: path.join(home, '.local', 'lib', 'animated-ocean-wallpaper'),
-    launcher: path.join(home, '.local', 'bin', 'animated-ocean-wallpaper'),
-    config: path.join(configHome, 'animated-ocean-wallpaper', 'config.json'),
-    credentials: path.join(configHome, 'animated-ocean-wallpaper', 'weather-credentials.json'),
-    service: path.join(configHome, 'systemd', 'user', 'animated-ocean-wallpaper.service'),
-    kwinScript: path.join(home, '.local', 'share', 'kwin', 'scripts', 'animated-ocean-wallpaper'),
+    installRoot: path.join(home, '.local', 'lib', 'mip-paper'),
+    launcher: path.join(home, '.local', 'bin', 'mip-paper'),
+    config: path.join(configHome, 'mip-paper', 'config.json'),
+    credentials: path.join(configHome, 'mip-paper', 'weather-credentials.json'),
+    service: path.join(configHome, 'systemd', 'user', 'mip-paper.service'),
+    kwinScript: path.join(home, '.local', 'share', 'kwin', 'scripts', 'mip-paper'),
     kwinrc: path.join(configHome, 'kwinrc'),
   };
 }
@@ -151,7 +151,7 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
       fadeOutMs: 450,
       fadeInMs: 160,
     });
-    assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=true/);
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
     const service = await readFile(fixture.service, 'utf8');
     assert.doesNotMatch(service, new RegExp(repositoryRoot));
     assert.match(service, /ExecStart=.*\/node_modules\/electron\/dist\/electron /);
@@ -178,7 +178,7 @@ test('uninstall removes only the project KWin package', async () => {
     await runCli(['uninstall'], fixture);
     assert.equal(await exists(fixture.kwinScript), false);
     assert.equal(await readFile(unrelated, 'utf8'), 'keep');
-    assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=false/);
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=false/);
   } finally {
     await cleanup(fixture);
   }
@@ -190,7 +190,7 @@ test('failed KWin activation restores the prior package and enabled state', asyn
     await mkdir(path.join(fixture.kwinScript, 'contents', 'code'), { recursive: true });
     await writeFile(path.join(fixture.kwinScript, 'metadata.json'), 'old-package');
     await writeFile(path.join(fixture.kwinScript, 'contents', 'code', 'main.js'), 'old-script');
-    await writeFile(fixture.kwinrc, '[Plugins]\nanimated-ocean-wallpaperEnabled=false\nother-scriptEnabled=true\n');
+    await writeFile(fixture.kwinrc, '[Plugins]\nmip-paperEnabled=false\nother-scriptEnabled=true\n');
 
     await assert.rejects(
       runCli(['install', '--no-start'], fixture, { KWIN_SCRIPT_NO_RELOAD: '0', FAKE_QDBUS_FAIL: '1' }),
@@ -198,7 +198,7 @@ test('failed KWin activation restores the prior package and enabled state', asyn
     );
     assert.equal(await readFile(path.join(fixture.kwinScript, 'metadata.json'), 'utf8'), 'old-package');
     assert.equal(await readFile(path.join(fixture.kwinScript, 'contents', 'code', 'main.js'), 'utf8'), 'old-script');
-    assert.match(await readFile(fixture.kwinrc, 'utf8'), /animated-ocean-wallpaperEnabled=false/);
+    assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=false/);
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /other-scriptEnabled=true/);
   } finally {
     await cleanup(fixture);
@@ -211,7 +211,7 @@ test('install re-enables and starts the Plasma session service by default', asyn
     await runCli(['install'], fixture);
     assert.match(
       await readFile(fixture.systemctlLog, 'utf8'),
-      /--user reenable --now animated-ocean-wallpaper\.service/,
+      /--user reenable --now mip-paper\.service/,
     );
   } finally {
     await cleanup(fixture);
@@ -258,7 +258,7 @@ test('service lifecycle commands are forwarded to the user service', async () =>
     }
     const log = await readFile(fixture.systemctlLog, 'utf8');
     for (const command of ['start', 'stop', 'restart', 'status']) {
-      assert.match(log, new RegExp(`--user ${command} animated-ocean-wallpaper\\.service`));
+      assert.match(log, new RegExp(`--user ${command} mip-paper\\.service`));
     }
   } finally {
     await cleanup(fixture);

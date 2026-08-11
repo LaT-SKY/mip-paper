@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly APP_ID='animated-ocean-wallpaper'
-readonly SERVICE_NAME='animated-ocean-wallpaper.service'
+readonly APP_ID='mip-paper'
+readonly SERVICE_NAME='mip-paper.service'
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
-readonly LOCAL_PREFIX="${ANIMATED_WALLPAPER_LOCAL_PREFIX:-$HOME/.local}"
-readonly INSTALL_ROOT="${ANIMATED_WALLPAPER_INSTALL_ROOT:-$LOCAL_PREFIX/lib/$APP_ID}"
-readonly LAUNCHER_PATH="${ANIMATED_WALLPAPER_LAUNCHER_PATH:-$LOCAL_PREFIX/bin/$APP_ID}"
+readonly LOCAL_PREFIX="${MIP_PAPER_LOCAL_PREFIX:-$HOME/.local}"
+readonly INSTALL_ROOT="${MIP_PAPER_INSTALL_ROOT:-$LOCAL_PREFIX/lib/$APP_ID}"
+readonly LAUNCHER_PATH="${MIP_PAPER_LAUNCHER_PATH:-$LOCAL_PREFIX/bin/$APP_ID}"
 readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 readonly CONFIG_DIRECTORY="$CONFIG_HOME/$APP_ID"
 readonly CONFIG_PATH="$CONFIG_DIRECTORY/config.json"
@@ -18,8 +18,8 @@ readonly KWIN_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 readonly KWIN_SCRIPT_PATH="$KWIN_DATA_HOME/kwin/scripts/$APP_ID"
 readonly KWIN_CONFIG_PATH="${KWIN_CONFIG_FILE:-$CONFIG_HOME/kwinrc}"
 
-if [[ -n "${ANIMATED_WALLPAPER_SOURCE_ROOT:-}" ]]; then
-  SOURCE_ROOT=$ANIMATED_WALLPAPER_SOURCE_ROOT
+if [[ -n "${MIP_PAPER_SOURCE_ROOT:-}" ]]; then
+  SOURCE_ROOT=$MIP_PAPER_SOURCE_ROOT
 elif [[ -f "$script_directory/../package.json" ]]; then
   SOURCE_ROOT=$(cd -- "$script_directory/.." && pwd -P)
 else
@@ -29,7 +29,7 @@ readonly SOURCE_ROOT
 
 usage() {
   cat >&2 <<'EOF'
-Usage: animated-ocean-wallpaper COMMAND [OPTION]
+Usage: mip-paper COMMAND [OPTION]
 
 Commands:
   install [--no-start]  Install or update and enable the user service
@@ -77,8 +77,8 @@ validate_source() {
     package.json package-lock.json src/main.mjs src/renderer/index.html \
     assets/161-2.jpeg config/default.json scripts/kwin-rules.sh \
     scripts/kwin-script.sh kwin/$APP_ID/metadata.json \
-    kwin/$APP_ID/contents/code/main.js bin/animated-ocean-wallpaper \
-    resources/animated-ocean-wallpaper.service.in; do
+    kwin/$APP_ID/contents/code/main.js bin/mip-paper \
+    resources/mip-paper.service.in; do
     [[ -e "$SOURCE_ROOT/$required_path" ]] || fail "Source file is missing: $required_path"
   done
 }
