@@ -152,7 +152,8 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.equal(await exists(path.join(fixture.installRoot, 'src', 'main.mjs')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron')), false);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'fft.js', 'package.json')), true);
-    assert.equal(await exists(path.join(fixture.installRoot, 'assets')), false);
+    assert.equal(await exists(path.join(fixture.installRoot, 'assets', 'default-wallpaper.jpg')), true);
+    assert.equal(await exists(path.join(fixture.installRoot, 'assets', 'ATTRIBUTION.md')), true);
     assert.equal(await exists(fixture.launcher), true);
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.credentials), true);
@@ -247,15 +248,15 @@ test('install re-enables and starts the Plasma session service by default', asyn
   }
 });
 
-test('install refuses to start before a wallpaper is selected', async () => {
+test('install imports the default wallpaper before first start', async () => {
   const fixture = await createFixture();
   try {
-    await assert.rejects(runCli(['install'], fixture), (error) => {
-      assert.equal(error.code, 1);
-      assert.match(error.stderr, /install --image/);
-      return true;
-    });
-    assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /reenable --now/);
+    await runCli(['install'], fixture);
+    assert.deepEqual(
+      await readFile(fixture.wallpaper),
+      await readFile(path.join(repositoryRoot, 'assets', 'default-wallpaper.jpg')),
+    );
+    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /reenable --now/);
   } finally {
     await cleanup(fixture);
   }
@@ -393,15 +394,15 @@ test('packaged setup reuses an image and preserves config and credentials', asyn
   }
 });
 
-test('packaged setup refuses a first start without an image', async () => {
+test('packaged setup imports the default wallpaper on first start', async () => {
   const fixture = await createPackagedFixture();
   try {
-    await assert.rejects(runCli(['setup'], fixture), (error) => {
-      assert.equal(error.code, 1);
-      assert.match(error.stderr, /setup --image/);
-      return true;
-    });
-    assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /enable --now/);
+    await runCli(['setup'], fixture);
+    assert.deepEqual(
+      await readFile(fixture.wallpaper),
+      await readFile(path.join(repositoryRoot, 'assets', 'default-wallpaper.jpg')),
+    );
+    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /enable --now/);
   } finally {
     await cleanup(fixture);
   }

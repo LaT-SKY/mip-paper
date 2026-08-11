@@ -34,7 +34,7 @@ test('uses system Electron for source and packaged installations', async () => {
 
 test('generates fixed-checksum Arch metadata and package ownership', async () => {
   const checksum = 'a'.repeat(64);
-  const [{ stdout: pkgbuild }, installHook, packageLicense] = await Promise.all([
+  const [{ stdout: pkgbuild }, installHook, packageLicense, wallpaperAttribution] = await Promise.all([
     execFileAsync(process.execPath, [
       'scripts/generate-pkgbuild.mjs',
       '0.1.0',
@@ -43,6 +43,7 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
     ]),
     readFile('packaging/mip-paper.install', 'utf8'),
     readFile('packaging/LICENSE', 'utf8'),
+    readFile('assets/ATTRIBUTION.md', 'utf8'),
   ]);
 
   for (const required of [
@@ -61,15 +62,21 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
     '"$pkgdir/usr/lib/systemd/user/mip-paper.service"',
     '"$pkgdir/usr/share/kwin/scripts/mip-paper"',
     '"$pkgdir/usr/share/licenses/mip-paper/LICENSE"',
+    '"$pkgdir/usr/share/licenses/mip-paper/default-wallpaper-ATTRIBUTION"',
     checksum,
   ]) {
     assert.ok(pkgbuild.includes(required), `PKGBUILD is missing: ${required}`);
   }
-  assert.doesNotMatch(pkgbuild, /SKIP|node_modules\/electron|assets\/|161-2\.jpeg/);
-  assert.match(installHook, /mip-paper setup --image \/path\/to\/image/);
+  assert.doesNotMatch(pkgbuild, /SKIP|node_modules\/electron|161-2\.jpeg/);
+  assert.match(pkgbuild, /cp -a bin config resources scripts src assets node_modules package\.json/);
+  assert.match(installHook, /Run: mip-paper setup/);
+  assert.doesNotMatch(installHook, /setup --image/);
   assert.match(installHook, /mip-paper restart/);
   assert.match(packageLicense, /Copyright Arch Linux Contributors/);
   assert.match(packageLicense, /Permission to use, copy, modify, and\/or distribute/);
+  assert.match(wallpaperAttribution, /Photograph by LaT-SKY/);
+  assert.match(wallpaperAttribution, /CC BY 4\.0/);
+  assert.match(wallpaperAttribution, /removing metadata and recompressing/);
 });
 
 test('rejects mutable or malformed PKGBUILD inputs', async () => {

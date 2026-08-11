@@ -60,8 +60,10 @@ test('publishes complete linked Chinese and English guides', async () => {
     assert.doesNotMatch(readme, /161-2\.jpeg|assets\/161-2/);
   }
 
-  assert.match(chinese, /不.{0,10}(附带|包含).{0,12}(默认|第三方).{0,8}(图片|壁纸)/);
-  assert.match(english, /does not (?:bundle|include).{0,30}(?:default|third-party).{0,20}(?:image|wallpaper)/i);
+  assert.match(chinese, /LaT-SKY.{0,20}CC BY 4\.0/);
+  assert.match(chinese, /不附带此前使用的第三方壁纸/);
+  assert.match(english, /default photograph by LaT-SKY under CC BY 4\.0/i);
+  assert.match(english, /former third-party wallpaper is not included/i);
 });
 
 test('declares the application license in package metadata', async () => {

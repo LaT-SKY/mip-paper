@@ -44,7 +44,7 @@ package() {
   cd "$srcdir/$pkgname-$pkgver"
 
   install -d "$pkgdir/usr/lib/mip-paper"
-  cp -a bin config resources scripts src node_modules package.json \
+  cp -a bin config resources scripts src assets node_modules package.json \
     "$pkgdir/usr/lib/mip-paper/"
 
   install -Dm755 packaging/mip-paper "$pkgdir/usr/bin/mip-paper"
@@ -55,6 +55,8 @@ package() {
   cp -a kwin/mip-paper/. "$pkgdir/usr/share/kwin/scripts/mip-paper/"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/mip-paper/LICENSE"
+  install -Dm644 assets/ATTRIBUTION.md \
+    "$pkgdir/usr/share/licenses/mip-paper/default-wallpaper-ATTRIBUTION"
   install -Dm644 node_modules/dbus-next/LICENSE \
     "$pkgdir/usr/share/licenses/mip-paper/dbus-next-LICENSE"
   install -Dm644 node_modules/fft.js/README.md \
