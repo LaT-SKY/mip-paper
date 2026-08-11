@@ -18,6 +18,7 @@ import { createLocationProvider, createPortalLocationAdapter } from './location-
 import { createQWeatherClient } from './qweather-client.mjs';
 import { createInformationService } from './information-service.mjs';
 import { createAudioSpectrumService } from './audio-spectrum-service.mjs';
+import { createShutdownCoordinator, installShutdownHandlers } from './app-lifecycle.mjs';
 import { createConfigWatcher } from './config-watcher.mjs';
 import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
@@ -28,8 +29,20 @@ let manager;
 let informationService;
 let audioSpectrumService;
 let configWatcher;
-let quitInProgress = false;
-let quitReady = false;
+
+const shutdownCoordinator = createShutdownCoordinator({
+  quit: () => app.quit(),
+  stopConfigWatcher: () => configWatcher?.stop(),
+  stopAudioSpectrum: () => audioSpectrumService?.stop(),
+  stopInformation: () => informationService?.stop(),
+  stopWindowManager: () => manager?.stop(),
+});
+
+installShutdownHandlers({
+  app,
+  processTarget: process,
+  coordinator: shutdownCoordinator,
+});
 
 async function buildInformationService(config) {
   const cachePathname = informationCachePath(process.env, os.homedir());
@@ -120,23 +133,6 @@ async function run() {
   configWatcher.start();
 }
 
-app.on('before-quit', (event) => {
-  if (quitReady) return;
-  event.preventDefault();
-  if (quitInProgress) return;
-  quitInProgress = true;
-  configWatcher?.stop();
-  void (async () => {
-    try {
-      await audioSpectrumService?.stop();
-    } finally {
-      informationService?.stop();
-      manager?.stop();
-      quitReady = true;
-      app.quit();
-    }
-  })();
-});
 app.on('window-all-closed', () => {});
 
 run().catch((error) => {
