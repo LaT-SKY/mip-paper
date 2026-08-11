@@ -5,7 +5,7 @@
 - KDE Plasma 6 / KWin 6 / Wayland
 - Electron 43.3.0
 - 双显示器；本轮使用移除 KWin fullscreen 规则后的安装快照
-- 原始结果：`/tmp/animated-ocean-probe-round3.qubSWr`
+- 原始结果：`/tmp/mip-paper-probe-round3.qubSWr`
 - 本轮比较 `timer` 与 `adaptive`；`raf` 已在第二轮因 FPS 不达标淘汰
 - 每种策略执行 `idle`、`sweep`、`return`
 - 每个场景预热 30 秒、采样 60 秒

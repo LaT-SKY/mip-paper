@@ -54,6 +54,7 @@ test('ships mip-paper command and service assets', async () => {
 
 test('contains no former product identity in tracked files', async () => {
   const formerIdentities = [
+    ['animated', 'ocean'].join('-'),
     ['animated', 'ocean', 'wallpaper'].join('-'),
     ['Animated', 'Ocean', 'Wallpaper'].join(' '),
     ['ANIMATED', 'OCEAN', 'WALLPAPER'].join('_'),
