@@ -39,12 +39,20 @@ class FakeWindow extends EventEmitter {
     this.options = options;
     this.bounds = { x: options.x, y: options.y, width: options.width, height: options.height };
     this.title = options.title;
-    this.webContents = new FakeWebContents();
+    this._webContents = new FakeWebContents();
     this.destroyed = false;
+    this.throwOnDestroyedWebContents = false;
     this.ignoreMouse = null;
     this.loadedFile = null;
     this.visibleOnAllWorkspaces = null;
     FakeWindow.instances.push(this);
+  }
+
+  get webContents() {
+    if (this.destroyed && this.throwOnDestroyedWebContents) {
+      throw new Error('Object has been destroyed');
+    }
+    return this._webContents;
   }
 
   async loadFile(pathname) {
@@ -366,4 +374,13 @@ test('stop closes windows, removes IPC, and detaches display listeners', async (
   assert.equal(screen.listenerCount('display-metrics-changed'), 0);
   assert.equal(informationListeners.size, 0);
   assert.equal(audioListeners.size, 0);
+});
+
+test('stop closes every window without reading webContents after destruction', async () => {
+  const { manager } = createFixture();
+  await manager.start();
+  for (const window of FakeWindow.instances) window.throwOnDestroyedWebContents = true;
+
+  assert.doesNotThrow(() => manager.stop());
+  assert.equal(FakeWindow.instances.every((window) => window.destroyed), true);
 });
