@@ -4,7 +4,7 @@
 - 日期：2026-08-07
 - 目标环境：KDE Plasma 6、KWin、Wayland
 - 当前验证环境：Plasma 6.7.4、KWin 6.7.4、Wayland
-- 原始素材：`161-2.jpeg`，3840 x 2160，sRGB JPEG
+- 图像来源：用户导入的 JPEG、PNG 或 WebP，由应用复制到 XDG 数据目录
 
 ## 1. 背景与目标
 
@@ -187,4 +187,3 @@ Electron 外部窗口值得制作技术原型。它最符合“桌面用于观�
 - [Electron BrowserWindow API](https://www.electronjs.org/docs/latest/api/browser-window)
 - [Electron screen API](https://www.electronjs.org/docs/latest/api/screen)
 - [KDE Plasma development documentation](https://develop.kde.org/docs/plasma/)
-

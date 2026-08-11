@@ -12,6 +12,9 @@ readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 readonly CONFIG_DIRECTORY="$CONFIG_HOME/$APP_ID"
 readonly CONFIG_PATH="$CONFIG_DIRECTORY/config.json"
 readonly WEATHER_CREDENTIALS_PATH="$CONFIG_DIRECTORY/weather-credentials.json"
+readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+readonly DATA_DIRECTORY="$DATA_HOME/$APP_ID"
+readonly WALLPAPER_PATH="$DATA_DIRECTORY/wallpaper"
 readonly SERVICE_DIRECTORY="$CONFIG_HOME/systemd/user"
 readonly SERVICE_PATH="$SERVICE_DIRECTORY/$SERVICE_NAME"
 readonly KWIN_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -32,13 +35,16 @@ usage() {
 Usage: mip-paper COMMAND [OPTION]
 
 Commands:
-  install [--no-start]  Install or update and enable the user service
+  install [--no-start] [--image PATH]
+                        Install or update and enable the user service
   uninstall [--purge]   Remove the app; --purge also removes user config
   start                 Start the user service
   stop                  Stop the user service
   restart               Restart the user service
   status                Show the user service status
   doctor                Diagnose the installation and Plasma integration
+  wallpaper set PATH    Import and use a JPEG, PNG or WebP image
+  wallpaper status      Show the managed wallpaper image status
   probe [OPTION]        Compare renderer scheduling strategies on the live desktop
 EOF
   exit 2
@@ -53,6 +59,7 @@ require_safe_paths() {
   [[ -n "${HOME:-}" && "$HOME" == /* && "$HOME" != '/' ]] || fail 'HOME must be an absolute user directory'
   [[ "$INSTALL_ROOT" == "$HOME"/* && "$INSTALL_ROOT" != "$HOME/.local" ]] || fail 'Unsafe installation path'
   [[ "$CONFIG_DIRECTORY" == "$HOME"/* && "$CONFIG_DIRECTORY" != "$HOME/.config" ]] || fail 'Unsafe configuration path'
+  [[ "$DATA_DIRECTORY" == "$HOME"/* && "$DATA_DIRECTORY" != "$HOME/.local/share" ]] || fail 'Unsafe data path'
 }
 
 require_command() {
@@ -75,7 +82,8 @@ validate_source() {
   local required_path
   for required_path in \
     package.json package-lock.json src/main.mjs src/renderer/index.html \
-    assets/161-2.jpeg config/default.json scripts/kwin-rules.sh \
+    config/default.json scripts/kwin-rules.sh scripts/wallpaper-image.mjs \
+    src/wallpaper-image.mjs \
     scripts/kwin-script.sh kwin/$APP_ID/metadata.json \
     kwin/$APP_ID/contents/code/main.js bin/mip-paper \
     resources/mip-paper.service.in; do
@@ -96,7 +104,6 @@ copy_snapshot() {
     "$SOURCE_ROOT/package.json" \
     "$SOURCE_ROOT/package-lock.json" \
     "$SOURCE_ROOT/src" \
-    "$SOURCE_ROOT/assets" \
     "$SOURCE_ROOT/config" \
     "$SOURCE_ROOT/scripts" \
     "$SOURCE_ROOT/kwin" \
@@ -106,16 +113,33 @@ copy_snapshot() {
 }
 
 install_app() {
-  local start_after_install=1
-  if (($# > 1)); then usage; fi
-  if (($# == 1)); then
-    [[ "$1" == '--no-start' ]] || usage
-    start_after_install=0
-  fi
+  local start_after_install=1 image_source=''
+  while (($#)); do
+    case "$1" in
+      --no-start)
+        start_after_install=0
+        shift
+        ;;
+      --image)
+        (($# >= 2)) || usage
+        [[ -z "$image_source" ]] || usage
+        image_source=$2
+        shift 2
+        ;;
+      *) usage ;;
+    esac
+  done
 
   require_safe_paths
   validate_environment
   validate_source
+
+  if [[ -n "$image_source" ]]; then
+    node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$image_source"
+  elif ((start_after_install == 1)) \
+    && ! node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status >/dev/null 2>&1; then
+    fail 'No wallpaper is configured; use install --image PATH'
+  fi
 
   library_parent=''
   launcher_directory=''
@@ -166,7 +190,6 @@ install_app() {
   node -e "require(process.argv[1])" "$stage/node_modules/electron" >/dev/null
   [[ -f "$stage/node_modules/electron/package.json" ]] || fail 'Electron dependency was not installed'
   [[ -x "$stage/node_modules/electron/dist/electron" ]] || fail 'Electron executable is missing'
-  [[ $(stat -c %s "$stage/assets/161-2.jpeg") -gt 100000 ]] || fail 'Wallpaper image is incomplete'
 
   if "$SOURCE_ROOT/scripts/kwin-rules.sh" check >/dev/null 2>&1; then had_rule=1; fi
   if [[ -e "$INSTALL_ROOT" ]]; then mv -- "$INSTALL_ROOT" "$backup/app"; had_install=1; fi
@@ -251,6 +274,7 @@ uninstall_app() {
   if ((purge == 1)); then
     rm -f -- "$CONFIG_PATH" "$WEATHER_CREDENTIALS_PATH"
     rmdir -- "$CONFIG_DIRECTORY" 2>/dev/null || true
+    rm -rf -- "$DATA_DIRECTORY"
   fi
   printf 'Uninstallation complete.\n'
 }
@@ -264,6 +288,24 @@ service_command() {
       printf 'Wallpaper service %s requested: %s\n' "$command_name" "$SERVICE_NAME"
       printf 'The wallpaper runs in the desktop background; no application window is opened.\n'
       ;;
+  esac
+}
+
+wallpaper_command() {
+  local action=${1:-}
+  case "$action" in
+    set)
+      (($# == 2)) || usage
+      node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$2"
+      if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then
+        systemctl --user restart "$SERVICE_NAME"
+      fi
+      ;;
+    status)
+      (($# == 1)) || usage
+      node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status
+      ;;
+    *) usage ;;
   esac
 }
 
@@ -370,10 +412,12 @@ NODE
   else
     check_fail 'KWin coordinator' 'display coordinator is missing or disabled'
   fi
-  if [[ -f "$INSTALL_ROOT/assets/161-2.jpeg" ]] && [[ $(stat -c %s "$INSTALL_ROOT/assets/161-2.jpeg") -gt 100000 ]]; then
-    check_pass image 'wallpaper image is present'
+  local wallpaper_helper="$INSTALL_ROOT/scripts/wallpaper-image.mjs"
+  if [[ ! -f "$wallpaper_helper" ]]; then wallpaper_helper="$SOURCE_ROOT/scripts/wallpaper-image.mjs"; fi
+  if [[ -f "$wallpaper_helper" ]] && node "$wallpaper_helper" status >/dev/null 2>&1; then
+    check_pass image "$WALLPAPER_PATH"
   else
-    check_fail image 'wallpaper image is missing or incomplete'
+    check_fail image 'managed wallpaper is missing or invalid'
   fi
 
   check_manual 'window stacking' 'verify wallpaper remains below ordinary windows and above the desktop surface'
@@ -394,6 +438,7 @@ case "${1:-}" in
   uninstall) shift; uninstall_app "$@" ;;
   start|stop|restart|status) command_name=$1; shift; (($# == 0)) || usage; service_command "$command_name" ;;
   doctor) shift; (($# == 0)) || usage; doctor ;;
+  wallpaper) shift; wallpaper_command "$@" ;;
   probe) shift; exec node "$SOURCE_ROOT/scripts/render-probe.mjs" "$@" ;;
   *) usage ;;
 esac
