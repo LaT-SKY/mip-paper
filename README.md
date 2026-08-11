@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-Mip-Paper 是面向 KDE Plasma 6、KWin 6 和 Wayland 的动态桌面壁纸引擎。它把用户自己的图片以覆盖方式绘制到每台显示器的全屏 Canvas 上，并加入缓慢漂移、鼠标视差、立体悬浮信息面板和媒体音频频谱。
+Mip-Paper 是面向 KDE Plasma 6、KWin 6 和 Wayland 的动态桌面壁纸引擎。它把默认或用户选择的图片以覆盖方式绘制到每台显示器的全屏 Canvas 上，并加入缓慢漂移、鼠标视差、立体悬浮信息面板和媒体音频频谱。
 
 Mip-Paper 不是 Plasma 原生 wallpaper plugin，也不会打开普通应用窗口。它由 Electron 创建受 KWin 管理的桌面层窗口；窗口不会进入任务栏、分页器、Alt+Tab 或应用启动器。
 
@@ -17,13 +17,15 @@ Mip-Paper 不是 Plasma 原生 wallpaper plugin，也不会打开普通应用窗
 
 ## 图片与版权
 
-Mip-Paper 不附带默认或第三方壁纸图片，也不会自动下载或链接某张图片。首次设置时必须导入本地 JPEG、PNG 或 WebP 文件。图片会被验证并原子复制到：
+Mip-Paper 附带一张由 LaT-SKY 拍摄并以 CC BY 4.0 授权的默认照片，详见 [图片归属说明](assets/ATTRIBUTION.md)。发行副本已移除 EXIF 等元数据。项目不附带第三方壁纸，也不会自动下载外部图片。
+
+首次运行 `mip-paper setup` 时，如果用户尚未选择图片，程序会验证默认照片并将其原子复制到：
 
 ```text
 ${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/wallpaper
 ```
 
-原文件之后可以移动或删除。用户应确保自己有权使用所选图片；程序的 GPL 许可证不适用于用户导入的图片。
+也可以在 setup 时使用 `--image /path/to/image`，或稍后导入自己的 JPEG、PNG 或 WebP。导入后原文件可以移动或删除。用户应确保自己有权使用所选图片；程序的 GPL 许可证不适用于用户导入的图片。
 
 设置或更换图片：
 
@@ -65,10 +67,10 @@ paru -S mip-paper
 软件包只安装系统文件，不会以 root 身份修改某个用户的主目录。每位用户首次安装后运行：
 
 ```bash
-mip-paper setup --image /path/to/image.png
+mip-paper setup
 ```
 
-`setup` 创建缺失的配置与天气凭据、安装当前用户的 KWin 规则、启用系统 KWin coordinator，并启动 `mip-paper.service`。已有配置、凭据和受管理图片不会被覆盖；已有图片时可直接运行 `mip-paper setup`。
+`setup` 创建缺失的配置与天气凭据、首次导入默认照片、安装当前用户的 KWin 规则、启用系统 KWin coordinator，并启动 `mip-paper.service`。已有配置、凭据和受管理图片不会被覆盖。要在首次设置时直接使用自己的图片，可运行 `mip-paper setup --image /path/to/image.png`。
 
 ## 管理壁纸与服务
 
@@ -242,7 +244,7 @@ journalctl --user -u mip-paper.service -n 100 --no-pager
 
 ```bash
 sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
-./bin/mip-paper install --image /path/to/image.png
+./bin/mip-paper install
 ```
 
 只准备文件、不启动服务：
@@ -287,4 +289,4 @@ mip-paper teardown --purge
 
 Mip-Paper 程序代码采用 `GPL-3.0-only`，详见 [LICENSE](LICENSE)。Copyright (C) 2026 LaT-SKY。
 
-随包保留的 JavaScript 依赖代码采用各自许可证，主要为 MIT；和风天气图标采用 CC BY 4.0。AUR 的 PKGBUILD 与安装脚本单独采用 0BSD。用户导入图片的权利与许可证由用户自行负责。
+默认照片 Copyright (C) 2026 LaT-SKY，采用 CC BY 4.0，归属和修改说明见 [assets/ATTRIBUTION.md](assets/ATTRIBUTION.md)。随包保留的 JavaScript 依赖代码采用各自许可证，主要为 MIT；和风天气图标采用 CC BY 4.0。AUR 的 PKGBUILD 与安装脚本单独采用 0BSD。用户导入图片的权利与许可证由用户自行负责。

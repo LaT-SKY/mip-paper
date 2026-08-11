@@ -33,6 +33,7 @@ else
 fi
 readonly SOURCE_ROOT
 readonly KWIN_PACKAGE_SOURCE="${MIP_PAPER_KWIN_SOURCE:-$SOURCE_ROOT/kwin/$APP_ID}"
+readonly DEFAULT_WALLPAPER_PATH="${MIP_PAPER_DEFAULT_WALLPAPER_PATH:-$SOURCE_ROOT/assets/default-wallpaper.jpg}"
 
 usage() {
   cat >&2 <<'EOF'
@@ -106,7 +107,7 @@ validate_source() {
   for required_path in \
     package.json package-lock.json src/main.mjs src/renderer/index.html \
     config/default.json scripts/kwin-rules.sh scripts/wallpaper-image.mjs \
-    src/wallpaper-image.mjs \
+    src/wallpaper-image.mjs assets/default-wallpaper.jpg assets/ATTRIBUTION.md \
     scripts/kwin-script.sh kwin/$APP_ID/metadata.json \
     kwin/$APP_ID/contents/code/main.js bin/mip-paper \
     resources/mip-paper.service.in; do
@@ -129,6 +130,7 @@ copy_snapshot() {
     "$SOURCE_ROOT/package-lock.json" \
     "$SOURCE_ROOT/src" \
     "$SOURCE_ROOT/config" \
+    "$SOURCE_ROOT/assets" \
     "$SOURCE_ROOT/scripts" \
     "$SOURCE_ROOT/kwin" \
     "$SOURCE_ROOT/bin" \
@@ -163,7 +165,7 @@ install_app() {
     node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$image_source"
   elif ((start_after_install == 1)) \
     && ! node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status >/dev/null 2>&1; then
-    fail 'No wallpaper is configured; use install --image PATH'
+    node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$DEFAULT_WALLPAPER_PATH"
   fi
 
   library_parent=''
@@ -319,11 +321,12 @@ setup_app() {
   [[ -f "$SERVICE_PATH" ]] || fail 'Packaged systemd user unit is missing'
   [[ -f "$KWIN_PACKAGE_SOURCE/metadata.json" ]] || fail 'Packaged KWin coordinator is missing'
   [[ -f "$KWIN_PACKAGE_SOURCE/contents/code/main.js" ]] || fail 'Packaged KWin coordinator code is missing'
+  [[ -f "$DEFAULT_WALLPAPER_PATH" ]] || fail 'Packaged default wallpaper is missing'
 
   if [[ -n "$image_source" ]]; then
     node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$image_source"
   elif ! node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status >/dev/null 2>&1; then
-    fail 'No wallpaper is configured; use setup --image PATH'
+    node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$DEFAULT_WALLPAPER_PATH"
   fi
 
   mkdir -p "$CONFIG_DIRECTORY"

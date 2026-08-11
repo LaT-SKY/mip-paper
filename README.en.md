@@ -2,7 +2,7 @@
 
 [中文](README.md)
 
-Mip-Paper is a dynamic desktop wallpaper engine for KDE Plasma 6, KWin 6, and Wayland. It cover-renders a user-provided image into a full-screen Canvas on every display, with idle drift, pointer parallax, floating information panels, and a media-audio spectrum.
+Mip-Paper is a dynamic desktop wallpaper engine for KDE Plasma 6, KWin 6, and Wayland. It cover-renders the default or a user-selected image into a full-screen Canvas on every display, with idle drift, pointer parallax, floating information panels, and a media-audio spectrum.
 
 Mip-Paper is not a native Plasma wallpaper plugin and does not open a normal application window. Electron windows are managed by KWin on the desktop layer and are excluded from the taskbar, pager, Alt+Tab, and application launcher.
 
@@ -17,13 +17,15 @@ Mip-Paper is not a native Plasma wallpaper plugin and does not open a normal app
 
 ## Images and Copyright
 
-Mip-Paper does not bundle or include a default or third-party wallpaper image, and it does not automatically download one. Initial setup requires a local JPEG, PNG, or WebP file. The validated image is atomically copied to:
+Mip-Paper includes a default photograph by LaT-SKY under CC BY 4.0; see the [image attribution](assets/ATTRIBUTION.md). EXIF and other metadata are removed from the distributed copy. The former third-party wallpaper is not included, and Mip-Paper does not download external images automatically.
+
+On the first `mip-paper setup`, the default is validated and atomically copied to the following path when no user image exists:
 
 ```text
 ${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/wallpaper
 ```
 
-The original file can then be moved or deleted. You are responsible for having the right to use the selected image. The program's GPL license does not cover user-imported images.
+Pass `--image /path/to/image` during setup or import your own JPEG, PNG, or WebP later. The original file can then be moved or deleted. You are responsible for having the right to use a selected image. The program's GPL license does not cover user-imported images.
 
 Set, replace, or inspect the managed image:
 
@@ -65,10 +67,10 @@ paru -S mip-paper
 The package installs only system files and never changes a particular user's home as root. Each user completes setup once:
 
 ```bash
-mip-paper setup --image /path/to/image.png
+mip-paper setup
 ```
 
-Setup creates missing configuration and weather credentials, installs the user's KWin rule, enables the system KWin coordinator, and starts `mip-paper.service`. Existing configuration, credentials, and managed images are preserved. When an image already exists, `mip-paper setup` is sufficient.
+Setup creates missing configuration and weather credentials, imports the default photograph on first use, installs the user's KWin rule, enables the system KWin coordinator, and starts `mip-paper.service`. Existing configuration, credentials, and managed images are preserved. To select your own image immediately, run `mip-paper setup --image /path/to/image.png`.
 
 ## Manage the Wallpaper and Service
 
@@ -236,7 +238,7 @@ Source installs also use system `electron43` and do not copy npm Electron:
 
 ```bash
 sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
-./bin/mip-paper install --image /path/to/image.png
+./bin/mip-paper install
 ```
 
 Prepare without starting:
@@ -271,4 +273,4 @@ Normal teardown preserves configuration, credentials, and the managed image. Exp
 
 Mip-Paper program code is `GPL-3.0-only`; see [LICENSE](LICENSE). Copyright (C) 2026 LaT-SKY.
 
-Bundled JavaScript dependencies retain their own licenses, primarily MIT. QWeather icons are CC BY 4.0. AUR package-source files use 0BSD. You remain responsible for the rights and license of any imported image.
+The default photograph is Copyright (C) 2026 LaT-SKY and licensed under CC BY 4.0; attribution and modification details are in [assets/ATTRIBUTION.md](assets/ATTRIBUTION.md). Bundled JavaScript dependencies retain their own licenses, primarily MIT. QWeather icons are CC BY 4.0. AUR package-source files use 0BSD. You remain responsible for the rights and license of any imported image.
