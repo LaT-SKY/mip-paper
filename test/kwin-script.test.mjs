@@ -71,3 +71,28 @@ test('installs, checks, idempotently reinstalls, and removes only the project pa
     await rm(data.directory, { recursive: true, force: true });
   }
 });
+
+test('enables and disables an existing system package without copying it', async () => {
+  const data = await fixture();
+  try {
+    const systemSource = path.join(data.directory, 'usr', 'share', 'kwin', 'scripts', 'mip-paper');
+    await mkdir(path.join(systemSource, 'contents', 'code'), { recursive: true });
+    await writeFile(path.join(systemSource, 'metadata.json'), '{}');
+    await writeFile(path.join(systemSource, 'contents', 'code', 'main.js'), '{}');
+    const unrelated = path.join(data.directory, '.local', 'share', 'kwin', 'scripts', 'unrelated', 'keep');
+    await mkdir(path.dirname(unrelated), { recursive: true });
+    await writeFile(unrelated, 'keep');
+    const env = { ...data.env, KWIN_SCRIPT_SOURCE: systemSource };
+
+    await runHelper('enable', env);
+    assert.equal(await exists(data.destination), false);
+    assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=true/);
+    await runHelper('check-enabled', env);
+
+    await runHelper('disable', env);
+    assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=false/);
+    assert.equal(await readFile(unrelated, 'utf8'), 'keep');
+  } finally {
+    await rm(data.directory, { recursive: true, force: true });
+  }
+});
