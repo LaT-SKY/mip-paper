@@ -17,12 +17,14 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.doesNotMatch(preload, /getAudioSpectrum|pw-cat|pw-metadata|spawn|rawPcm|selectAudioDevice/i);
 });
 
-test('main owns one audio service, one config watcher and an asynchronous quit barrier', async () => {
+test('main owns one audio service and config watcher wired to the quit barrier', async () => {
   const main = await readFile(new URL('../src/main.mjs', import.meta.url), 'utf8');
+  const lifecycle = await readFile(new URL('../src/app-lifecycle.mjs', import.meta.url), 'utf8');
   assert.match(main, /createAudioSpectrumService/);
   assert.match(main, /createConfigWatcher/);
   assert.match(main, /audioSpectrumService\.updateConfig/);
   assert.match(main, /manager\.updateAudioConfig/);
-  assert.match(main, /event\.preventDefault\(\)/);
-  assert.match(main, /await audioSpectrumService\?\.stop\(\)/);
+  assert.match(main, /stopAudioSpectrum:\s*\(\)\s*=>\s*audioSpectrumService\?\.stop\(\)/);
+  assert.match(lifecycle, /event\.preventDefault\(\)/);
+  assert.match(lifecycle, /await stop\('audio spectrum',\s*stopAudioSpectrum\)/);
 });
