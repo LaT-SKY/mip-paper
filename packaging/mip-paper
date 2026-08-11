@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export MIP_PAPER_MODE=packaged
+export MIP_PAPER_SOURCE_ROOT=/usr/lib/mip-paper
+export MIP_PAPER_INSTALL_ROOT=/usr/lib/mip-paper
+export MIP_PAPER_SERVICE_PATH=/usr/lib/systemd/user/mip-paper.service
+export MIP_PAPER_KWIN_SOURCE=/usr/share/kwin/scripts/mip-paper
+
+exec /usr/lib/mip-paper/bin/mip-paper "$@"

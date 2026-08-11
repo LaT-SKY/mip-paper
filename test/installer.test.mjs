@@ -55,13 +55,8 @@ prefix=''
 while (($#)); do
   if [[ "$1" == '--prefix' ]]; then prefix=$2; shift 2; else shift; fi
 done
-mkdir -p "$prefix/node_modules/electron/dist" "$prefix/node_modules/fft.js" "$prefix/node_modules/.bin"
-printf '{"name":"electron","version":"43.3.0"}\n' > "$prefix/node_modules/electron/package.json"
+mkdir -p "$prefix/node_modules/fft.js"
 printf '{"name":"fft.js","version":"4.0.4"}\n' > "$prefix/node_modules/fft.js/package.json"
-printf "module.exports = require('path').join(__dirname, 'dist', 'electron');\n" > "$prefix/node_modules/electron/index.js"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$prefix/node_modules/.bin/electron"
-cp "$prefix/node_modules/.bin/electron" "$prefix/node_modules/electron/dist/electron"
-chmod +x "$prefix/node_modules/.bin/electron" "$prefix/node_modules/electron/dist/electron"
 `);
 
   await writeExecutable(path.join(fakeBin, 'systemctl'), `#!/usr/bin/env bash
@@ -78,6 +73,7 @@ exit 0
 if [[ "\${FAKE_QDBUS_FAIL:-0}" == 1 ]]; then exit 9; fi
 exit 0
 `);
+  await writeExecutable(path.join(fakeBin, 'electron43'), '#!/usr/bin/env bash\nexit 0\n');
 
   const env = {
     ...process.env,
@@ -154,8 +150,7 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     const { stdout } = await runCli(['install', '--no-start'], fixture);
     assert.match(stdout, /Installation complete/);
     assert.equal(await exists(path.join(fixture.installRoot, 'src', 'main.mjs')), true);
-    assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'package.json')), true);
-    assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'dist', 'electron')), true);
+    assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron')), false);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'fft.js', 'package.json')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'assets')), false);
     assert.equal(await exists(fixture.launcher), true);
@@ -188,8 +183,8 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
     const service = await readFile(fixture.service, 'utf8');
     assert.doesNotMatch(service, new RegExp(repositoryRoot));
-    assert.match(service, /ExecStart=.*\/node_modules\/electron\/dist\/electron /);
-    assert.doesNotMatch(service, /node_modules\/\.bin\/electron/);
+    assert.match(service, new RegExp(`ExecStart=${path.join(fixture.home, 'fake-bin', 'electron43')} `));
+    assert.doesNotMatch(service, /node_modules\/electron/);
     assert.match(service, /After=plasma-workspace\.target/);
     assert.match(service, /PartOf=graphical-session\.target/);
     assert.match(service, /WantedBy=plasma-workspace\.target/);
