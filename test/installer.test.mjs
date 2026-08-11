@@ -18,6 +18,7 @@ import test from 'node:test';
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve('.');
 const cli = path.join(repositoryRoot, 'bin', 'mip-paper');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 
 async function exists(pathname) {
   try {
@@ -39,10 +40,12 @@ async function createFixture() {
   const configHome = path.join(home, '.config');
   const rulesFile = path.join(configHome, 'kwinrulesrc');
   const systemctlLog = path.join(home, 'systemctl.log');
+  const sourceImage = path.join(home, 'source.png');
   await mkdir(fakeBin, { recursive: true });
   await mkdir(configHome, { recursive: true });
   await writeFile(rulesFile, '[General]\ncount=0\nrules=\n');
   await writeFile(systemctlLog, '');
+  await writeFile(sourceImage, png);
 
   await writeExecutable(path.join(fakeBin, 'npm'), `#!/usr/bin/env bash
 set -euo pipefail
@@ -65,7 +68,7 @@ printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
 if [[ "\${FAKE_SYSTEMCTL_FAIL_ENABLE:-0}" == 1 && "$*" == *'reenable --now'* ]]; then exit 8; fi
 case "$*" in
   *'is-enabled'*) exit 1 ;;
-  *'is-active'*) exit 1 ;;
+  *'is-active'*) [[ "\${FAKE_SYSTEMCTL_ACTIVE:-0}" == 1 ]] ;;
 esac
 exit 0
 `);
@@ -96,12 +99,15 @@ exit 0
     env,
     rulesFile,
     systemctlLog,
+    sourceImage,
     installRoot: path.join(home, '.local', 'lib', 'mip-paper'),
     launcher: path.join(home, '.local', 'bin', 'mip-paper'),
     config: path.join(configHome, 'mip-paper', 'config.json'),
     credentials: path.join(configHome, 'mip-paper', 'weather-credentials.json'),
     service: path.join(configHome, 'systemd', 'user', 'mip-paper.service'),
     kwinScript: path.join(home, '.local', 'share', 'kwin', 'scripts', 'mip-paper'),
+    dataDirectory: path.join(home, '.local', 'share', 'mip-paper'),
+    wallpaper: path.join(home, '.local', 'share', 'mip-paper', 'wallpaper'),
     kwinrc: path.join(configHome, 'kwinrc'),
   };
 }
@@ -126,6 +132,7 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'package.json')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'electron', 'dist', 'electron')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'node_modules', 'fft.js', 'package.json')), true);
+    assert.equal(await exists(path.join(fixture.installRoot, 'assets')), false);
     assert.equal(await exists(fixture.launcher), true);
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.credentials), true);
@@ -140,6 +147,8 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
       'src/config-watcher.mjs',
       'src/renderer/audio-ribbon.mjs',
       'scripts/audio-probe.mjs',
+      'scripts/wallpaper-image.mjs',
+      'src/wallpaper-image.mjs',
     ]) {
       assert.equal(await exists(path.join(fixture.installRoot, pathname)), true, `missing ${pathname}`);
     }
@@ -208,11 +217,45 @@ test('failed KWin activation restores the prior package and enabled state', asyn
 test('install re-enables and starts the Plasma session service by default', async () => {
   const fixture = await createFixture();
   try {
-    await runCli(['install'], fixture);
+    await runCli(['install', '--image', fixture.sourceImage], fixture);
     assert.match(
       await readFile(fixture.systemctlLog, 'utf8'),
       /--user reenable --now mip-paper\.service/,
     );
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('install refuses to start before a wallpaper is selected', async () => {
+  const fixture = await createFixture();
+  try {
+    await assert.rejects(runCli(['install'], fixture), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /install --image/);
+      return true;
+    });
+    assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /reenable --now/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('wallpaper set, status and failed replacement preserve the managed image', async () => {
+  const fixture = await createFixture();
+  try {
+    const set = await runCli(['wallpaper', 'set', fixture.sourceImage], fixture, {
+      FAKE_SYSTEMCTL_ACTIVE: '1',
+    });
+    assert.match(set.stdout, /format=png/);
+    assert.deepEqual(await readFile(fixture.wallpaper), png);
+    assert.match((await runCli(['wallpaper', 'status'], fixture)).stdout, /format=png/);
+    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user restart mip-paper\.service/);
+
+    const invalid = path.join(fixture.home, 'invalid.txt');
+    await writeFile(invalid, 'not an image');
+    await assert.rejects(runCli(['wallpaper', 'set', invalid], fixture));
+    assert.deepEqual(await readFile(fixture.wallpaper), png);
   } finally {
     await cleanup(fixture);
   }
@@ -278,6 +321,7 @@ test('start confirms that the background wallpaper service was requested', async
 test('normal uninstall preserves config and purge removes it', async () => {
   const fixture = await createFixture();
   try {
+    await runCli(['wallpaper', 'set', fixture.sourceImage], fixture);
     await runCli(['install', '--no-start'], fixture);
     await runCli(['uninstall'], fixture);
     assert.equal(await exists(fixture.installRoot), false);
@@ -285,11 +329,13 @@ test('normal uninstall preserves config and purge removes it', async () => {
     assert.equal(await exists(fixture.service), false);
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.credentials), true);
+    assert.equal(await exists(fixture.wallpaper), true);
 
     await runCli(['install', '--no-start'], fixture);
     await runCli(['uninstall', '--purge'], fixture);
     assert.equal(await exists(fixture.config), false);
     assert.equal(await exists(fixture.credentials), false);
+    assert.equal(await exists(fixture.dataDirectory), false);
   } finally {
     await cleanup(fixture);
   }

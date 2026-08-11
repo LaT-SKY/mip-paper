@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -9,6 +9,7 @@ import test from 'node:test';
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve('.');
 const cli = path.join(repositoryRoot, 'bin', 'mip-paper');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 
 async function executable(pathname, contents) {
   await writeFile(pathname, contents);
@@ -30,12 +31,20 @@ async function fixture({
   await mkdir(path.join(installRoot, 'src'), { recursive: true });
   await mkdir(path.join(installRoot, 'scripts'), { recursive: true });
   await mkdir(path.join(installRoot, 'kwin', 'mip-paper'), { recursive: true });
-  await mkdir(path.join(installRoot, 'assets'), { recursive: true });
   await mkdir(path.join(installRoot, 'node_modules', 'electron', 'dist'), { recursive: true });
   await mkdir(path.join(home, '.local', 'bin'), { recursive: true });
   await mkdir(path.join(configHome, 'mip-paper'), { recursive: true });
   await mkdir(path.join(configHome, 'systemd', 'user'), { recursive: true });
   await writeFile(path.join(installRoot, 'src', 'main.mjs'), 'export {};\n');
+  await cp(
+    path.join(repositoryRoot, 'src', 'wallpaper-image.mjs'),
+    path.join(installRoot, 'src', 'wallpaper-image.mjs'),
+  );
+  await cp(
+    path.join(repositoryRoot, 'node_modules', 'image-size'),
+    path.join(installRoot, 'node_modules', 'image-size'),
+    { recursive: true },
+  );
   await writeFile(path.join(installRoot, 'src', 'config.mjs'), "import { readFile } from 'node:fs/promises'; export async function loadConfig(pathname) { return JSON.parse(await readFile(pathname, 'utf8')); }\n");
   await writeFile(
     path.join(installRoot, 'src', 'pipewire-audio.mjs'),
@@ -46,7 +55,10 @@ async function fixture({
     await readFile(path.join(repositoryRoot, 'scripts', 'audio-probe.mjs'), 'utf8'),
   );
   await executable(path.join(installRoot, 'node_modules', 'electron', 'dist', 'electron'), '#!/usr/bin/env bash\n');
-  await writeFile(path.join(installRoot, 'assets', '161-2.jpeg'), Buffer.alloc(100001));
+  await cp(
+    path.join(repositoryRoot, 'scripts', 'wallpaper-image.mjs'),
+    path.join(installRoot, 'scripts', 'wallpaper-image.mjs'),
+  );
   await writeFile(path.join(installRoot, 'scripts', 'kwin-rules.sh'), '#!/usr/bin/env bash\nexit 0\n');
   await chmod(path.join(installRoot, 'scripts', 'kwin-rules.sh'), 0o755);
   const coordinatorHelper = await readFile(path.join(repositoryRoot, 'scripts', 'kwin-script.sh'), 'utf8');
@@ -65,6 +77,8 @@ async function fixture({
   await writeFile(credentialsPath, invalidCredentials ? '{}' : JSON.stringify({ apiHost: 'weather.example.com', apiKey: 'private' }), { mode: 0o600 });
   await writeFile(path.join(configHome, 'systemd', 'user', 'mip-paper.service'), '[Service]\n');
   await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nmip-paperEnabled=${coordinator === 'valid'}\n`);
+  await mkdir(path.join(home, '.local', 'share', 'mip-paper'), { recursive: true });
+  await writeFile(path.join(home, '.local', 'share', 'mip-paper', 'wallpaper'), png);
   await executable(path.join(home, '.local', 'bin', 'mip-paper'), '#!/usr/bin/env bash\n');
   await mkdir(path.dirname(rulesFile), { recursive: true });
   await writeFile(rulesFile, '[General]\ncount=1\nrules=mip-paper\n\n[mip-paper]\nDescription=Mip-Paper\n');
@@ -118,6 +132,7 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
     for (const label of [
       'session', 'desktop', 'command:pw-cat', 'command:pw-metadata', 'snapshot', 'config',
       'weather-credentials', 'audio-output', 'service', 'KWin rule', 'KWin coordinator',
+      'image',
     ]) {
       assert.match(stdout, new RegExp(`PASS .*${label}`));
     }
