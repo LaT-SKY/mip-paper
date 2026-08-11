@@ -3,6 +3,7 @@ set -euo pipefail
 
 readonly APP_ID='mip-paper'
 readonly SERVICE_NAME='mip-paper.service'
+readonly INSTALL_MODE="${MIP_PAPER_MODE:-source}"
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly LOCAL_PREFIX="${MIP_PAPER_LOCAL_PREFIX:-$HOME/.local}"
@@ -15,8 +16,10 @@ readonly WEATHER_CREDENTIALS_PATH="$CONFIG_DIRECTORY/weather-credentials.json"
 readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 readonly DATA_DIRECTORY="$DATA_HOME/$APP_ID"
 readonly WALLPAPER_PATH="$DATA_DIRECTORY/wallpaper"
+readonly CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+readonly CACHE_DIRECTORY="$CACHE_HOME/$APP_ID"
 readonly SERVICE_DIRECTORY="$CONFIG_HOME/systemd/user"
-readonly SERVICE_PATH="$SERVICE_DIRECTORY/$SERVICE_NAME"
+readonly SERVICE_PATH="${MIP_PAPER_SERVICE_PATH:-$SERVICE_DIRECTORY/$SERVICE_NAME}"
 readonly KWIN_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 readonly KWIN_SCRIPT_PATH="$KWIN_DATA_HOME/kwin/scripts/$APP_ID"
 readonly KWIN_CONFIG_PATH="${KWIN_CONFIG_FILE:-$CONFIG_HOME/kwinrc}"
@@ -29,6 +32,7 @@ else
   SOURCE_ROOT=$INSTALL_ROOT
 fi
 readonly SOURCE_ROOT
+readonly KWIN_PACKAGE_SOURCE="${MIP_PAPER_KWIN_SOURCE:-$SOURCE_ROOT/kwin/$APP_ID}"
 
 usage() {
   cat >&2 <<'EOF'
@@ -38,6 +42,8 @@ Commands:
   install [--no-start] [--image PATH]
                         Install or update and enable the user service
   uninstall [--purge]   Remove the app; --purge also removes user config
+  setup [--image PATH]  Configure and start a pacman-installed copy
+  teardown [--purge]    Disable user integration; --purge removes user data
   start                 Start the user service
   stop                  Stop the user service
   restart               Restart the user service
@@ -57,9 +63,14 @@ fail() {
 
 require_safe_paths() {
   [[ -n "${HOME:-}" && "$HOME" == /* && "$HOME" != '/' ]] || fail 'HOME must be an absolute user directory'
-  [[ "$INSTALL_ROOT" == "$HOME"/* && "$INSTALL_ROOT" != "$HOME/.local" ]] || fail 'Unsafe installation path'
+  if [[ "$INSTALL_MODE" == source ]]; then
+    [[ "$INSTALL_ROOT" == "$HOME"/* && "$INSTALL_ROOT" != "$HOME/.local" ]] || fail 'Unsafe installation path'
+  else
+    [[ "$INSTALL_MODE" == packaged && "$INSTALL_ROOT" == /* && "$INSTALL_ROOT" != '/' ]] || fail 'Unsafe installation mode or root'
+  fi
   [[ "$CONFIG_DIRECTORY" == "$HOME"/* && "$CONFIG_DIRECTORY" != "$HOME/.config" ]] || fail 'Unsafe configuration path'
   [[ "$DATA_DIRECTORY" == "$HOME"/* && "$DATA_DIRECTORY" != "$HOME/.local/share" ]] || fail 'Unsafe data path'
+  [[ "$CACHE_DIRECTORY" == "$HOME"/* && "$CACHE_DIRECTORY" != "$HOME/.cache" ]] || fail 'Unsafe cache path'
 }
 
 require_command() {
@@ -69,6 +80,18 @@ require_command() {
 validate_environment() {
   local command_name
   for command_name in node npm systemctl plasmashell kwin_wayland kreadconfig6 kwriteconfig6; do
+    require_command "$command_name"
+  done
+  [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]] || fail 'The current session is not Wayland'
+  [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]] || fail 'The current desktop is not KDE Plasma'
+  plasmashell --version | grep -Eq '(^| )6\.' || fail 'Plasma 6 is required'
+  kwin_wayland --version | grep -Eq '(^| )6\.' || fail 'KWin 6 is required'
+  systemctl --user show-environment >/dev/null
+}
+
+validate_setup_environment() {
+  local command_name
+  for command_name in node systemctl plasmashell kwin_wayland kreadconfig6 kwriteconfig6; do
     require_command "$command_name"
   done
   [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]] || fail 'The current session is not Wayland'
@@ -113,6 +136,7 @@ copy_snapshot() {
 }
 
 install_app() {
+  [[ "$INSTALL_MODE" == source ]] || fail 'This installation is managed by pacman; use setup and teardown'
   local start_after_install=1 image_source=''
   while (($#)); do
     case "$1" in
@@ -240,6 +264,7 @@ install_app() {
 }
 
 uninstall_app() {
+  [[ "$INSTALL_MODE" == source ]] || fail 'This installation is managed by pacman; use setup and teardown'
   local purge=0
   if (($# > 1)); then usage; fi
   if (($# == 1)); then
@@ -279,6 +304,71 @@ uninstall_app() {
   printf 'Uninstallation complete.\n'
 }
 
+setup_app() {
+  [[ "$INSTALL_MODE" == packaged ]] || fail 'Source installations use install instead of setup'
+  local image_source=''
+  if (($# > 2)); then usage; fi
+  if (($#)); then
+    [[ "$1" == '--image' && $# == 2 ]] || usage
+    image_source=$2
+  fi
+
+  require_safe_paths
+  validate_setup_environment
+  [[ -f "$SOURCE_ROOT/config/default.json" ]] || fail 'Packaged default configuration is missing'
+  [[ -x "$SOURCE_ROOT/scripts/kwin-rules.sh" ]] || fail 'Packaged KWin rule helper is missing'
+  [[ -x "$SOURCE_ROOT/scripts/kwin-script.sh" ]] || fail 'Packaged KWin script helper is missing'
+  [[ -f "$SERVICE_PATH" ]] || fail 'Packaged systemd user unit is missing'
+  [[ -f "$KWIN_PACKAGE_SOURCE/metadata.json" ]] || fail 'Packaged KWin coordinator is missing'
+  [[ -f "$KWIN_PACKAGE_SOURCE/contents/code/main.js" ]] || fail 'Packaged KWin coordinator code is missing'
+
+  if [[ -n "$image_source" ]]; then
+    node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$image_source"
+  elif ! node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status >/dev/null 2>&1; then
+    fail 'No wallpaper is configured; use setup --image PATH'
+  fi
+
+  mkdir -p "$CONFIG_DIRECTORY"
+  if [[ ! -e "$CONFIG_PATH" ]]; then
+    install -m 644 "$SOURCE_ROOT/config/default.json" "$CONFIG_PATH"
+  fi
+  if [[ ! -e "$WEATHER_CREDENTIALS_PATH" ]]; then
+    install -m 600 /dev/null "$WEATHER_CREDENTIALS_PATH"
+  else
+    chmod 600 "$WEATHER_CREDENTIALS_PATH"
+  fi
+
+  "$SOURCE_ROOT/scripts/kwin-rules.sh" install
+  KWIN_SCRIPT_SOURCE="$KWIN_PACKAGE_SOURCE" \
+    "$SOURCE_ROOT/scripts/kwin-script.sh" enable
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$SERVICE_NAME"
+  printf 'Setup complete for %s.\n' "$APP_ID"
+}
+
+teardown_app() {
+  [[ "$INSTALL_MODE" == packaged ]] || fail 'Source installations use uninstall instead of teardown'
+  local purge=0
+  if (($# > 1)); then usage; fi
+  if (($# == 1)); then
+    [[ "$1" == '--purge' ]] || usage
+    purge=1
+  fi
+
+  require_safe_paths
+  require_command systemctl
+  systemctl --user disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
+  "$SOURCE_ROOT/scripts/kwin-rules.sh" remove || true
+  KWIN_SCRIPT_SOURCE="$KWIN_PACKAGE_SOURCE" \
+    "$SOURCE_ROOT/scripts/kwin-script.sh" disable || true
+  systemctl --user daemon-reload
+
+  if ((purge == 1)); then
+    rm -rf -- "$CONFIG_DIRECTORY" "$DATA_DIRECTORY" "$CACHE_DIRECTORY"
+  fi
+  printf 'Teardown complete.\n'
+}
+
 service_command() {
   local command_name=$1
   require_command systemctl
@@ -315,6 +405,7 @@ doctor() {
   check_pass() { printf 'PASS %-18s %s\n' "$1" "$2"; }
   check_fail() { printf 'FAIL %-18s %s\n' "$1" "$2"; failures=1; }
   check_manual() { printf 'MANUAL %-16s %s\n' "$1" "$2"; }
+  check_pass mode "$INSTALL_MODE"
 
   if [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]]; then
     check_pass session 'Wayland session detected'
@@ -328,7 +419,13 @@ doctor() {
   fi
 
   local command_name
-  for command_name in node npm systemctl kreadconfig6 kwriteconfig6 pw-cat pw-metadata; do
+  local -a required_commands=(node systemctl kreadconfig6 kwriteconfig6 pw-cat pw-metadata)
+  if [[ "$INSTALL_MODE" == packaged ]]; then
+    required_commands+=(electron43)
+  else
+    required_commands+=(npm)
+  fi
+  for command_name in "${required_commands[@]}"; do
     if command -v "$command_name" >/dev/null 2>&1; then
       check_pass "command:$command_name" "$(command -v "$command_name")"
     else
@@ -346,13 +443,20 @@ doctor() {
     check_fail kwin 'KWin 6 is unavailable'
   fi
 
-  if [[ -d "$INSTALL_ROOT" && -f "$INSTALL_ROOT/src/main.mjs" && -x "$INSTALL_ROOT/node_modules/electron/dist/electron" ]]; then
-    check_pass snapshot "$INSTALL_ROOT"
+  local runtime_root=$INSTALL_ROOT
+  if [[ "$INSTALL_MODE" == packaged ]]; then runtime_root=$SOURCE_ROOT; fi
+  if [[ "$INSTALL_MODE" == packaged && -f "$runtime_root/src/main.mjs" ]] \
+    && command -v electron43 >/dev/null 2>&1; then
+    check_pass snapshot "$runtime_root (system electron43)"
+  elif [[ "$INSTALL_MODE" == source && -d "$runtime_root" \
+    && -f "$runtime_root/src/main.mjs" \
+    && -x "$runtime_root/node_modules/electron/dist/electron" ]]; then
+    check_pass snapshot "$runtime_root"
   else
     check_fail snapshot 'installed application snapshot is incomplete'
   fi
-  if [[ -f "$CONFIG_PATH" && -f "$INSTALL_ROOT/src/config.mjs" ]] \
-    && node --input-type=module - "$INSTALL_ROOT/src/config.mjs" "$CONFIG_PATH" <<'NODE'
+  if [[ -f "$CONFIG_PATH" && -f "$runtime_root/src/config.mjs" ]] \
+    && node --input-type=module - "$runtime_root/src/config.mjs" "$CONFIG_PATH" <<'NODE'
 const [, , modulePath, configPathname] = process.argv;
 const { loadConfig } = await import(`file://${modulePath}`);
 await loadConfig(configPathname);
@@ -377,8 +481,8 @@ NODE
   else
     check_fail weather-credentials 'credentials are missing, invalid, or not mode 0600'
   fi
-  if [[ -f "$INSTALL_ROOT/scripts/audio-probe.mjs" ]] \
-    && node "$INSTALL_ROOT/scripts/audio-probe.mjs" >/dev/null 2>&1; then
+  if [[ -f "$runtime_root/scripts/audio-probe.mjs" ]] \
+    && node "$runtime_root/scripts/audio-probe.mjs" >/dev/null 2>&1; then
     check_pass audio-output 'default PipeWire sink capture is available'
   else
     check_fail audio-output 'default PipeWire sink capture is unavailable'
@@ -398,21 +502,26 @@ NODE
   else
     check_fail service-active 'user service is not active'
   fi
-  local rule_helper="$INSTALL_ROOT/scripts/kwin-rules.sh"
+  local rule_helper="$runtime_root/scripts/kwin-rules.sh"
   if [[ ! -x "$rule_helper" ]]; then rule_helper="$SOURCE_ROOT/scripts/kwin-rules.sh"; fi
   if [[ -x "$rule_helper" ]] && "$rule_helper" check >/dev/null 2>&1; then
     check_pass 'KWin rule' 'project rule is installed'
   else
     check_fail 'KWin rule' 'project rule is missing or invalid'
   fi
-  local coordinator_helper="$INSTALL_ROOT/scripts/kwin-script.sh"
+  local coordinator_helper="$runtime_root/scripts/kwin-script.sh"
+  local coordinator_command=check coordinator_source="$runtime_root/kwin/$APP_ID"
+  if [[ "$INSTALL_MODE" == packaged ]]; then
+    coordinator_command=check-enabled
+    coordinator_source=$KWIN_PACKAGE_SOURCE
+  fi
   if [[ -x "$coordinator_helper" ]] \
-    && KWIN_SCRIPT_SOURCE="$INSTALL_ROOT/kwin/$APP_ID" "$coordinator_helper" check >/dev/null 2>&1; then
+    && KWIN_SCRIPT_SOURCE="$coordinator_source" "$coordinator_helper" "$coordinator_command" >/dev/null 2>&1; then
     check_pass 'KWin coordinator' 'display coordinator is installed and enabled'
   else
     check_fail 'KWin coordinator' 'display coordinator is missing or disabled'
   fi
-  local wallpaper_helper="$INSTALL_ROOT/scripts/wallpaper-image.mjs"
+  local wallpaper_helper="$runtime_root/scripts/wallpaper-image.mjs"
   if [[ ! -f "$wallpaper_helper" ]]; then wallpaper_helper="$SOURCE_ROOT/scripts/wallpaper-image.mjs"; fi
   if [[ -f "$wallpaper_helper" ]] && node "$wallpaper_helper" status >/dev/null 2>&1; then
     check_pass image "$WALLPAPER_PATH"
@@ -436,6 +545,8 @@ NODE
 case "${1:-}" in
   install) shift; install_app "$@" ;;
   uninstall) shift; uninstall_app "$@" ;;
+  setup) shift; setup_app "$@" ;;
+  teardown) shift; teardown_app "$@" ;;
   start|stop|restart|status) command_name=$1; shift; (($# == 0)) || usage; service_command "$command_name" ;;
   doctor) shift; (($# == 0)) || usage; doctor ;;
   wallpaper) shift; wallpaper_command "$@" ;;
