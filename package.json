@@ -13,6 +13,7 @@
     "dbus-next": "0.10.2",
     "electron": "43.3.0",
     "fft.js": "4.0.4",
+    "image-size": "2.0.2",
     "qweather-icons": "1.8.0"
   }
 }
