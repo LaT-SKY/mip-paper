@@ -1,0 +1,7 @@
+post_install() {
+  printf '%s\n' 'Run: mip-paper setup --image /path/to/image'
+}
+
+post_upgrade() {
+  printf '%s\n' 'Restart active user instances with: mip-paper restart'
+}

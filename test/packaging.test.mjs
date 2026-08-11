@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 test('uses system Electron for source and packaged installations', async () => {
   const [packageJson, sourceUnit, packagedUnit, wrapper] = await Promise.all([
@@ -26,4 +30,54 @@ test('uses system Electron for source and packaged installations', async () => {
     assert.ok(wrapper.includes(required), `packaged wrapper is missing: ${required}`);
   }
   assert.match(wrapper, /exec \/usr\/lib\/mip-paper\/bin\/mip-paper "\$@"/);
+});
+
+test('generates fixed-checksum Arch metadata and package ownership', async () => {
+  const checksum = 'a'.repeat(64);
+  const [{ stdout: pkgbuild }, installHook, packageLicense] = await Promise.all([
+    execFileAsync(process.execPath, [
+      'scripts/generate-pkgbuild.mjs',
+      '0.1.0',
+      'https://example.invalid/mip-paper-0.1.0.tar.gz',
+      checksum,
+    ]),
+    readFile('packaging/mip-paper.install', 'utf8'),
+    readFile('packaging/LICENSE', 'utf8'),
+  ]);
+
+  for (const required of [
+    'pkgname=mip-paper',
+    'pkgver=0.1.0',
+    'pkgrel=1',
+    "arch=('x86_64')",
+    "license=('GPL-3.0-only' 'MIT' 'CC-BY-4.0')",
+    "depends=('bash' 'electron43' 'nodejs' 'plasma-workspace' 'kwin' 'kconfig' 'qt6-tools' 'systemd' 'pipewire' 'pipewire-audio' 'wireplumber')",
+    "optdepends=('geoclue: automatic location through XDG Desktop Portal')",
+    "makedepends=('npm')",
+    "options=('!strip')",
+    'npm ci --omit=dev --omit=optional --ignore-scripts --cache "$srcdir/npm-cache"',
+    '"$pkgdir/usr/lib/mip-paper"',
+    '"$pkgdir/usr/bin/mip-paper"',
+    '"$pkgdir/usr/lib/systemd/user/mip-paper.service"',
+    '"$pkgdir/usr/share/kwin/scripts/mip-paper"',
+    '"$pkgdir/usr/share/licenses/mip-paper/LICENSE"',
+    checksum,
+  ]) {
+    assert.ok(pkgbuild.includes(required), `PKGBUILD is missing: ${required}`);
+  }
+  assert.doesNotMatch(pkgbuild, /SKIP|node_modules\/electron|assets\/|161-2\.jpeg/);
+  assert.match(installHook, /mip-paper setup --image \/path\/to\/image/);
+  assert.match(installHook, /mip-paper restart/);
+  assert.match(packageLicense, /Copyright Arch Linux Contributors/);
+  assert.match(packageLicense, /Permission to use, copy, modify, and\/or distribute/);
+});
+
+test('rejects mutable or malformed PKGBUILD inputs', async () => {
+  for (const arguments_ of [
+    ['next', 'https://example.invalid/source.tar.gz', 'a'.repeat(64)],
+    ['0.1.0', 'http://example.invalid/source.tar.gz', 'a'.repeat(64)],
+    ['0.1.0', 'https://example.invalid/source.tar.gz', 'SKIP'],
+  ]) {
+    await assert.rejects(execFileAsync(process.execPath, ['scripts/generate-pkgbuild.mjs', ...arguments_]));
+  }
 });
