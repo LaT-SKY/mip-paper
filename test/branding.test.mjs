@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 test('uses the Mip-Paper package and runtime identity', async () => {
   const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
@@ -46,4 +50,25 @@ test('ships mip-paper command and service assets', async () => {
   assert.match(launcher, /readonly APP_ID='mip-paper'/);
   assert.match(launcher, /readonly SERVICE_NAME='mip-paper\.service'/);
   assert.match(unit, /Description=Mip-Paper/);
+});
+
+test('contains no former product identity in tracked files', async () => {
+  const formerIdentities = [
+    ['animated', 'ocean', 'wallpaper'].join('-'),
+    ['Animated', 'Ocean', 'Wallpaper'].join(' '),
+    ['ANIMATED', 'OCEAN', 'WALLPAPER'].join('_'),
+    ['ANIMATED', 'WALLPAPER'].join('_'),
+  ];
+  const { stdout } = await execFileAsync('git', ['ls-files', '-z'], { encoding: 'utf8' });
+  const violations = [];
+
+  for (const pathname of stdout.split('\0').filter(Boolean)) {
+    const contents = await readFile(pathname).catch(() => null);
+    if (!contents || contents.includes(0)) continue;
+    for (const identity of formerIdentities) {
+      if (contents.includes(identity)) violations.push(`${pathname}: ${identity}`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
 });

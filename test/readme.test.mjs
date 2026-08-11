@@ -5,6 +5,8 @@ import test from 'node:test';
 test('documents GeoClue setup and QWeather Icons attribution', async () => {
   const readme = await readFile('README.md', 'utf8');
 
+  assert.match(readme, /^# Mip-Paper$/m);
+
   for (const required of [
     'sudo pacman -S geoclue',
     'sudo systemctl enable --now geoclue',
@@ -45,7 +47,7 @@ test('documents PipeWire audio visualization, live timing config and privacy bou
     '没有辉光',
     'Stream/Input/Audio/Internal',
     'Plasma 麦克风列表',
-    'animated-ocean-wallpaper doctor',
+    'mip-paper doctor',
   ]) {
     assert.ok(readme.includes(required), `README is missing: ${required}`);
   }
