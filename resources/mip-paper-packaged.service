@@ -5,8 +5,8 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=@ELECTRON@ @INSTALL_ROOT@
-WorkingDirectory=@INSTALL_ROOT@
+ExecStart=/usr/bin/electron43 /usr/lib/mip-paper
+WorkingDirectory=/usr/lib/mip-paper
 Environment=ELECTRON_OZONE_PLATFORM_HINT=auto
 KillMode=mixed
 Restart=on-failure

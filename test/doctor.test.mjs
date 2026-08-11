@@ -32,7 +32,6 @@ async function fixture({
   await mkdir(path.join(installRoot, 'src'), { recursive: true });
   await mkdir(path.join(installRoot, 'scripts'), { recursive: true });
   await mkdir(path.join(installRoot, 'kwin', 'mip-paper'), { recursive: true });
-  await mkdir(path.join(installRoot, 'node_modules', 'electron', 'dist'), { recursive: true });
   await mkdir(path.join(home, '.local', 'bin'), { recursive: true });
   await mkdir(path.join(configHome, 'mip-paper'), { recursive: true });
   await mkdir(path.join(configHome, 'systemd', 'user'), { recursive: true });
@@ -55,7 +54,6 @@ async function fixture({
     path.join(installRoot, 'scripts', 'audio-probe.mjs'),
     await readFile(path.join(repositoryRoot, 'scripts', 'audio-probe.mjs'), 'utf8'),
   );
-  await executable(path.join(installRoot, 'node_modules', 'electron', 'dist', 'electron'), '#!/usr/bin/env bash\n');
   await cp(
     path.join(repositoryRoot, 'scripts', 'wallpaper-image.mjs'),
     path.join(installRoot, 'scripts', 'wallpaper-image.mjs'),

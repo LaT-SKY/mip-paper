@@ -79,7 +79,7 @@ require_command() {
 
 validate_environment() {
   local command_name
-  for command_name in node npm systemctl plasmashell kwin_wayland kreadconfig6 kwriteconfig6; do
+  for command_name in node npm electron43 systemctl plasmashell kwin_wayland kreadconfig6 kwriteconfig6; do
     require_command "$command_name"
   done
   [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]] || fail 'The current session is not Wayland'
@@ -118,6 +118,7 @@ render_service() {
   local template=$1 destination=$2 contents
   contents=$(<"$template")
   contents=${contents//@INSTALL_ROOT@/$INSTALL_ROOT}
+  contents=${contents//@ELECTRON@/$(command -v electron43)}
   printf '%s\n' "$contents" > "$destination"
 }
 
@@ -210,10 +211,7 @@ install_app() {
   trap cleanup_install EXIT
 
   copy_snapshot "$stage"
-  npm ci --omit=dev --prefix "$stage"
-  node -e "require(process.argv[1])" "$stage/node_modules/electron" >/dev/null
-  [[ -f "$stage/node_modules/electron/package.json" ]] || fail 'Electron dependency was not installed'
-  [[ -x "$stage/node_modules/electron/dist/electron" ]] || fail 'Electron executable is missing'
+  npm ci --omit=dev --omit=optional --ignore-scripts --prefix "$stage"
 
   if "$SOURCE_ROOT/scripts/kwin-rules.sh" check >/dev/null 2>&1; then had_rule=1; fi
   if [[ -e "$INSTALL_ROOT" ]]; then mv -- "$INSTALL_ROOT" "$backup/app"; had_install=1; fi
@@ -420,11 +418,8 @@ doctor() {
 
   local command_name
   local -a required_commands=(node systemctl kreadconfig6 kwriteconfig6 pw-cat pw-metadata)
-  if [[ "$INSTALL_MODE" == packaged ]]; then
-    required_commands+=(electron43)
-  else
-    required_commands+=(npm)
-  fi
+  required_commands+=(electron43)
+  if [[ "$INSTALL_MODE" == source ]]; then required_commands+=(npm); fi
   for command_name in "${required_commands[@]}"; do
     if command -v "$command_name" >/dev/null 2>&1; then
       check_pass "command:$command_name" "$(command -v "$command_name")"
@@ -449,9 +444,9 @@ doctor() {
     && command -v electron43 >/dev/null 2>&1; then
     check_pass snapshot "$runtime_root (system electron43)"
   elif [[ "$INSTALL_MODE" == source && -d "$runtime_root" \
-    && -f "$runtime_root/src/main.mjs" \
-    && -x "$runtime_root/node_modules/electron/dist/electron" ]]; then
-    check_pass snapshot "$runtime_root"
+    && -f "$runtime_root/src/main.mjs" ]] \
+    && command -v electron43 >/dev/null 2>&1; then
+    check_pass snapshot "$runtime_root (system electron43)"
   else
     check_fail snapshot 'installed application snapshot is incomplete'
   fi
