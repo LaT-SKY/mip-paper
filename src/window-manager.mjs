@@ -73,12 +73,13 @@ export function createWindowManager({
     });
 
     secureWebContents(window.webContents);
+    const webContentsId = window.webContents.id;
     window.on('page-title-updated', (event) => event.preventDefault());
     window.setIgnoreMouseEvents(!currentConfig.interactionEnabled);
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     window.once('ready-to-show', () => window.showInactive());
     windows.set(display.id, window);
-    bootstrapByWebContents.set(window.webContents.id, {
+    bootstrapByWebContents.set(webContentsId, {
       config: currentConfig,
       display,
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
@@ -86,22 +87,22 @@ export function createWindowManager({
       ...(probe ? { probe } : {}),
     });
     if (informationService) {
-      informationUnsubscribers.set(window.webContents.id, informationService.subscribe((snapshot) => {
+      informationUnsubscribers.set(webContentsId, informationService.subscribe((snapshot) => {
         window.webContents.send(INFORMATION_UPDATED_CHANNEL, snapshot);
       }));
     }
     if (audioSpectrumService) {
-      audioUnsubscribers.set(window.webContents.id, audioSpectrumService.subscribe((snapshot) => {
+      audioUnsubscribers.set(webContentsId, audioSpectrumService.subscribe((snapshot) => {
         window.webContents.send(AUDIO_SPECTRUM_UPDATED_CHANNEL, snapshot);
       }));
     }
     window.once('closed', () => {
-      informationUnsubscribers.get(window.webContents.id)?.();
-      informationUnsubscribers.delete(window.webContents.id);
-      audioUnsubscribers.get(window.webContents.id)?.();
-      audioUnsubscribers.delete(window.webContents.id);
+      informationUnsubscribers.get(webContentsId)?.();
+      informationUnsubscribers.delete(webContentsId);
+      audioUnsubscribers.get(webContentsId)?.();
+      audioUnsubscribers.delete(webContentsId);
       windows.delete(display.id);
-      bootstrapByWebContents.delete(window.webContents.id);
+      bootstrapByWebContents.delete(webContentsId);
     });
     await window.loadFile(rendererPath);
     window.setTitle(formatDisplayTargetTitle(display));

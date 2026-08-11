@@ -161,6 +161,7 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.match(service, /WantedBy=plasma-workspace\.target/);
     assert.doesNotMatch(service, /WantedBy=default\.target/);
     assert.doesNotMatch(service, /KillSignal=/);
+    assert.match(service, /KillMode=mixed/);
     assert.doesNotMatch(await readFile(fixture.systemctlLog, 'utf8'), /(?:enable|reenable) --now/);
   } finally {
     await cleanup(fixture);
