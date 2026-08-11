@@ -8,7 +8,7 @@
 - CPU：窗口前后 `CPUUsageNSec` 差分除以墙钟时间
 - RSS：窗口结束时 systemd service cgroup 的 `MemoryCurrent`
 - GPU：窗口结束时 `nvidia-smi` 单次快照；当前 GPU 为 NVIDIA RTX 5060 Laptop GPU
-- 原始结果：`/tmp/animated-ocean-resource-full.hPZMIW`
+- 原始结果：`/tmp/mip-paper-resource-full.hPZMIW`
 
 ## 逐场景结果
 

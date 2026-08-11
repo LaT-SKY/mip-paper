@@ -6,7 +6,7 @@
 - Electron 43.3.0
 - 双显示器，当前桌面布局和用户配置未改变
 - 运行快照已更新到仓库当前版本
-- 原始结果：`/tmp/animated-ocean-probe-full.wfZog1`
+- 原始结果：`/tmp/mip-paper-probe-full.wfZog1`
 
 每种策略依次执行 `idle`、`sweep`、`return` 三个场景。每个场景预热 30 秒、采样 60 秒。测试期间服务保持 `active`，结束后 probe 环境变量已清理。
 

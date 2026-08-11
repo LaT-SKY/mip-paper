@@ -5,7 +5,7 @@
 - KDE Plasma 6 / KWin 6 / Wayland
 - Electron 43.3.0
 - 双显示器，运行快照已重新安装
-- 原始结果：`/tmp/animated-ocean-probe-round2.72rlCT`
+- 原始结果：`/tmp/mip-paper-probe-round2.72rlCT`
 - 每种策略执行 `idle`、`sweep`、`return`
 - 每个场景预热 30 秒、采样 60 秒
 
