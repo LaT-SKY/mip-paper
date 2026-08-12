@@ -1,6 +1,7 @@
 export const SIMULATION_STEP = 1 / 120;
 const INTERACTION_HOLD_SECONDS = 0.95;
-export const RETURN_DURATION_SECONDS = 1.5;
+export const RETURN_INTERACTIVE_FPS_SECONDS = 1.5;
+const SETTLE_SECONDS = 0.2;
 const DRIFT_FREQUENCY = 1.15;
 const DAMPING = 0.9;
 
@@ -18,11 +19,6 @@ export function createPointerState(x, y) {
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
-}
-
-function smoothstep(value) {
-  const clamped = clamp(value, 0, 1);
-  return clamped * clamped * (3 - 2 * clamped);
 }
 
 function updateNormalizedPointer(state, viewport) {
@@ -102,14 +98,6 @@ function advanceCamera(camera, target, frequency, deltaTime) {
   );
 }
 
-function blendCamera(camera, reference, amount) {
-  for (const field of [
-    'x', 'y', 'vx', 'vy', 'angle', 'angleVelocity', 'scale', 'scaleVelocity',
-  ]) {
-    camera[field] += (reference[field] - camera[field]) * amount;
-  }
-}
-
 export function computeSafeScale(viewport, motion) {
   const aspect = Math.max(viewport.width, 1) / Math.max(viewport.height, 1);
   const angle = motion.maxRotationDegrees * Math.PI / 180;
@@ -153,6 +141,7 @@ export function createMotionState(config, viewport, phase = 0) {
     driftTime: phase,
     accumulator: 0,
     returnElapsed: 0,
+    settledDuration: 0,
     viewport: { ...viewport },
     safeScale: computeSafeScale(viewport, config.motion),
   };
@@ -183,12 +172,14 @@ function simulateStep(state, realTime, config, viewport) {
   if (interactive) {
     state.mode = 'interactive';
     state.returnElapsed = 0;
+    state.settledDuration = 0;
     return;
   }
 
   if (state.mode === 'interactive') {
     state.mode = 'returning';
     state.returnElapsed = 0;
+    state.settledDuration = 0;
   }
 
   if (state.mode !== 'returning') {
@@ -196,15 +187,15 @@ function simulateStep(state, realTime, config, viewport) {
   }
 
   state.returnElapsed += SIMULATION_STEP;
-  blendCamera(
-    state.camera,
-    state.driftReference,
-    smoothstep(state.returnElapsed / RETURN_DURATION_SECONDS),
-  );
-  if (state.returnElapsed + SIMULATION_STEP * 1e-9 >= RETURN_DURATION_SECONDS) {
+  state.settledDuration = hasReturnedToDrift(state.camera, state.driftReference)
+    ? state.settledDuration + SIMULATION_STEP
+    : 0;
+
+  if (state.settledDuration + Number.EPSILON >= SETTLE_SECONDS) {
     Object.assign(state.camera, state.driftReference);
     state.mode = 'drift';
     state.returnElapsed = 0;
+    state.settledDuration = 0;
   }
 }
 
@@ -223,5 +214,8 @@ export function advanceMotion(state, elapsedSeconds, realTime, config, viewport)
 }
 
 export function requestedFrameRate(state, config) {
-  return state.mode === 'drift' ? config.frameRate.drift : config.frameRate.interactive;
+  const driftCadence = state.mode === 'drift'
+    || (state.mode === 'returning'
+      && state.returnElapsed + SIMULATION_STEP * 1e-9 >= RETURN_INTERACTIVE_FPS_SECONDS);
+  return driftCadence ? config.frameRate.drift : config.frameRate.interactive;
 }

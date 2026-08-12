@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { DEFAULT_CONFIG } from '../src/config.mjs';
 import {
-  RETURN_DURATION_SECONDS,
+  RETURN_INTERACTIVE_FPS_SECONDS,
   SIMULATION_STEP,
   advanceMotion,
   applyPointerSample,
@@ -82,7 +82,7 @@ test('render cadence does not change simulated motion speed', () => {
   assert.ok(Math.abs(at30.driftTime - at60.driftTime) < 1e-12);
 });
 
-test('returning uses interactive FPS for the full bounded recovery duration', () => {
+test('returning lowers render cadence without completing or changing motion', () => {
   const state = createMotionState(DEFAULT_CONFIG, VIEWPORT);
   state.mode = 'returning';
   Object.assign(state.camera, state.driftReference);
@@ -91,7 +91,7 @@ test('returning uses interactive FPS for the full bounded recovery duration', ()
   assert.equal(hasReturnedToDrift(state.camera, state.driftReference), false);
   assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 60);
 
-  const returningSteps = Math.round(RETURN_DURATION_SECONDS / SIMULATION_STEP);
+  const returningSteps = Math.round(RETURN_INTERACTIVE_FPS_SECONDS / SIMULATION_STEP);
   for (let step = 0; step < returningSteps - 1; step += 1) {
     advanceMotion(state, SIMULATION_STEP, 2 + (step + 1) * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
   }
@@ -99,11 +99,11 @@ test('returning uses interactive FPS for the full bounded recovery duration', ()
   assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 60);
 
   advanceMotion(state, SIMULATION_STEP, 2 + returningSteps * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
-  assert.equal(state.mode, 'drift');
+  assert.equal(state.mode, 'returning');
   assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 12);
 });
 
-test('real pointer interaction returns to drift after bounded smooth recovery', () => {
+test('real pointer interaction restores drift FPS while preserving the original return trajectory', () => {
   const state = createMotionState(DEFAULT_CONFIG, VIEWPORT);
   applyPointerSample(state.pointer, 960, 540, 0, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
   applyPointerSample(state.pointer, 1500, 800, 0.1, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
@@ -119,16 +119,22 @@ test('real pointer interaction returns to drift after bounded smooth recovery', 
     }
   }
 
-  assert.deepEqual(transitions, [
-    'drift->interactive',
-    'interactive->returning',
-    'returning->drift',
-  ]);
-  assert.equal(state.mode, 'drift');
+  assert.deepEqual(transitions, ['drift->interactive', 'interactive->returning']);
+  assert.equal(state.mode, 'returning');
   assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), DEFAULT_CONFIG.frameRate.drift);
+  assert.deepEqual(state.camera, {
+    x: 37.01441884981362,
+    y: 16.405996732969488,
+    vx: 4.925696425217493,
+    vy: -3.7271285462088297,
+    angle: 0.003185605761056426,
+    angleVelocity: 0.0007409414268093874,
+    scale: 1.0739878269304495,
+    scaleVelocity: 0.0008888966352193645,
+  });
 });
 
-test('new pointer input restarts the full return duration', () => {
+test('new pointer input restarts the interactive FPS hold window', () => {
   const state = createMotionState(DEFAULT_CONFIG, VIEWPORT);
   applyPointerSample(state.pointer, 960, 540, 0, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
   applyPointerSample(state.pointer, 1500, 800, 0.1, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
@@ -157,7 +163,8 @@ test('new pointer input restarts the full return duration', () => {
   for (let step = 1; step <= 120 * 3; step += 1) {
     advanceMotion(state, SIMULATION_STEP, 1.6 + step * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
   }
-  assert.equal(state.mode, 'drift');
+  assert.equal(state.mode, 'returning');
+  assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), DEFAULT_CONFIG.frameRate.drift);
 });
 
 test('effective input switches immediately to interactive mode', () => {

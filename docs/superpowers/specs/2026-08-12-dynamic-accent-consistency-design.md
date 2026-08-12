@@ -14,7 +14,7 @@
 4. 多块屏幕使用不同壁纸时，各自独立显示对应强调色。
 5. 每块屏幕的信息卡与音频频谱带使用该屏幕自己的动态色，并同步过渡。
 6. 音频频谱的左右声道分别使用强调色和互补色，双声道合并曲线根据当前壁纸亮度使用纯黑或纯白，避免在极亮或极暗壁纸上失去可读性。
-7. 指针交互结束并完成平滑回归后，renderer 必须从交互帧率可靠恢复到漂移帧率。
+7. 指针交互结束后，renderer 必须在不改变 `motion.returnSpeed` 或相机回归轨迹的前提下可靠恢复到漂移帧率。
 
 ## 已确认根因
 
@@ -127,18 +127,18 @@ Renderer 接收事务后：
 
 ## 漂移帧率恢复
 
-运动状态仍保留 `drift → interactive → returning → drift` 的三状态循环。有效指针输入后进入 `interactive`；最后一次有效输入结束 `0.95s` 后进入 `returning`。回归阶段继续使用 `frameRate.interactive`，确保相机回到漂移轨迹时保持流畅；只有回归完成后才使用 `frameRate.drift`。
+运动状态仍保留 `drift → interactive → returning → drift` 的三状态循环。有效指针输入后进入 `interactive`；最后一次有效输入结束 `0.95s` 后进入 `returning`。原有 `motion.returnSpeed` 弹簧、移动 `driftReference`、误差阈值和 `settledDuration` 完成判定全部保持不变。
 
-`returning` 不再以可能永远不可达的瞬时误差阈值作为唯一完成条件，而使用固定 `1.5s` 的确定回归时长：
+帧率恢复与运动完成解耦。`returning` 使用独立的 `returnElapsed` 记录本轮回归已经持续的时间：
 
 - 进入 `returning` 时将 `returnElapsed` 清零；
-- 每个固定模拟步继续以现有 `motion.returnSpeed` 弹簧追踪持续移动的 `driftReference`；
-- 每步弹簧更新后，以归一化回归进度的 smoothstep 值为插值权重，把相机的位置、速度、旋转和缩放分量向当步 `driftReference` 收紧；权重从 `0` 连续增加到 `1`，避免到期时产生可见跳变；
-- `returnElapsed` 达到 `1.5s` 时，把完整相机状态精确对齐到当步 `driftReference`，切换为 `drift` 并清零回归状态；
+- 每个固定模拟步只按原有 `motion.returnSpeed` 弹簧追踪持续移动的 `driftReference`，不增加插值、不提高弹簧频率、不强制对齐相机；
+- `returnElapsed` 小于 `1.5s` 时请求 `frameRate.interactive`；达到 `1.5s` 后仅请求 `frameRate.drift`，相机仍保持 `returning` 并按原速继续回归；
+- 原有误差条件若未来自然满足，状态照常从 `returning` 切到 `drift`；帧率计时不参与该状态转换；
 - 回归期间收到新的有效指针输入时立即切回 `interactive` 并清零 `returnElapsed`，之后重新执行完整回归；
-- `interactionEnabled` 热切换为关闭时，清除指针输入状态；若当前处于交互或回归阶段，仍通过同一有限回归路径返回漂移，不建立另一套状态转换。
+- `interactionEnabled` 热切换为关闭时，清除指针输入状态；若当前处于交互或回归阶段，仍通过原有自然回归路径继续运动，不建立另一套状态转换。
 
-调度器继续在每个 callback 根据当前 `state.mode` 查询目标帧率。状态切到 `drift` 后，下一次调度判断必须采用 `frameRate.drift` 并重置绘制累计/截止时间；不重启 scheduler，也不新增独立定时器。性能探针的 `return` 场景必须实际注入一次指针交互并等待状态返回漂移，不能把一个从未进入交互态的 idle renderer 标记为 return。
+调度器继续在每个 callback 根据 `requestedFrameRate` 查询目标帧率。回归帧率保持窗口结束后，下一次调度判断必须采用 `frameRate.drift` 并重置绘制累计/截止时间；不重启 scheduler，也不新增独立定时器。性能探针的 `return` 场景必须实际注入一次指针交互，并观察 `interactive`、`returning` 以及最终漂移目标帧率，不能把一个从未进入交互态的 idle renderer 标记为 return。
 
 ## 测试策略
 
@@ -172,13 +172,13 @@ Renderer 接收事务后：
 
 ### 运动状态与调度器
 
-- 使用默认配置完整模拟一次真实指针交互，不手工复制相机状态；停止输入后必须在 `0.95s + 1.5s` 加一个固定模拟步的范围内回到 `drift`。
-- `returning` 全程请求交互帧率，切换为 `drift` 后请求漂移帧率。
+- 使用默认配置完整模拟一次真实指针交互，不手工复制相机状态；多个时间点的全部相机字段必须逐字段等同修改前的 `motion.returnSpeed: 0.3` 轨迹。
+- `returning` 开始后的前 `1.5s` 请求交互帧率，之后在不改变 mode 或运动轨迹的情况下请求漂移帧率。
 - 回归中再次输入会重置回归计时，不能沿用旧进度提前完成。
-- 回归结束时相机全部位置和速度分量与当步漂移参考一致，下一步漂移连续推进。
-- adaptive scheduler 覆盖真实 `interactive → returning → drift` 状态变化，并验证切换后的绘制节拍降至 `frameRate.drift`。
-- `interactionEnabled` 从开启热切换为关闭后能够完成有限回归并恢复漂移帧率。
-- 性能探针的 `return` 场景验证确实观察到交互、回归和漂移三个状态，否则该次结果无效。
+- 不允许新增 smoothstep、额外插值、强制相机对齐或修改 `motion.returnSpeed`。
+- adaptive scheduler 覆盖真实 `interactive → returning` 状态变化，并验证回归帧率保持窗口结束后的绘制节拍降至 `frameRate.drift`。
+- `interactionEnabled` 从开启热切换为关闭后沿原轨迹自然回归，并在保持窗口结束后恢复漂移帧率。
+- 性能探针的 `return` 场景验证确实观察到交互与回归状态，并最终报告漂移目标帧率，否则该次结果无效。
 
 ### 音频频谱与 CSS
 
@@ -209,8 +209,8 @@ git diff --check
 4. 快速连续切换多张壁纸，确认没有旧壁纸颜色迟到覆盖。
 5. 使用灰暗、接近纯黑/纯白及普通彩色壁纸，确认均产生颜色或明确进入回退，而非无状态继承。
 6. 播放系统音频并切换壁纸，确认左右声道分别使用强调色与互补色，合并曲线在浅色壁纸上为纯黑、深色壁纸上为纯白，三者平滑更新且运动不中断。
-7. 移动指针触发视差后停止输入，确认约 `0.95s` 后开始回归、再经 `1.5s` 平滑接入漂移，并从交互帧率恢复到配置的漂移帧率。
-8. 回归途中再次移动指针，确认立即重新跟随；再次停止后仍能完整回归并降至漂移帧率。
+7. 移动指针触发视差后停止输入，确认约 `0.95s` 后按原有速率开始回归；回归 `1.5s` 后绘制节拍恢复为配置的漂移帧率，但运动速度和轨迹没有变化。
+8. 回归途中再次移动指针，确认立即重新跟随；再次停止后重新计算帧率保持窗口，且两次回归均保持原有 `motion.returnSpeed` 曲线。
 
 ## 非目标
 
