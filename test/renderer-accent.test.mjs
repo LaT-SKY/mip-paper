@@ -23,6 +23,9 @@ test('applies validated accent roles and the configured duration', () => {
   assert.equal(root.style.getPropertyValue('--accent-dark'), 'rgb(22 120 110)');
   assert.equal(root.style.getPropertyValue('--accent-shadow'), 'rgb(31 173 158 / 0.76)');
   assert.equal(root.style.getPropertyValue('--accent-glow'), 'rgb(31 173 158 / 0.75)');
+  assert.equal(root.style.getPropertyValue('--accent-audio-primary'), 'rgb(31 173 158)');
+  assert.equal(root.style.getPropertyValue('--accent-audio-energy'), 'rgb(94 196 185)');
+  assert.equal(root.style.getPropertyValue('--accent-audio-aux'), 'rgb(183 229 224)');
   assert.equal(root.style.getPropertyValue('--accent-transition-ms'), '900ms');
   assert.equal(root.dataset.accentSource, 'wallpaper');
 });

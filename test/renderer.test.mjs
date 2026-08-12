@@ -87,8 +87,12 @@ test('mounts the approved floating audio ribbon inside the real panel', async ()
   for (const [pathName, width] of [['left', '2.4'], ['right', '2.4'], ['energy', '3.4']]) {
     const pathRule = panelCss.match(new RegExp(`\\.audio-path-${pathName}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
     assert.match(pathRule, new RegExp(`stroke-width:\\s*${width}`));
+    assert.match(pathRule, /transition:\s*stroke\s+var\(--accent-transition-ms\)\s+ease/);
     assert.doesNotMatch(pathRule, /drop-shadow|blur\(/);
   }
+  assert.match(panelCss.match(/\.audio-path-right\s*\{([^}]*)\}/)?.[1] ?? '', /var\(--accent-audio-primary\)/);
+  assert.match(panelCss.match(/\.audio-path-energy\s*\{([^}]*)\}/)?.[1] ?? '', /var\(--accent-audio-energy\)/);
+  assert.match(panelCss.match(/\.audio-path-left\s*\{([^}]*)\}/)?.[1] ?? '', /var\(--accent-audio-aux\)/);
   assert.doesNotMatch(html, /switchBar|spectrum-bar|scanline|connector/);
   assert.match(renderer, /createAudioRibbonController/);
   assert.match(renderer, /onAudioSpectrumUpdated/);
