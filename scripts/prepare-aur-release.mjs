@@ -59,7 +59,7 @@ export async function prepareAurRelease(version, aurDirectory, { fetchImpl = fet
     throw new Error(`${tag} must be pushed to origin at ${localCommit} before packaging`);
   }
 
-  const sourceUrl = `https://github.com/${REPOSITORY}/archive/refs/tags/${tag}.tar.gz`;
+  const sourceUrl = `https://github.com/${REPOSITORY}/releases/download/${tag}/mip-paper-${version}.tar.gz`;
   const response = await fetchImpl(sourceUrl, { redirect: 'follow' });
   if (!response.ok) throw new Error(`archive download failed: HTTP ${response.status}`);
   const archive = Buffer.from(await response.arrayBuffer());
