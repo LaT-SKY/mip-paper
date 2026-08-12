@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { appendFile } from 'node:fs/promises';
+import { appendFile, stat } from 'node:fs/promises';
 import { watch as nodeWatch } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -26,6 +26,8 @@ import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
 import { wallpaperPath } from './wallpaper-image.mjs';
 import { createKdeWallpaperSync } from './kde-wallpaper-sync.mjs';
+import { createKdeAccentWatcher } from './kde-accent.mjs';
+import { createColorService, colorCacheDirectory } from './color-service.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
@@ -33,6 +35,8 @@ let informationService;
 let audioSpectrumService;
 let configWatcher;
 let wallpaperSync;
+let colorService;
+let kdeAccentWatcher;
 const wallpaperUrls = new Map();
 
 const shutdownCoordinator = createShutdownCoordinator({
@@ -42,6 +46,7 @@ const shutdownCoordinator = createShutdownCoordinator({
   stopInformation: () => informationService?.stop(),
   stopWindowManager: () => manager?.stop(),
   stopWallpaperSync: () => wallpaperSync?.stop(),
+  stopColorService: () => colorService?.stop(),
 });
 
 installShutdownHandlers({
@@ -115,13 +120,26 @@ async function run() {
     defaultWallpaper: wallpaperPathname,
     manualWallpaper: wallpaperPathname,
     watch: nodeWatch,
-    onUpdate(displayId, nextUrl) {
+    onUpdate(displayId, nextUrl, identity) {
       wallpaperUrls.set(displayId, nextUrl);
       manager?.updateWallpaper(displayId, nextUrl);
+      void colorService?.wallpaperChanged(displayId, identity);
     },
     onStatus: (status) => {
       if (status.status === 'watch-error' || status.status === 'config-error') console.error(`KDE wallpaper sync: ${status.reason}`);
     },
+  });
+  kdeAccentWatcher = createKdeAccentWatcher({
+    pathname: path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'kdeglobals'),
+    onAccent: (rgb) => colorService?.setKdeAccent(rgb),
+    onError: (error) => console.error(`KDE accent watcher: ${error?.message || error}`),
+  });
+  colorService = createColorService({
+    config,
+    displays: () => screen.getAllDisplays(),
+    cacheRoot: colorCacheDirectory(process.env, os.homedir()),
+    kdeWatcher: kdeAccentWatcher,
+    onUpdate: (displayId, state) => manager?.updateColor(displayId, state),
   });
   wallpaperSync.start();
   await wallpaperSync.whenIdle();
@@ -134,11 +152,15 @@ async function run() {
     config,
     informationService,
     audioSpectrumService,
+    colorService,
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
     wallpaperUrl,
     getWallpaperUrl: (display) => wallpaperUrls.get(display.id) || wallpaperUrl,
-    onDisplaysChanged: () => { void wallpaperSync.reconcile(); },
+    onDisplaysChanged: () => {
+      void colorService.reconcileDisplays();
+      void wallpaperSync.reconcile();
+    },
     probe,
     onProbeReport: probe ? async (summary) => {
       const validated = validateProbeSummary(summary);
@@ -147,6 +169,18 @@ async function run() {
     } : null,
   });
   await manager.start();
+  await colorService.start();
+  for (const [displayId, source] of wallpaperSync.getDisplaySources()) {
+    let metadata = { size: source.size ?? 0, mtimeMs: source.mtimeMs ?? 0 };
+    if (source.size === undefined || source.mtimeMs === undefined) {
+      try { metadata = await stat(source.wallpaperPath); } catch {}
+    }
+    await colorService.wallpaperChanged(displayId, {
+      path: source.wallpaperPath,
+      size: metadata.size,
+      mtimeMs: metadata.mtimeMs,
+    });
+  }
   informationService.start();
   await audioSpectrumService.start();
   configWatcher = createConfigWatcher({
@@ -154,6 +188,7 @@ async function run() {
     load: loadConfig,
     onConfig(nextConfig) {
       manager.updateAudioConfig(nextConfig.audio);
+      colorService.updateConfig(nextConfig.color);
       if (nextConfig.wallpaper.mode !== currentConfig.wallpaper.mode) wallpaperSync.setMode(nextConfig.wallpaper.mode);
       currentConfig = nextConfig;
       void audioSpectrumService.updateConfig(nextConfig.audio).catch((error) => {
