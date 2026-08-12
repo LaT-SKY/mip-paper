@@ -191,6 +191,7 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 ```json
 {
   "interactionEnabled": true,
+  "wallpaper": { "mode": "kde" },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "audio": {
     "enabled": true,
@@ -242,7 +243,7 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
 | `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 重启 |
-| `frameRate.interactive` | 数值，`>= 30` FPS | `60` | 交互与回归阶段目标帧率 | 重启 |
+| `frameRate.interactive` | 整数，`1–180` FPS | `60` | 交互与回归阶段目标帧率 | 重启 |
 | `frameRate.drift` | 整数，`1–180` FPS | `12` | 待机漂移阶段目标帧率 | 重启 |
 
 ### 动态强调色
@@ -322,7 +323,7 @@ mip-paper probe --duration 60
 
 音频可视化通过 PipeWire 跟随当前默认输出设备。实现使用 `stream.capture.sink=true` 连接输出设备的 monitor 端口，并把流标记为 `Stream/Input/Audio/Internal`。它不会连接麦克风，不会录制或保存 PCM 音频，也不会作为录音应用出现在 Plasma 麦克风列表中。
 
-原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、缓存、IPC 或 renderer。白色曲线向上显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在共同基线后层显示总体能量。
+原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、缓存、IPC 或 renderer。白色曲线向上显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在共同基线后层显示总体能量。曲线不使用辉光、磨砂背景、边框或面板阴影。
 
 ### 许可证与第三方组件
 
