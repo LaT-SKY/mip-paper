@@ -44,7 +44,7 @@ test('reconciles each display and debounces Plasma changes', async () => {
     defaultWallpaper: '/default.jpg',
     manualWallpaper: '/manual.jpg',
     timers: clock,
-    onUpdate: (id, url) => updates.push([id, url]),
+    onUpdate: (id, url, identity) => updates.push([id, url, identity]),
     onStatus: (status) => statuses.push(status),
   });
   sync.start();
@@ -99,9 +99,9 @@ test('manual mode publishes one managed image to every display', async () => {
     homedir: '/home/tester',
     getDisplays: () => [{ id: 'a' }, { id: 'b' }],
     manualWallpaper: '/manual.jpg',
-    onUpdate: (id, url) => updates.push([id, url]),
+    onUpdate: (id, url, identity) => updates.push([id, url, identity]),
   });
   sync.start();
   await sync.whenIdle();
-  assert.deepEqual(updates, [['a', 'file:///manual.jpg'], ['b', 'file:///manual.jpg']]);
+  assert.deepEqual(updates.map(([id, url]) => [id, url]), [['a', 'file:///manual.jpg'], ['b', 'file:///manual.jpg']]);
 });

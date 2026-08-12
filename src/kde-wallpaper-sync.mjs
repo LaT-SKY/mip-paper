@@ -76,7 +76,9 @@ export function createKdeWallpaperSync({
       for (const display of displays) {
         const url = pathToFileURL(manualWallpaper).href;
         sources.set(display.id, { displayId: display.id, mode: 'manual', status: 'manual', wallpaperPath: manualWallpaper, wallpaperUrl: url });
-        onUpdate(display.id, url);
+        let metadata = { size: 0, mtimeMs: 0 };
+        try { metadata = await stat(manualWallpaper); } catch {}
+        onUpdate(display.id, url, { path: manualWallpaper, size: metadata.size, mtimeMs: metadata.mtimeMs });
       }
       return;
     }
@@ -117,7 +119,7 @@ export function createKdeWallpaperSync({
       sources.set(display.id, record);
       await persistStatus(display.id, record);
       if (!previousRecord || imageChanged || previousRecord.wallpaperPath !== record.wallpaperPath) {
-        onUpdate(display.id, record.wallpaperUrl);
+        onUpdate(display.id, record.wallpaperUrl, { path: record.wallpaperPath, size: record.size ?? 0, mtimeMs: record.mtimeMs ?? 0 });
       }
       onStatus(record);
     }
