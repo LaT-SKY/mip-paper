@@ -14,7 +14,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   }),
   frameRate: Object.freeze({
     interactive: 60,
-    drift: 12,
+    drift: 30,
   }),
   motion: Object.freeze({
     interactionSpeed: 1.15,

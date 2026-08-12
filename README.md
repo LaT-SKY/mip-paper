@@ -201,7 +201,7 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
   },
   "frameRate": {
     "interactive": 60,
-    "drift": 12
+    "drift": 30
   },
   "motion": {
     "interactionSpeed": 1.15,
@@ -243,7 +243,7 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | --- | --- | --- | --- | --- |
 | `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 实时热加载 |
 | `frameRate.interactive` | 整数，`1–180` FPS | `60` | 交互与回归阶段目标帧率 | 实时热加载 |
-| `frameRate.drift` | 整数，`1–180` FPS | `12` | 待机漂移阶段目标帧率 | 实时热加载 |
+| `frameRate.drift` | 整数，`1–180` FPS | `30` | 待机漂移阶段目标帧率 | 实时热加载 |
 
 ### 动态强调色
 

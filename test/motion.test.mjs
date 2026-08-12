@@ -100,7 +100,7 @@ test('returning lowers render cadence without completing or changing motion', ()
 
   advanceMotion(state, SIMULATION_STEP, 2 + returningSteps * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
   assert.equal(state.mode, 'returning');
-  assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 12);
+  assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), DEFAULT_CONFIG.frameRate.drift);
 });
 
 test('real pointer interaction restores drift FPS while preserving the original return trajectory', () => {

@@ -102,7 +102,7 @@ test('documents safe runtime defaults and purge commands', async () => {
   for (const readme of [chinese, english]) {
     assert.match(readme, /"wallpaper":\s*\{\s*"mode":\s*"kde"\s*\}/);
     assert.match(readme, /"mode":\s*"hybrid"/);
-    assert.match(readme, /"drift":\s*12/);
+    assert.match(readme, /"drift":\s*30/);
     assert.match(readme, /`frameRate\.interactive`[^\n]*1[–-]180/);
     assert.match(readme, /`frameRate\.drift`[^\n]*1[–-]180/);
     assert.match(readme, /mip-paper teardown --purge/);
