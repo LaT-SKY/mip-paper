@@ -25,7 +25,7 @@ test('defaults match the approved v1 design', () => {
     },
     frameRate: {
       interactive: 60,
-      drift: 12,
+      drift: 30,
     },
     motion: {
       interactionSpeed: 1.15,

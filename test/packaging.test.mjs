@@ -6,6 +6,17 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+test('declares the 0.2.1 release version consistently', async () => {
+  const [packageJson, lockfile] = await Promise.all([
+    readFile('package.json', 'utf8').then(JSON.parse),
+    readFile('package-lock.json', 'utf8').then(JSON.parse),
+  ]);
+
+  assert.equal(packageJson.version, '0.2.1');
+  assert.equal(lockfile.version, '0.2.1');
+  assert.equal(lockfile.packages[''].version, '0.2.1');
+});
+
 test('uses system Electron for source and packaged installations', async () => {
   const [packageJson, sourceUnit, packagedUnit, wrapper] = await Promise.all([
     readFile('package.json', 'utf8').then(JSON.parse),

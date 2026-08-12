@@ -193,7 +193,7 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "fadeOutMs": 450,
     "fadeInMs": 160
   },
-  "frameRate": { "interactive": 60, "drift": 12 },
+  "frameRate": { "interactive": 60, "drift": 30 },
   "motion": {
     "interactionSpeed": 1.15,
     "returnSpeed": 0.3,
@@ -231,7 +231,7 @@ Unknown fields are rejected. Every valid saved field takes effect without restar
 | --- | --- | --- | --- | --- |
 | `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Live reload |
 | `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction and return | Live reload |
-| `frameRate.drift` | integer, `1–180` FPS | `12` | Target rate during idle drift | Live reload |
+| `frameRate.drift` | integer, `1–180` FPS | `30` | Target rate during idle drift | Live reload |
 
 ### Dynamic Accent Color
 
