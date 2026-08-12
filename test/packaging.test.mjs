@@ -78,6 +78,7 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
   ]);
 
   for (const required of [
+    '# Maintainer: LaT-SKY <miprota at 163 dot com>',
     'pkgname=mip-paper',
     'pkgver=0.2.0',
     'pkgrel=1',
