@@ -216,3 +216,15 @@ test('documents PipeWire audio visualization, live timing config and privacy bou
   assert.match(readme, /最后一份有效配置/);
   assert.doesNotMatch(readme, /上曲线表示左声道[\s\S]{0,80}下曲线表示右声道/);
 });
+
+test('documents semantic audio colors and bounded drift FPS recovery', async () => {
+  const [chinese, english] = await Promise.all([readFile('README.md', 'utf8'), readFile('README.en.md', 'utf8')]);
+  for (const required of ['强调色', '互补色', '纯黑', '纯白', '每块屏幕', '0.95', '1.5', '漂移帧率']) {
+    assert.ok(chinese.includes(required), `Chinese README is missing: ${required}`);
+  }
+  for (const required of ['accent', 'complementary', 'pure black', 'pure white', 'each display', '0.95', '1.5', 'drift frame rate']) {
+    assert.ok(english.toLowerCase().includes(required), `English README is missing: ${required}`);
+  }
+  assert.doesNotMatch(chinese, /三层曲线.{0,80}不同亮度/s);
+  assert.doesNotMatch(english, /three.{0,30}curves.{0,80}different brightness/is);
+});

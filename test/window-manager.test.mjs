@@ -175,6 +175,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     wallpaperIdentity: { path: `/wallpapers/${display.id}/wallpaper`, size: 123 + index, mtimeMs: 456 + index },
     contentKey: `sha256:${String(index + 1).repeat(64)}`,
     generation: 1,
+    wallpaperLuminance: display.id === 11 ? 0.7 : 0.1,
     color: {
       rgb: display.id === 11 ? [255, 52, 120] : [10, 20, 30],
       source: 'wallpaper', transitionDurationMs: 900, analyzeWallpaper: false,
@@ -298,6 +299,7 @@ test('publishes one complete wallpaper transaction to only the owning display', 
     wallpaperIdentity: { path: '/wallpapers/a', size: 10, mtimeMs: 20 },
     contentKey: `sha256:${'a'.repeat(64)}`,
     generation: 2,
+    wallpaperLuminance: 0.32,
     color: {
       rgb: [31, 173, 158], source: 'wallpaper', transitionDurationMs: 900,
       analyzeWallpaper: false, wallpaperIdentity: { path: '/wallpapers/a', size: 10, mtimeMs: 20 },
@@ -307,6 +309,7 @@ test('publishes one complete wallpaper transaction to only the owning display', 
 
   assert.equal(manager.updateWallpaper(11, transaction), true);
   assert.deepEqual(first.webContents.sent.at(-1), { channel: WALLPAPER_UPDATED_CHANNEL, value: transaction });
+  assert.equal(first.webContents.sent.at(-1).value.wallpaperLuminance, 0.32);
   assert.equal(second.webContents.sent.some(({ channel }) => channel === WALLPAPER_UPDATED_CHANNEL), false);
   const bootstrap = await manager.whenIdle().then(() => true);
   assert.equal(bootstrap, true);
