@@ -116,7 +116,8 @@ test('release preparation enforces tag-first AUR metadata generation', async () 
   assert.match(source, /ls-remote.*--tags.*origin/si);
   assert.match(source, /publishedCommit !== localCommit/);
   assert.match(source, /freeze and tag the final/);
-  assert.match(source, /github\.com\/.*archive\/refs\/tags/);
+  assert.match(source, /github\.com\/.*releases\/download/);
+  assert.match(source, /mip-paper-\$\{version\}\.tar\.gz/);
   assert.match(source, /createHash\('sha256'\)/);
   assert.match(source, /makepkg.*--printsrcinfo/si);
   assert.match(source, /\.SRCINFO/);
