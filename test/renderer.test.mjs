@@ -144,3 +144,18 @@ test('renderer consumes the motion core and read-only preload bootstrap', async 
   assert.match(script, /advanceMotion/);
   assert.match(script, /createScheduler\('adaptive'\)/);
 });
+
+test('renderer analyzes requested wallpapers and applies explicit accent transitions', async () => {
+  const script = await readFile('src/renderer/renderer.mjs', 'utf8');
+  const panelCss = await readFile('src/renderer/panel.css', 'utf8');
+  assert.match(script, /analyzeWallpaperImage/);
+  assert.match(script, /applyAccentState/);
+  assert.match(script, /submitWallpaperAccent/);
+  assert.match(script, /onColorUpdated/);
+  assert.match(script, /prefers-reduced-motion/);
+  assert.match(panelCss, /--accent-transition-ms/);
+  assert.match(panelCss, /var\(--accent\)/);
+  assert.match(panelCss, /var\(--accent-dark\)/);
+  assert.match(panelCss, /transition:/);
+  assert.doesNotMatch(panelCss, /transition:\s*all/);
+});
