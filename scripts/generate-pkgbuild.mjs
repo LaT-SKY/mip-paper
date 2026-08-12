@@ -65,8 +65,6 @@ package() {
     "$pkgdir/usr/share/licenses/mip-paper/dbus-next-LICENSE"
   install -Dm644 node_modules/fft.js/README.md \
     "$pkgdir/usr/share/licenses/mip-paper/fft.js-LICENSE"
-  install -Dm644 node_modules/image-size/LICENSE \
-    "$pkgdir/usr/share/licenses/mip-paper/image-size-LICENSE"
   install -Dm644 node_modules/qweather-icons/LICENSE \
     "$pkgdir/usr/share/licenses/mip-paper/qweather-icons-LICENSE"
   install -Dm644 node_modules/qweather-icons/README.md \

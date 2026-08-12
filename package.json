@@ -14,7 +14,6 @@
   "dependencies": {
     "@particle/dbus-next": "0.11.4",
     "fft.js": "4.0.4",
-    "image-size": "2.0.2",
     "qweather-icons": "1.8.0"
   },
   "devDependencies": {
