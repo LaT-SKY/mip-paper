@@ -12,7 +12,7 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.match(preload, /getInformationSnapshot\s*:\s*\(\)\s*=>\s*ipcRenderer\.invoke/);
   assert.match(preload, /onInformationUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onAudioSpectrumUpdated\s*:\s*\(listener\)/);
-  assert.match(preload, /onAudioConfigUpdated\s*:\s*\(listener\)/);
+  assert.match(preload, /onConfigUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onWallpaperUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onColorUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /submitWallpaperAccent\s*:\s*\(submission\)\s*=>\s*ipcRenderer\.invoke/);
@@ -20,17 +20,21 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.doesNotMatch(preload, /getAudioSpectrum|pw-cat|pw-metadata|spawn|rawPcm|selectAudioDevice/i);
 });
 
-test('main owns one audio service and config watcher wired to the quit barrier', async () => {
+test('main owns both configuration watchers and the runtime coordinator', async () => {
   const main = await readFile(new URL('../src/main.mjs', import.meta.url), 'utf8');
   const lifecycle = await readFile(new URL('../src/app-lifecycle.mjs', import.meta.url), 'utf8');
   assert.match(main, /createAudioSpectrumService/);
   assert.match(main, /createConfigWatcher/);
+  assert.match(main, /createRuntimeConfigCoordinator/);
+  assert.match(main, /credentialsWatcher\s*=\s*createConfigWatcher/);
   assert.match(main, /audioSpectrumService\.updateConfig/);
-  assert.match(main, /manager\.updateAudioConfig/);
+  assert.match(main, /manager\.updateConfig/);
   assert.match(main, /createKdeWallpaperSync/);
   assert.match(main, /manager\?\.updateWallpaper/);
   assert.match(main, /stopWallpaperSync:\s*\(\)\s*=>\s*wallpaperSync\?\.stop\(\)/);
   assert.match(main, /stopAudioSpectrum:\s*\(\)\s*=>\s*audioSpectrumService\?\.stop\(\)/);
+  assert.match(main, /stopCredentialsWatcher:\s*\(\)\s*=>\s*credentialsWatcher\?\.stop\(\)/);
+  assert.match(main, /stopRuntimeCoordinator:\s*\(\)\s*=>\s*runtimeCoordinator\?\.stop\(\)/);
   assert.match(lifecycle, /event\.preventDefault\(\)/);
   assert.match(lifecycle, /await stop\('audio spectrum',\s*stopAudioSpectrum\)/);
 });

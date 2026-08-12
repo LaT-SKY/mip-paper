@@ -201,6 +201,7 @@ test('documents PipeWire audio visualization, live timing config and privacy bou
   assert.match(readme, /不会.{0,12}麦克风/);
   assert.match(readme, /不会.{0,12}(录制|保存).{0,12}(PCM|音频)/);
   assert.match(readme, /audio.{0,30}(实时|热加载)/i);
-  assert.match(readme, /其他.{0,20}配置.{0,20}重启/);
+  assert.match(readme, /所有配置.{0,20}(实时热加载|自动生效)/);
+  assert.match(readme, /最后一份有效配置/);
   assert.doesNotMatch(readme, /上曲线表示左声道[\s\S]{0,80}下曲线表示右声道/);
 });

@@ -21,6 +21,7 @@ import { createInformationService } from './information-service.mjs';
 import { createAudioSpectrumService } from './audio-spectrum-service.mjs';
 import { createShutdownCoordinator, installShutdownHandlers } from './app-lifecycle.mjs';
 import { createConfigWatcher } from './config-watcher.mjs';
+import { createRuntimeConfigCoordinator } from './runtime-config-coordinator.mjs';
 import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
@@ -34,6 +35,8 @@ let manager;
 let informationService;
 let audioSpectrumService;
 let configWatcher;
+let credentialsWatcher;
+let runtimeCoordinator;
 let wallpaperSync;
 let colorService;
 let kdeAccentWatcher;
@@ -42,6 +45,8 @@ const wallpaperUrls = new Map();
 const shutdownCoordinator = createShutdownCoordinator({
   quit: () => app.quit(),
   stopConfigWatcher: () => configWatcher?.stop(),
+  stopCredentialsWatcher: () => credentialsWatcher?.stop(),
+  stopRuntimeCoordinator: () => runtimeCoordinator?.stop(),
   stopAudioSpectrum: () => audioSpectrumService?.stop(),
   stopInformation: () => informationService?.stop(),
   stopWindowManager: () => manager?.stop(),
@@ -80,6 +85,18 @@ async function buildInformationService(config) {
       cache,
     });
   }
+}
+
+function buildWeatherSources(config, credentials, cache) {
+  const qweatherClient = credentials ? createQWeatherClient({ credentials }) : {};
+  const portal = credentials && config.weather.location.mode === 'auto' ? createPortalLocationAdapter() : null;
+  const locationProvider = credentials ? createLocationProvider({
+    config: config.weather.location,
+    portal,
+    cache,
+    geoLookup: (id) => qweatherClient.resolveLocation(id),
+  }) : { resolve: async () => { throw new Error('Location unavailable'); } };
+  return { locationProvider, qweatherClient };
 }
 
 export function parseProbeOptions(env = process.env) {
@@ -183,23 +200,76 @@ async function run() {
   }
   informationService.start();
   await audioSpectrumService.start();
+  const credentialsPathname = weatherCredentialsPath(process.env, os.homedir());
+  const cachePathname = informationCachePath(process.env, os.homedir());
+  const cache = {
+    read: () => readInformationCache(cachePathname),
+    write: (snapshot) => writeInformationCache(cachePathname, snapshot),
+  };
+  let credentials = null;
+  try { credentials = await loadWeatherCredentials(credentialsPathname); } catch {}
+  runtimeCoordinator = createRuntimeConfigCoordinator({
+    config,
+    credentials,
+    onError: (error) => console.error(error.message),
+    applyConfig: async (nextConfig, { assertCurrent }) => {
+      const previousConfig = currentConfig;
+      try {
+        await audioSpectrumService.updateConfig(nextConfig.audio);
+        assertCurrent();
+        const sources = buildWeatherSources(nextConfig, credentials, cache);
+        await informationService.updateSources({ config: nextConfig, ...sources });
+        assertCurrent();
+        colorService.updateConfig(nextConfig.color);
+        assertCurrent();
+        if (nextConfig.wallpaper.mode !== previousConfig.wallpaper.mode) {
+          wallpaperSync.setMode(nextConfig.wallpaper.mode);
+          await wallpaperSync.whenIdle();
+          assertCurrent();
+        }
+        manager.updateConfig(nextConfig);
+        currentConfig = nextConfig;
+      } catch (error) {
+        await audioSpectrumService.updateConfig(previousConfig.audio).catch(() => {});
+        const previousSources = buildWeatherSources(previousConfig, credentials, cache);
+        await informationService.updateSources({ config: previousConfig, ...previousSources }).catch(() => {});
+        try { colorService.updateConfig(previousConfig.color); } catch {}
+        if (nextConfig.wallpaper.mode !== previousConfig.wallpaper.mode) {
+          try { wallpaperSync.setMode(previousConfig.wallpaper.mode); await wallpaperSync.whenIdle(); } catch {}
+        }
+        throw error;
+      }
+    },
+    applyCredentials: async (nextCredentials, { config: activeConfig, assertCurrent }) => {
+      const previousCredentials = credentials;
+      try {
+        const sources = buildWeatherSources(activeConfig, nextCredentials, cache);
+        await informationService.updateSources({ config: activeConfig, ...sources });
+        assertCurrent();
+        credentials = nextCredentials;
+      } catch (error) {
+        const previousSources = buildWeatherSources(activeConfig, previousCredentials, cache);
+        await informationService.updateSources({ config: activeConfig, ...previousSources }).catch(() => {});
+        throw error;
+      }
+    },
+  });
   configWatcher = createConfigWatcher({
     pathname,
     load: loadConfig,
-    onConfig(nextConfig) {
-      manager.updateAudioConfig(nextConfig.audio);
-      colorService.updateConfig(nextConfig.color);
-      if (nextConfig.wallpaper.mode !== currentConfig.wallpaper.mode) wallpaperSync.setMode(nextConfig.wallpaper.mode);
-      currentConfig = nextConfig;
-      void audioSpectrumService.updateConfig(nextConfig.audio).catch((error) => {
-        console.error(`Audio configuration update failed: ${error?.message || 'unknown error'}`);
-      });
-    },
+    onConfig(nextConfig) { void runtimeCoordinator.updateConfig(nextConfig); },
     onError(error) {
       console.error(`Configuration reload failed: ${error?.message || 'unknown error'}`);
     },
   });
+  credentialsWatcher = createConfigWatcher({
+    pathname: credentialsPathname,
+    load: loadWeatherCredentials,
+    onConfig(nextCredentials) { void runtimeCoordinator.updateCredentials(nextCredentials); },
+    onError(error) { console.error(`Weather credentials reload failed: ${error?.message || 'unknown error'}`); },
+  });
   configWatcher.start();
+  credentialsWatcher.start();
 }
 
 app.on('window-all-closed', () => {});

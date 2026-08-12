@@ -5,6 +5,8 @@ function errorMessage(error) {
 export function createShutdownCoordinator({
   quit,
   stopConfigWatcher = () => {},
+  stopCredentialsWatcher = () => {},
+  stopRuntimeCoordinator = () => {},
   stopWallpaperSync = () => {},
   stopColorService = () => {},
   stopAudioSpectrum = async () => {},
@@ -26,7 +28,9 @@ export function createShutdownCoordinator({
   }
 
   async function shutdown() {
+    await stop('runtime config coordinator', stopRuntimeCoordinator);
     await stop('config watcher', stopConfigWatcher);
+    await stop('credentials watcher', stopCredentialsWatcher);
     await stop('wallpaper sync', stopWallpaperSync);
     await stop('color service', stopColorService);
     await stop('audio spectrum', stopAudioSpectrum);

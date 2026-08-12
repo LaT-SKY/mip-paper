@@ -3,7 +3,7 @@ export const PROBE_REPORT_CHANNEL = 'wallpaper:report-probe';
 export const INFORMATION_CHANNEL = 'wallpaper:get-information';
 export const INFORMATION_UPDATED_CHANNEL = 'wallpaper:information-updated';
 export const AUDIO_SPECTRUM_UPDATED_CHANNEL = 'wallpaper:audio-spectrum-updated';
-export const AUDIO_CONFIG_UPDATED_CHANNEL = 'wallpaper:audio-config-updated';
+export const CONFIG_UPDATED_CHANNEL = 'wallpaper:config-updated';
 export const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
 export const COLOR_UPDATED_CHANNEL = 'wallpaper:color-updated';
 export const COLOR_SUBMIT_CHANNEL = 'wallpaper:submit-color';
@@ -215,11 +215,8 @@ export function createWindowManager({
     audioUnsubscribers.clear();
   }
 
-  function updateAudioConfig(audioConfig) {
-    currentConfig = {
-      ...currentConfig,
-      audio: { ...audioConfig },
-    };
+  function updateConfig(nextConfig) {
+    currentConfig = nextConfig;
     for (const window of windows.values()) {
       const bootstrap = bootstrapByWebContents.get(window.webContents.id);
       if (bootstrap) {
@@ -228,7 +225,8 @@ export function createWindowManager({
           config: currentConfig,
         });
       }
-      window.webContents.send(AUDIO_CONFIG_UPDATED_CHANNEL, { ...audioConfig });
+      window.setIgnoreMouseEvents(!currentConfig.interactionEnabled);
+      window.webContents.send(CONFIG_UPDATED_CHANNEL, currentConfig);
     }
   }
 
@@ -255,7 +253,7 @@ export function createWindowManager({
   return {
     start,
     stop,
-    updateAudioConfig,
+    updateConfig,
     updateWallpaper,
     updateColor,
     whenIdle: () => queue,

@@ -92,7 +92,9 @@ test('mounts the approved floating audio ribbon inside the real panel', async ()
   assert.doesNotMatch(html, /switchBar|spectrum-bar|scanline|connector/);
   assert.match(renderer, /createAudioRibbonController/);
   assert.match(renderer, /onAudioSpectrumUpdated/);
-  assert.match(renderer, /onAudioConfigUpdated/);
+  assert.match(renderer, /onConfigUpdated/);
+  assert.match(renderer, /panel\.setConfig/);
+  assert.match(renderer, /audioRibbon\.setConfig/);
   assert.match(renderer, /audioRibbon\.advance/);
   assert.match(renderer, /createScheduler\('adaptive'\)/);
 });

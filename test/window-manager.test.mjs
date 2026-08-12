@@ -4,13 +4,13 @@ import test from 'node:test';
 
 import { DEFAULT_CONFIG } from '../src/config.mjs';
 import {
-  AUDIO_CONFIG_UPDATED_CHANNEL,
   AUDIO_SPECTRUM_UPDATED_CHANNEL,
   BOOTSTRAP_CHANNEL,
   COLOR_UPDATED_CHANNEL,
   COLOR_SUBMIT_CHANNEL,
   INFORMATION_CHANNEL,
   INFORMATION_UPDATED_CHANNEL,
+  CONFIG_UPDATED_CHANNEL,
   createWindowManager,
   formatDisplayTargetTitle,
 } from '../src/window-manager.mjs';
@@ -290,19 +290,20 @@ test('streams one spectrum service to every window and unsubscribes closed windo
   assert.equal(audioListeners.size, before - 1);
 });
 
-test('broadcasts only the validated audio subsection on runtime config changes', async () => {
+test('broadcasts the complete runtime config and updates mouse passthrough', async () => {
   const { manager, ipcMain } = createFixture();
   await manager.start();
-  const audio = { ...DEFAULT_CONFIG.audio, fadeInMs: 0 };
-  manager.updateAudioConfig(audio);
+  const config = { ...DEFAULT_CONFIG, interactionEnabled: false, audio: { ...DEFAULT_CONFIG.audio, fadeInMs: 0 } };
+  manager.updateConfig(config);
   assert.deepEqual(FakeWindow.instances.map((window) => window.webContents.sent.at(-1)), [
-    { channel: AUDIO_CONFIG_UPDATED_CHANNEL, value: audio },
-    { channel: AUDIO_CONFIG_UPDATED_CHANNEL, value: audio },
+    { channel: CONFIG_UPDATED_CHANNEL, value: config },
+    { channel: CONFIG_UPDATED_CHANNEL, value: config },
   ]);
+  assert.deepEqual(FakeWindow.instances.map((window) => window.ignoreMouse), [true, true]);
   const bootstrap = await ipcMain.handlers.get(BOOTSTRAP_CHANNEL)({
     sender: FakeWindow.instances[0].webContents,
   });
-  assert.deepEqual(bootstrap.config.audio, audio);
+  assert.deepEqual(bootstrap.config, config);
 });
 
 test('streams information only to managed renderers and unsubscribes closed windows', async () => {
