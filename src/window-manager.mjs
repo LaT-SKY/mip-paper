@@ -5,6 +5,8 @@ export const INFORMATION_UPDATED_CHANNEL = 'wallpaper:information-updated';
 export const AUDIO_SPECTRUM_UPDATED_CHANNEL = 'wallpaper:audio-spectrum-updated';
 export const AUDIO_CONFIG_UPDATED_CHANNEL = 'wallpaper:audio-config-updated';
 export const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
+export const COLOR_UPDATED_CHANNEL = 'wallpaper:color-updated';
+export const COLOR_SUBMIT_CHANNEL = 'wallpaper:submit-color';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -26,6 +28,7 @@ export function createWindowManager({
   onProbeReport = null,
   informationService = null,
   audioSpectrumService = null,
+  colorService = null,
   onDisplaysChanged = () => {},
 }) {
   const windows = new Map();
@@ -89,6 +92,7 @@ export function createWindowManager({
       wallpaperUrl: getWallpaperUrl(display),
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
       ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
+      ...(colorService ? { color: colorService.getState(display.id) } : {}),
       ...(probe ? { probe } : {}),
     });
     if (informationService) {
@@ -137,6 +141,7 @@ export function createWindowManager({
         wallpaperUrl: getWallpaperUrl(display),
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
         ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
+        ...(colorService ? { color: colorService.getState(display.id) } : {}),
         ...(probe ? { probe } : {}),
       });
     }
@@ -176,6 +181,13 @@ export function createWindowManager({
         return onProbeReport(summary, event.sender.id);
       });
     }
+    if (colorService) {
+      ipcMain.handle(COLOR_SUBMIT_CHANNEL, async (event, submission) => {
+        const displayId = [...windows.entries()].find(([, window]) => window.webContents.id === event.sender.id)?.[0];
+        if (displayId === undefined) throw new Error('Unknown wallpaper renderer');
+        return colorService.submitWallpaperAccent(displayId, submission);
+      });
+    }
     screen.on('display-added', onDisplayAdded);
     screen.on('display-removed', onDisplayRemoved);
     screen.on('display-metrics-changed', onDisplayMetricsChanged);
@@ -193,6 +205,7 @@ export function createWindowManager({
     ipcMain.removeHandler(BOOTSTRAP_CHANNEL);
     if (informationService) ipcMain.removeHandler(INFORMATION_CHANNEL);
     if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);
+    if (colorService) ipcMain.removeHandler(COLOR_SUBMIT_CHANNEL);
     for (const window of [...windows.values()]) {
       window.close();
     }
@@ -229,11 +242,22 @@ export function createWindowManager({
     return true;
   }
 
+  function updateColor(displayId, color) {
+    const window = windows.get(displayId);
+    if (!window) return false;
+    const bootstrap = bootstrapByWebContents.get(window.webContents.id);
+    if (!bootstrap) return false;
+    bootstrapByWebContents.set(window.webContents.id, { ...bootstrap, color });
+    window.webContents.send(COLOR_UPDATED_CHANNEL, color);
+    return true;
+  }
+
   return {
     start,
     stop,
     updateAudioConfig,
     updateWallpaper,
+    updateColor,
     whenIdle: () => queue,
   };
 }

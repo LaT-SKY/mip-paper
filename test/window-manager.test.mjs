@@ -7,6 +7,8 @@ import {
   AUDIO_CONFIG_UPDATED_CHANNEL,
   AUDIO_SPECTRUM_UPDATED_CHANNEL,
   BOOTSTRAP_CHANNEL,
+  COLOR_UPDATED_CHANNEL,
+  COLOR_SUBMIT_CHANNEL,
   INFORMATION_CHANNEL,
   INFORMATION_UPDATED_CHANNEL,
   createWindowManager,
@@ -166,6 +168,11 @@ function createFixture(config = DEFAULT_CONFIG) {
       return () => audioListeners.delete(listener);
     },
   };
+  const colorSubmissions = [];
+  const colorService = {
+    getState: (displayId) => ({ rgb: displayId === 11 ? [255, 52, 120] : [10, 20, 30], source: 'default', transitionDurationMs: 900, analyzeWallpaper: false, wallpaperIdentity: null, generation: 0 }),
+    submitWallpaperAccent: async (displayId, submission) => { colorSubmissions.push([displayId, submission]); return true; },
+  };
   const manager = createWindowManager({
     BrowserWindow: FakeWindow,
     screen,
@@ -174,6 +181,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     config,
     informationService,
     audioSpectrumService,
+    colorService,
     rendererPath: '/app/src/renderer/index.html',
     preloadPath: '/app/src/preload.mjs',
     wallpaperUrl: 'file:///home/test/.local/share/mip-paper/wallpaper',
@@ -187,6 +195,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     informationListeners,
     audioListeners,
     audioSnapshot,
+    colorSubmissions,
   };
 }
 
@@ -235,8 +244,33 @@ test('provides bootstrap data only to a managed renderer', async () => {
       right: Array(72).fill(0),
       rms: 0,
     },
+    color: {
+      rgb: [255, 52, 120], source: 'default', transitionDurationMs: 900,
+      analyzeWallpaper: false, wallpaperIdentity: null, generation: 0,
+    },
   });
   await assert.rejects(handler({ sender: { id: 999 } }), /Unknown wallpaper renderer/);
+});
+
+test('scopes wallpaper accent submissions and updates to the owning display', async () => {
+  const { manager, ipcMain, colorSubmissions } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+  const submission = {
+    rgb: [31, 173, 158],
+    wallpaperIdentity: { path: '/wallpaper', size: 12, mtimeMs: 34 },
+    generation: 1,
+  };
+  assert.equal(await ipcMain.handlers.get(COLOR_SUBMIT_CHANNEL)({ sender: first.webContents }, submission), true);
+  assert.deepEqual(colorSubmissions, [[11, submission]]);
+  await assert.rejects(
+    ipcMain.handlers.get(COLOR_SUBMIT_CHANNEL)({ sender: { id: 999 } }, submission),
+    /Unknown wallpaper renderer/,
+  );
+
+  assert.equal(manager.updateColor(11, { rgb: [1, 2, 3] }), true);
+  assert.deepEqual(first.webContents.sent.at(-1), { channel: COLOR_UPDATED_CHANNEL, value: { rgb: [1, 2, 3] } });
+  assert.equal(manager.updateColor(999, { rgb: [1, 2, 3] }), false);
 });
 
 test('streams one spectrum service to every window and unsubscribes closed windows', async () => {
@@ -371,6 +405,7 @@ test('stop closes windows, removes IPC, and detaches display listeners', async (
   assert.equal(FakeWindow.instances.every((window) => window.destroyed), true);
   assert.equal(ipcMain.handlers.has(BOOTSTRAP_CHANNEL), false);
   assert.equal(ipcMain.handlers.has(INFORMATION_CHANNEL), false);
+  assert.equal(ipcMain.handlers.has(COLOR_SUBMIT_CHANNEL), false);
   assert.equal(screen.listenerCount('display-added'), 0);
   assert.equal(screen.listenerCount('display-removed'), 0);
   assert.equal(screen.listenerCount('display-metrics-changed'), 0);
