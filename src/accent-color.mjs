@@ -47,6 +47,38 @@ function hslToRgb({ hue, saturation, lightness }) {
   return Object.freeze(components.map((channel) => Math.round((channel + offset) * 255)));
 }
 
+export function relativeLuminance(value) {
+  const rgb = normalizeRgb(value);
+  if (!rgb) throw new TypeError('invalid RGB color');
+  const [red, green, blue] = rgb.map((channel) => {
+    const srgb = channel / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+export function complementaryRgb(value) {
+  const rgb = normalizeRgb(value);
+  if (!rgb) throw new TypeError('invalid RGB color');
+  const hsl = rgbToHsl(rgb);
+  return hslToRgb({
+    hue: (hsl.hue + 180) % 360,
+    saturation: Math.max(0.50, Math.min(0.78, hsl.saturation)),
+    lightness: Math.max(0.48, Math.min(0.62, hsl.lightness)),
+  });
+}
+
+export function contrastingNeutral(luminance) {
+  if (!Number.isFinite(luminance) || luminance < 0 || luminance > 1) {
+    throw new TypeError('invalid wallpaper luminance');
+  }
+  const blackContrast = (luminance + 0.05) / 0.05;
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  return blackContrast >= whiteContrast
+    ? Object.freeze([0, 0, 0])
+    : Object.freeze([255, 255, 255]);
+}
+
 function binColor(key) {
   return [((key >> 8) & 15) * 17, ((key >> 4) & 15) * 17, (key & 15) * 17];
 }
@@ -86,4 +118,17 @@ export function selectWallpaperAccent(pixels) {
     saturation: Math.max(0.50, Math.min(0.78, selected.hsl.saturation)),
     lightness: Math.max(0.40, Math.min(0.62, selected.hsl.lightness)),
   });
+}
+
+export function analyzeWallpaperPixels(pixels) {
+  const rgb = selectWallpaperAccent(pixels);
+  if (!rgb) return null;
+  let luminance = 0;
+  let opaqueCount = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index + 3] < 220) continue;
+    luminance += relativeLuminance([pixels[index], pixels[index + 1], pixels[index + 2]]);
+    opaqueCount += 1;
+  }
+  return Object.freeze({ rgb, luminance: luminance / opaqueCount });
 }
