@@ -141,11 +141,19 @@ test('upgrades matching legacy metadata that has no content key', async () => {
       readConfig: async () => 'fixture',
       parse: () => [{ screenIndex: 0, sourcePath: source, status: 'supported' }],
       inspect: async () => ({ format: 'png', size: metadata.size, mtimeMs: metadata.mtimeMs, contentKey: `sha256:${'e'.repeat(64)}` }),
-      importDisplay: async () => { imports += 1; },
+    importDisplay: async (_source, _destination, nextMetadata) => {
+      imports += 1;
+      await writeFile(path.join(displayDirectory, 'metadata.json'), JSON.stringify({
+        ...nextMetadata,
+        contentKey: `sha256:${'e'.repeat(64)}`,
+      }));
+    },
       defaultWallpaper: '/default.jpg',
     });
     sync.start();
     await sync.whenIdle();
+    assert.equal(imports, 1);
+    await sync.reconcile();
     assert.equal(imports, 1);
     sync.stop();
   } finally {
