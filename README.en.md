@@ -19,7 +19,11 @@ Mip-Paper is not a native Plasma wallpaper plugin and does not open a normal app
 
 Mip-Paper includes a default photograph by LaT-SKY under CC BY 4.0; see the [image attribution](assets/ATTRIBUTION.md). EXIF and other metadata are removed from the distributed copy. The former third-party wallpaper is not included, and Mip-Paper does not download external images automatically.
 
-On the first `mip-paper setup`, the default is validated and atomically copied to the following path when no user image exists:
+KDE synchronization is the default mode. Each display follows the static `org.kde.image` selected for that Plasma screen and updates after KDE settings change. The watcher does not poll: writes are debounced for 350 ms, and image data is copied and decoded only when its path, size, or modification time changes.
+
+KDE slideshows and third-party dynamic wallpaper plugins are unsupported. The affected display preserves its last valid cache, or uses the bundled default when no cache exists.
+
+Selecting one image manually switches to manual mode and applies it to every display. The manual image is stored at:
 
 ```text
 ${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/wallpaper
@@ -32,6 +36,12 @@ Set, replace, or inspect the managed image:
 ```bash
 mip-paper wallpaper set /path/to/image.png
 mip-paper wallpaper status
+```
+
+Return to per-display KDE synchronization with:
+
+```bash
+mip-paper wallpaper use-kde
 ```
 
 A failed replacement preserves the previous valid image. A successful replacement restarts the service when it is active.
@@ -70,7 +80,7 @@ The package installs only system files and never changes a particular user's hom
 mip-paper setup
 ```
 
-Setup creates missing configuration and weather credentials, imports the default photograph on first use, installs the user's KWin rule, enables the system KWin coordinator, and starts `mip-paper.service`. Existing configuration, credentials, and managed images are preserved. To select your own image immediately, run `mip-paper setup --image /path/to/image.png`.
+Setup creates missing configuration and weather credentials, follows each display's KDE static wallpaper by default, installs the user's KWin rule, enables the system KWin coordinator, and starts `mip-paper.service`. Displays without a readable KDE static image use the bundled default. Existing configuration, credentials, and managed images are preserved. To switch directly to manual mode with your own image, run `mip-paper setup --image /path/to/image.png`.
 
 After completion, setup reports the active wallpaper file, the replacement command, and whether weather still needs configuration. The bundled photograph is only the initial value. Replace it at any time with:
 
@@ -135,7 +145,7 @@ Current weather refreshes every 30 minutes; forecasts and tides refresh every 6 
 
 ## Configuration
 
-The configuration file is `~/.config/mip-paper/config.json`. Complete defaults:
+The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Complete defaults:
 
 ```json
 {

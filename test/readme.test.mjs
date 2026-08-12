@@ -4,6 +4,7 @@ import test from 'node:test';
 
 const configurationFields = [
   'interactionEnabled',
+  'wallpaper.mode',
   'audio.enabled',
   'audio.gain',
   'audio.silenceDelayMs',
@@ -47,6 +48,7 @@ test('publishes complete linked Chinese and English guides', async () => {
       'mip-paper setup --image',
       'mip-paper wallpaper set',
       'mip-paper wallpaper status',
+      'mip-paper wallpaper use-kde',
       'GPL-3.0-only',
       'JPEG',
       'PNG',
@@ -64,6 +66,17 @@ test('publishes complete linked Chinese and English guides', async () => {
   assert.match(chinese, /不附带.{0,8}第三方壁纸/);
   assert.match(english, /default photograph by LaT-SKY under CC BY 4\.0/i);
   assert.match(english, /former third-party wallpaper is not included/i);
+});
+
+test('documents default per-display KDE wallpaper synchronization', async () => {
+  const [chinese, english] = await Promise.all([readFile('README.md', 'utf8'), readFile('README.en.md', 'utf8')]);
+  for (const readme of [chinese, english]) {
+    assert.match(readme, /org\.kde\.image/);
+    assert.match(readme, /350 ms/);
+    assert.match(readme, /mip-paper wallpaper use-kde/);
+    assert.match(readme, /(不轮询|does not poll)/i);
+    assert.match(readme, /(幻灯片|slideshows).*(不支持|unsupported)/is);
+  }
 });
 
 test('declares the application license in package metadata', async () => {

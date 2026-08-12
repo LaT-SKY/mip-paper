@@ -13,6 +13,7 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.match(preload, /onInformationUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onAudioSpectrumUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onAudioConfigUpdated\s*:\s*\(listener\)/);
+  assert.match(preload, /onWallpaperUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /removeListener/);
   assert.doesNotMatch(preload, /getAudioSpectrum|pw-cat|pw-metadata|spawn|rawPcm|selectAudioDevice/i);
 });
@@ -24,6 +25,9 @@ test('main owns one audio service and config watcher wired to the quit barrier',
   assert.match(main, /createConfigWatcher/);
   assert.match(main, /audioSpectrumService\.updateConfig/);
   assert.match(main, /manager\.updateAudioConfig/);
+  assert.match(main, /createKdeWallpaperSync/);
+  assert.match(main, /manager\?\.updateWallpaper/);
+  assert.match(main, /stopWallpaperSync:\s*\(\)\s*=>\s*wallpaperSync\?\.stop\(\)/);
   assert.match(main, /stopAudioSpectrum:\s*\(\)\s*=>\s*audioSpectrumService\?\.stop\(\)/);
   assert.match(lifecycle, /event\.preventDefault\(\)/);
   assert.match(lifecycle, /await stop\('audio spectrum',\s*stopAudioSpectrum\)/);

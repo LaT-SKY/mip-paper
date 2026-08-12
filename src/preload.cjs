@@ -6,6 +6,7 @@ const INFORMATION_CHANNEL = 'wallpaper:get-information';
 const INFORMATION_UPDATED_CHANNEL = 'wallpaper:information-updated';
 const AUDIO_SPECTRUM_UPDATED_CHANNEL = 'wallpaper:audio-spectrum-updated';
 const AUDIO_CONFIG_UPDATED_CHANNEL = 'wallpaper:audio-config-updated';
+const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
 
 contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
   getBootstrap: () => ipcRenderer.invoke(BOOTSTRAP_CHANNEL),
@@ -25,5 +26,10 @@ contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
     const wrapper = (_event, audioConfig) => listener(audioConfig);
     ipcRenderer.on(AUDIO_CONFIG_UPDATED_CHANNEL, wrapper);
     return () => ipcRenderer.removeListener(AUDIO_CONFIG_UPDATED_CHANNEL, wrapper);
+  },
+  onWallpaperUpdated: (listener) => {
+    const wrapper = (_event, payload) => listener(payload);
+    ipcRenderer.on(WALLPAPER_UPDATED_CHANNEL, wrapper);
+    return () => ipcRenderer.removeListener(WALLPAPER_UPDATED_CHANNEL, wrapper);
   },
 }));

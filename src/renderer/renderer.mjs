@@ -78,10 +78,13 @@ async function loadImage(url) {
 
 async function start() {
   const bootstrap = await window.wallpaper.getBootstrap();
-  const [image, information] = await Promise.all([
+  let image;
+  const [initialImage, information] = await Promise.all([
     loadImage(bootstrap.wallpaperUrl),
     window.wallpaper.getInformationSnapshot(),
   ]);
+  image = initialImage;
+  let wallpaperGeneration = 0;
   const { config, display } = bootstrap;
   const viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
   const state = createMotionState(config, viewport, displayPhase(display.id));
@@ -104,10 +107,20 @@ async function start() {
   const unsubscribeAudioConfig = window.wallpaper.onAudioConfigUpdated((audioConfig) => {
     audioRibbon.setConfig(audioConfig);
   });
+  const unsubscribeWallpaper = window.wallpaper.onWallpaperUpdated(async ({ wallpaperUrl }) => {
+    const generation = ++wallpaperGeneration;
+    try {
+      const nextImage = await loadImage(wallpaperUrl);
+      if (generation === wallpaperGeneration) image = nextImage;
+    } catch (error) {
+      console.error(`Wallpaper update failed: ${error?.message || error}`);
+    }
+  });
   window.addEventListener('pagehide', () => {
     unsubscribeInformation();
     unsubscribeAudio();
     unsubscribeAudioConfig();
+    unsubscribeWallpaper();
     audioRibbon.destroy();
   }, { once: true });
   const advanceScene = (...args) => {

@@ -1,5 +1,8 @@
 {
   "interactionEnabled": true,
+  "wallpaper": {
+    "mode": "kde"
+  },
   "audio": {
     "enabled": true,
     "gain": 1,

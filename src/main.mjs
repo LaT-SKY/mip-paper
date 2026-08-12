@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { appendFile } from 'node:fs/promises';
+import { watch as nodeWatch } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
@@ -23,13 +24,16 @@ import { createConfigWatcher } from './config-watcher.mjs';
 import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
-import { inspectWallpaper, wallpaperPath } from './wallpaper-image.mjs';
+import { wallpaperPath } from './wallpaper-image.mjs';
+import { createKdeWallpaperSync } from './kde-wallpaper-sync.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
 let informationService;
 let audioSpectrumService;
 let configWatcher;
+let wallpaperSync;
+const wallpaperUrls = new Map();
 
 const shutdownCoordinator = createShutdownCoordinator({
   quit: () => app.quit(),
@@ -37,6 +41,7 @@ const shutdownCoordinator = createShutdownCoordinator({
   stopAudioSpectrum: () => audioSpectrumService?.stop(),
   stopInformation: () => informationService?.stop(),
   stopWindowManager: () => manager?.stop(),
+  stopWallpaperSync: () => wallpaperSync?.stop(),
 });
 
 installShutdownHandlers({
@@ -96,12 +101,30 @@ async function run() {
   const pathname = process.env.MIP_PAPER_CONFIG
     || configPath(process.env, os.homedir());
   const config = await loadConfig(pathname);
+  let currentConfig = config;
   const wallpaperPathname = wallpaperPath(process.env, os.homedir());
-  await inspectWallpaper(wallpaperPathname);
   const wallpaperUrl = pathToFileURL(wallpaperPathname).href;
   const probe = parseProbeOptions(process.env);
   informationService = await buildInformationService(config);
   audioSpectrumService = createAudioSpectrumService({ config: config.audio });
+
+  wallpaperSync = createKdeWallpaperSync({
+    config,
+    plasmaConfigPath: path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'plasma-org.kde.plasma.desktop-appletsrc'),
+    getDisplays: () => screen.getAllDisplays(),
+    defaultWallpaper: wallpaperPathname,
+    manualWallpaper: wallpaperPathname,
+    watch: nodeWatch,
+    onUpdate(displayId, nextUrl) {
+      wallpaperUrls.set(displayId, nextUrl);
+      manager?.updateWallpaper(displayId, nextUrl);
+    },
+    onStatus: (status) => {
+      if (status.status === 'watch-error' || status.status === 'config-error') console.error(`KDE wallpaper sync: ${status.reason}`);
+    },
+  });
+  wallpaperSync.start();
+  await wallpaperSync.whenIdle();
 
   manager = createWindowManager({
     BrowserWindow,
@@ -114,6 +137,8 @@ async function run() {
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
     wallpaperUrl,
+    getWallpaperUrl: (display) => wallpaperUrls.get(display.id) || wallpaperUrl,
+    onDisplaysChanged: () => { void wallpaperSync.reconcile(); },
     probe,
     onProbeReport: probe ? async (summary) => {
       const validated = validateProbeSummary(summary);
@@ -129,6 +154,8 @@ async function run() {
     load: loadConfig,
     onConfig(nextConfig) {
       manager.updateAudioConfig(nextConfig.audio);
+      if (nextConfig.wallpaper.mode !== currentConfig.wallpaper.mode) wallpaperSync.setMode(nextConfig.wallpaper.mode);
+      currentConfig = nextConfig;
       void audioSpectrumService.updateConfig(nextConfig.audio).catch((error) => {
         console.error(`Audio configuration update failed: ${error?.message || 'unknown error'}`);
       });

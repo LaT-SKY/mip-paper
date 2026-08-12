@@ -158,6 +158,7 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.equal(await exists(path.join(fixture.installRoot, 'assets', 'ATTRIBUTION.md')), true);
     assert.equal(await exists(fixture.launcher), true);
     assert.equal(await exists(fixture.config), true);
+    assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'kde');
     assert.equal(await exists(fixture.credentials), true);
     assert.equal((await stat(fixture.credentials)).mode & 0o777, 0o600);
     assert.equal(await exists(fixture.service), true);
@@ -171,7 +172,10 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
       'src/renderer/audio-ribbon.mjs',
       'scripts/audio-probe.mjs',
       'scripts/wallpaper-image.mjs',
+      'scripts/wallpaper-mode.mjs',
       'src/wallpaper-image.mjs',
+      'src/plasma-wallpaper.mjs',
+      'src/kde-wallpaper-sync.mjs',
     ]) {
       assert.equal(await exists(path.join(fixture.installRoot, pathname)), true, `missing ${pathname}`);
     }
@@ -241,6 +245,7 @@ test('install re-enables and starts the Plasma session service by default', asyn
   const fixture = await createFixture();
   try {
     await runCli(['install', '--image', fixture.sourceImage], fixture);
+    assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'manual');
     assert.match(
       await readFile(fixture.systemctlLog, 'utf8'),
       /--user reenable --now mip-paper\.service/,
@@ -278,12 +283,27 @@ test('wallpaper set, status and failed replacement preserve the managed image', 
     assert.match(set.stdout, /format=png/);
     assert.deepEqual(await readFile(fixture.wallpaper), png);
     assert.match((await runCli(['wallpaper', 'status'], fixture)).stdout, /format=png/);
+    assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'manual');
     assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user restart mip-paper\.service/);
 
     const invalid = path.join(fixture.home, 'invalid.txt');
     await writeFile(invalid, 'not an image');
     await assert.rejects(runCli(['wallpaper', 'set', invalid], fixture));
     assert.deepEqual(await readFile(fixture.wallpaper), png);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('wallpaper use-kde restores per-display synchronization mode', async () => {
+  const fixture = await createFixture();
+  try {
+    await runCli(['install', '--no-start'], fixture);
+    await runCli(['wallpaper', 'set', fixture.sourceImage], fixture);
+    const { stdout } = await runCli(['wallpaper', 'use-kde'], fixture, { FAKE_SYSTEMCTL_ACTIVE: '1' });
+    assert.match(stdout, /Wallpaper mode: kde/);
+    assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'kde');
+    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /restart mip-paper\.service/);
   } finally {
     await cleanup(fixture);
   }
@@ -375,6 +395,7 @@ test('packaged setup imports an image and enables per-user integration', async (
     const { stdout } = await runCli(['setup', '--image', fixture.sourceImage], fixture);
     assert.deepEqual(await readFile(fixture.wallpaper), png);
     assert.equal(await exists(fixture.config), true);
+    assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'manual');
     assert.equal(await exists(fixture.credentials), true);
     assert.equal((await stat(fixture.credentials)).mode & 0o777, 0o600);
     assert.equal(await exists(fixture.kwinScript), false);

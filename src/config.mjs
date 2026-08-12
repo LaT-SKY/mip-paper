@@ -3,6 +3,7 @@ import path from 'node:path';
 
 export const DEFAULT_CONFIG = Object.freeze({
   interactionEnabled: true,
+  wallpaper: Object.freeze({ mode: 'kde' }),
   audio: Object.freeze({
     enabled: true,
     gain: 1,
@@ -44,6 +45,7 @@ export const DEFAULT_CONFIG = Object.freeze({
 
 const SCHEMA = {
   interactionEnabled: 'boolean',
+  wallpaper: { mode: 'wallpaperMode' },
   audio: {
     enabled: 'boolean',
     gain: 'positive',
@@ -161,6 +163,9 @@ function validateShape(value, schema, prefix = '') {
     if (rule === 'locationMode' && !['auto', 'fixed'].includes(fieldValue)) {
       throw new TypeError(`${fieldPath} must be auto or fixed`);
     }
+    if (rule === 'wallpaperMode' && !['kde', 'manual'].includes(fieldValue)) {
+      throw new TypeError(`${fieldPath} must be kde or manual`);
+    }
     if (rule === 'nullableLatitude' && fieldValue !== null
       && (!Number.isFinite(fieldValue) || fieldValue < -90 || fieldValue > 90)) {
       throw new RangeError(`${fieldPath} must be null or between -90 and 90`);
@@ -178,6 +183,10 @@ function validateShape(value, schema, prefix = '') {
 function mergeConfig(value) {
   return {
     interactionEnabled: value.interactionEnabled ?? DEFAULT_CONFIG.interactionEnabled,
+    wallpaper: {
+      ...DEFAULT_CONFIG.wallpaper,
+      ...(value.wallpaper ?? {}),
+    },
     audio: {
       ...DEFAULT_CONFIG.audio,
       ...(value.audio ?? {}),

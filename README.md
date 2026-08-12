@@ -19,7 +19,11 @@ Mip-Paper 不是 Plasma 原生 wallpaper plugin，也不会打开普通应用窗
 
 Mip-Paper 附带一张由 LaT-SKY 拍摄并以 CC BY 4.0 授权的默认照片，详见 [图片归属说明](assets/ATTRIBUTION.md)。发行副本已移除 EXIF 等元数据。项目不附带第三方壁纸，也不会自动下载外部图片。
 
-首次运行 `mip-paper setup` 时，如果用户尚未选择图片，程序会验证默认照片并将其原子复制到：
+默认使用 KDE 同步模式：每台显示器分别采用 Plasma 在该屏选择的 `org.kde.image` 静态图片，并在 KDE 设置变化后自动同步。监听器不轮询；配置写入经过 350 ms 防抖，只有图片路径、大小或修改时间变化才复制和解码图片。
+
+KDE 幻灯片与第三方动态壁纸插件暂不支持。该屏会保留上一张有效缓存；首次没有缓存时使用随包默认照片。
+
+手动指定一张图片会切换到 manual 模式并应用到所有显示器。手动图片保存在：
 
 ```text
 ${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/wallpaper
@@ -32,6 +36,12 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/wallpaper
 ```bash
 mip-paper wallpaper set /path/to/image.png
 mip-paper wallpaper status
+```
+
+恢复按显示器跟随 KDE：
+
+```bash
+mip-paper wallpaper use-kde
 ```
 
 替换失败时会保留上一张有效图片。若服务正在运行，成功更换后会自动重启壁纸。
@@ -70,7 +80,7 @@ paru -S mip-paper
 mip-paper setup
 ```
 
-`setup` 创建缺失的配置与天气凭据、首次导入默认照片、安装当前用户的 KWin 规则、启用系统 KWin coordinator，并启动 `mip-paper.service`。已有配置、凭据和受管理图片不会被覆盖。要在首次设置时直接使用自己的图片，可运行 `mip-paper setup --image /path/to/image.png`。
+`setup` 创建缺失的配置与天气凭据，默认按显示器读取 KDE 静态壁纸，安装当前用户的 KWin 规则、启用系统 KWin coordinator，并启动 `mip-paper.service`。无法读取 KDE 静态图片的屏幕使用随包默认照片。已有配置、凭据和受管理图片不会被覆盖。要在首次设置时直接切换到 manual 模式并使用自己的图片，可运行 `mip-paper setup --image /path/to/image.png`。
 
 完成后，`setup` 会明确显示当前壁纸文件、替换壁纸的命令以及天气是否仍需配置。默认照片只是初始值，随时可以运行：
 
@@ -135,7 +145,7 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 
 ## 配置文件
 
-配置位于 `~/.config/mip-paper/config.json`。完整默认值：
+配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。完整默认值：
 
 ```json
 {
