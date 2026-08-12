@@ -45,7 +45,7 @@ mip-paper wallpaper status
 ## 环境要求
 
 - Arch Linux 或兼容环境
-- KDE Plasma 6、KWin 6、Wayland 会话
+- KDE Plasma 6、KWin >= 6.7、Wayland 会话；6.7 之前的 KWin scripting API 不在支持范围内
 - systemd 用户管理器
 - PipeWire、WirePlumber、`pw-cat`、`pw-metadata`
 - GeoClue（仅自动定位需要）
@@ -71,6 +71,12 @@ mip-paper setup
 ```
 
 `setup` 创建缺失的配置与天气凭据、首次导入默认照片、安装当前用户的 KWin 规则、启用系统 KWin coordinator，并启动 `mip-paper.service`。已有配置、凭据和受管理图片不会被覆盖。要在首次设置时直接使用自己的图片，可运行 `mip-paper setup --image /path/to/image.png`。
+
+完成后，`setup` 会明确显示当前壁纸文件、替换壁纸的命令以及天气是否仍需配置。默认照片只是初始值，随时可以运行：
+
+```bash
+mip-paper wallpaper set /path/to/image.jpg
+```
 
 ## 管理壁纸与服务
 
@@ -114,6 +120,13 @@ gsettings set org.gnome.system.location enabled true
   "apiHost": "your-project-host.qweatherapi.com",
   "apiKey": "your-api-key"
 }
+```
+
+先登录[和风天气控制台](https://console.qweather.com/)创建项目和 API Key；控制台分配的 API Host 与 API Key 分别填入上面的字段。写入后收紧权限并重启：
+
+```bash
+chmod 600 ~/.config/mip-paper/weather-credentials.json
+mip-paper restart
 ```
 
 Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 只由主进程读取，不进入 renderer、URL、日志或缓存。修改凭据后运行 `mip-paper restart`。
@@ -261,6 +274,18 @@ npm test
 npm run check
 bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
 ```
+
+## 0.2 发布与 AUR 流程
+
+发布顺序固定为：完成并提交 0.2 代码，创建并推送 `v0.2.0` tag，确认 GitHub tag archive 可下载，然后计算 SHA-256，生成 PKGBUILD，最后由 `makepkg --printsrcinfo` 生成 `.SRCINFO`。不得在 tag 推送前预先生成校验和。
+
+tag 已推送并指向最终提交后运行：
+
+```bash
+npm run release:aur -- 0.2.0 /home/neo/Code/Projects/mip-paper-aur
+```
+
+该命令会核对本地与 `origin` 的 tag commit，下载 `https://github.com/LaT-SKY/mip-paper/archive/refs/tags/v0.2.0.tar.gz`，计算 SHA-256，并原子更新 AUR 工作副本中的 `PKGBUILD`、`.SRCINFO`、`mip-paper.install` 和 `LICENSE`。随后必须在 AUR 仓库运行 `makepkg` 检查、审阅差异并提交；`.SRCINFO` 必须与 PKGBUILD 一同提交。
 
 渲染调度性能实验：
 

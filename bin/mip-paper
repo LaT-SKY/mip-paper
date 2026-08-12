@@ -4,6 +4,7 @@ set -euo pipefail
 readonly APP_ID='mip-paper'
 readonly SERVICE_NAME='mip-paper.service'
 readonly INSTALL_MODE="${MIP_PAPER_MODE:-source}"
+readonly MINIMUM_KWIN_VERSION='6.7'
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly LOCAL_PREFIX="${MIP_PAPER_LOCAL_PREFIX:-$HOME/.local}"
@@ -78,6 +79,46 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command is missing: $1"
 }
 
+kwin_version() {
+  kwin_wayland --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1
+}
+
+version_at_least() {
+  [[ $(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1) == "$1" ]]
+}
+
+require_supported_kwin() {
+  local detected
+  detected=$(kwin_version || true)
+  [[ -n "$detected" ]] || fail 'Unable to determine the KWin version'
+  version_at_least "$MINIMUM_KWIN_VERSION" "$detected" \
+    || fail "KWin $MINIMUM_KWIN_VERSION or newer is required (detected $detected)"
+}
+
+weather_credentials_valid() {
+  [[ -f "$WEATHER_CREDENTIALS_PATH" ]] \
+    && node --input-type=module - "$WEATHER_CREDENTIALS_PATH" <<'NODE' >/dev/null 2>&1
+import { readFile, stat } from 'node:fs/promises';
+const pathname = process.argv[2];
+const metadata = await stat(pathname);
+if ((metadata.mode & 0o077) !== 0) process.exit(1);
+const value = JSON.parse(await readFile(pathname, 'utf8'));
+if (typeof value.apiHost !== 'string' || !/^[a-z0-9.-]+$/i.test(value.apiHost)) process.exit(1);
+if (typeof value.apiKey !== 'string' || value.apiKey.trim() === '') process.exit(1);
+NODE
+}
+
+print_weather_setup_guidance() {
+  cat <<EOF
+Weather is not configured yet.
+1. Create a QWeather project and API key at https://console.qweather.com/.
+2. Write its API Host and API Key to: $WEATHER_CREDENTIALS_PATH
+   {"apiHost":"your-project-host.qweatherapi.com","apiKey":"your-api-key"}
+3. Run: chmod 600 "$WEATHER_CREDENTIALS_PATH"
+4. Run: mip-paper restart
+EOF
+}
+
 validate_environment() {
   local command_name
   for command_name in node npm electron43 systemctl plasmashell kwin_wayland kreadconfig6 kwriteconfig6; do
@@ -86,7 +127,7 @@ validate_environment() {
   [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]] || fail 'The current session is not Wayland'
   [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]] || fail 'The current desktop is not KDE Plasma'
   plasmashell --version | grep -Eq '(^| )6\.' || fail 'Plasma 6 is required'
-  kwin_wayland --version | grep -Eq '(^| )6\.' || fail 'KWin 6 is required'
+  require_supported_kwin
   systemctl --user show-environment >/dev/null
 }
 
@@ -98,7 +139,7 @@ validate_setup_environment() {
   [[ "${XDG_SESSION_TYPE:-}" == 'wayland' ]] || fail 'The current session is not Wayland'
   [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* ]] || fail 'The current desktop is not KDE Plasma'
   plasmashell --version | grep -Eq '(^| )6\.' || fail 'Plasma 6 is required'
-  kwin_wayland --version | grep -Eq '(^| )6\.' || fail 'KWin 6 is required'
+  require_supported_kwin
   systemctl --user show-environment >/dev/null
 }
 
@@ -258,6 +299,11 @@ install_app() {
   backup=''
   trap - EXIT
   printf 'Installation complete: %s\n' "$INSTALL_ROOT"
+  printf 'Wallpaper file: %s\n' "$WALLPAPER_PATH"
+  printf 'Change it with: mip-paper wallpaper set /path/to/image.jpg\n'
+  if ! weather_credentials_valid; then
+    print_weather_setup_guidance
+  fi
   if ((start_after_install == 0)); then
     printf 'Service was not started (--no-start).\n'
   fi
@@ -323,10 +369,15 @@ setup_app() {
   [[ -f "$KWIN_PACKAGE_SOURCE/contents/code/main.js" ]] || fail 'Packaged KWin coordinator code is missing'
   [[ -f "$DEFAULT_WALLPAPER_PATH" ]] || fail 'Packaged default wallpaper is missing'
 
+  local wallpaper_message
   if [[ -n "$image_source" ]]; then
     node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$image_source"
+    wallpaper_message="Imported custom wallpaper: $image_source"
   elif ! node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status >/dev/null 2>&1; then
     node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$DEFAULT_WALLPAPER_PATH"
+    wallpaper_message='Imported the packaged default wallpaper.'
+  else
+    wallpaper_message='Kept the existing managed wallpaper.'
   fi
 
   mkdir -p "$CONFIG_DIRECTORY"
@@ -345,6 +396,12 @@ setup_app() {
   systemctl --user daemon-reload
   systemctl --user enable --now "$SERVICE_NAME"
   printf 'Setup complete for %s.\n' "$APP_ID"
+  printf 'Wallpaper: %s\n' "$wallpaper_message"
+  printf 'Wallpaper file: %s\n' "$WALLPAPER_PATH"
+  printf 'Change it with: mip-paper wallpaper set /path/to/image.jpg\n'
+  if ! weather_credentials_valid; then
+    print_weather_setup_guidance
+  fi
 }
 
 teardown_app() {
@@ -435,10 +492,12 @@ doctor() {
   else
     check_fail plasma 'Plasma 6 is unavailable'
   fi
-  if command -v kwin_wayland >/dev/null 2>&1 && kwin_wayland --version | grep -Eq '(^| )6\.'; then
-    check_pass kwin 'KWin 6 detected'
+  local detected_kwin=''
+  if command -v kwin_wayland >/dev/null 2>&1; then detected_kwin=$(kwin_version || true); fi
+  if [[ -n "$detected_kwin" ]] && version_at_least "$MINIMUM_KWIN_VERSION" "$detected_kwin"; then
+    check_pass kwin "KWin $detected_kwin (minimum $MINIMUM_KWIN_VERSION)"
   else
-    check_fail kwin 'KWin 6 is unavailable'
+    check_fail kwin "KWin $MINIMUM_KWIN_VERSION or newer is required${detected_kwin:+ (detected $detected_kwin)}"
   fi
 
   local runtime_root=$INSTALL_ROOT
@@ -464,17 +523,7 @@ NODE
   else
     check_fail config 'configuration is missing or invalid'
   fi
-  if [[ -f "$WEATHER_CREDENTIALS_PATH" ]] \
-    && node --input-type=module - "$WEATHER_CREDENTIALS_PATH" <<'NODE'
-import { readFile, stat } from 'node:fs/promises';
-const pathname = process.argv[2];
-const metadata = await stat(pathname);
-if ((metadata.mode & 0o077) !== 0) process.exit(1);
-const value = JSON.parse(await readFile(pathname, 'utf8'));
-if (typeof value.apiHost !== 'string' || !/^[a-z0-9.-]+$/i.test(value.apiHost)) process.exit(1);
-if (typeof value.apiKey !== 'string' || value.apiKey.trim() === '') process.exit(1);
-NODE
-  then
+  if weather_credentials_valid; then
     check_pass weather-credentials "$WEATHER_CREDENTIALS_PATH"
   else
     check_fail weather-credentials 'credentials are missing, invalid, or not mode 0600'

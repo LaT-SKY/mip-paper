@@ -1,25 +1,29 @@
 #!/usr/bin/env node
 
+import { pathToFileURL } from 'node:url';
+
 function fail(message) {
   process.stderr.write(`Error: ${message}\n`);
   process.exit(2);
 }
 
-const [version, sourceUrl, checksum] = process.argv.slice(2);
-if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) fail('VERSION must be semantic x.y.z');
-if (!/^[0-9a-f]{64}$/.test(checksum ?? '')) fail('SHA256 must be 64 lowercase hexadecimal characters');
+export function generatePkgbuild(version, sourceUrl, checksum) {
+  if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new TypeError('VERSION must be semantic x.y.z');
+  if (!/^[0-9a-f]{64}$/.test(checksum ?? '')) {
+    throw new TypeError('SHA256 must be 64 lowercase hexadecimal characters');
+  }
 
-let parsedUrl;
-try {
-  parsedUrl = new URL(sourceUrl);
-} catch {
-  fail('SOURCE_URL must be an absolute URL');
-}
-if (!['https:', 'file:'].includes(parsedUrl.protocol) || sourceUrl.includes("'")) {
-  fail('SOURCE_URL must use HTTPS or file');
-}
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(sourceUrl);
+  } catch {
+    throw new TypeError('SOURCE_URL must be an absolute URL');
+  }
+  if (!['https:', 'file:'].includes(parsedUrl.protocol) || sourceUrl.includes("'")) {
+    throw new TypeError('SOURCE_URL must use HTTPS or file');
+  }
 
-process.stdout.write(`# Maintainer: LaT-SKY <liujunzhe070611 at gmail dot com>
+  return `# Maintainer: LaT-SKY <liujunzhe070611 at gmail dot com>
 pkgname=mip-paper
 pkgver=${version}
 pkgrel=1
@@ -27,7 +31,7 @@ pkgdesc='Dynamic wallpaper engine for KDE Plasma 6 on Wayland'
 arch=('x86_64')
 url='https://github.com/LaT-SKY/mip-paper'
 license=('GPL-3.0-only' 'MIT' 'CC-BY-4.0')
-depends=('bash' 'electron43' 'nodejs' 'plasma-workspace' 'kwin' 'kconfig' 'qt6-tools' 'systemd' 'pipewire' 'pipewire-audio' 'wireplumber')
+depends=('bash' 'electron43' 'nodejs' 'plasma-workspace' 'kwin>=6.7' 'kconfig' 'qt6-tools' 'systemd' 'pipewire' 'pipewire-audio' 'wireplumber')
 optdepends=('geoclue: automatic location through XDG Desktop Portal')
 makedepends=('npm')
 options=('!strip')
@@ -68,4 +72,13 @@ package() {
   install -Dm644 node_modules/qweather-icons/README.md \
     "$pkgdir/usr/share/licenses/mip-paper/qweather-icons-ATTRIBUTION"
 }
-`);
+`;
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    process.stdout.write(generatePkgbuild(...process.argv.slice(2)));
+  } catch (error) {
+    fail(error.message);
+  }
+}

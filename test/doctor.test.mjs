@@ -22,6 +22,7 @@ async function fixture({
   coordinator = 'valid',
   audio = 'valid',
   packaged = false,
+  kwinVersion = '6.7.4',
 } = {}) {
   const home = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-doctor-'));
   const fakeBin = path.join(home, 'fake-bin');
@@ -83,7 +84,7 @@ async function fixture({
   await writeFile(rulesFile, '[General]\ncount=1\nrules=mip-paper\n\n[mip-paper]\nDescription=Mip-Paper\n');
 
   await executable(path.join(fakeBin, 'plasmashell'), '#!/usr/bin/env bash\nprintf "plasmashell 6.7.4\\n"\n');
-  await executable(path.join(fakeBin, 'kwin_wayland'), '#!/usr/bin/env bash\nprintf "kwin 6.7.4\\n"\n');
+  await executable(path.join(fakeBin, 'kwin_wayland'), `#!/usr/bin/env bash\nprintf "kwin ${kwinVersion}\\n"\n`);
   await executable(path.join(fakeBin, 'electron43'), '#!/usr/bin/env bash\nexit 0\n');
   await executable(path.join(fakeBin, 'pw-metadata'), `#!/bin/bash
 printf '%s\n' "update: id:0 key:'default.audio.sink' value:'{\\\"name\\\":\\\"sink.test\\\"}' type:'Spa:String:JSON'"
@@ -146,6 +147,21 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
     for (const label of ['window stacking', 'panel visibility', 'Alt\\+Tab', 'mouse input', 'multi-display', 'lock/suspend', 'resource usage']) {
       assert.match(stdout, new RegExp(`MANUAL .*${label}`));
     }
+  } finally {
+    await rm(fixtureData.home, { recursive: true, force: true });
+  }
+});
+
+test('doctor rejects KWin versions older than 6.7', async () => {
+  const fixtureData = await fixture({ kwinVersion: '6.6.5' });
+  try {
+    await assert.rejects(
+      execFileAsync(cli, ['doctor'], { env: fixtureData.env }),
+      (error) => {
+        assert.match(error.stdout, /FAIL kwin.*6\.7 or newer.*6\.6\.5/);
+        return true;
+      },
+    );
   } finally {
     await rm(fixtureData.home, { recursive: true, force: true });
   }

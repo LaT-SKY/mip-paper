@@ -37,8 +37,8 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
   const [{ stdout: pkgbuild }, installHook, packageLicense, wallpaperAttribution] = await Promise.all([
     execFileAsync(process.execPath, [
       'scripts/generate-pkgbuild.mjs',
-      '0.1.0',
-      'https://example.invalid/mip-paper-0.1.0.tar.gz',
+      '0.2.0',
+      'https://example.invalid/mip-paper-0.2.0.tar.gz',
       checksum,
     ]),
     readFile('packaging/mip-paper.install', 'utf8'),
@@ -48,11 +48,11 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
 
   for (const required of [
     'pkgname=mip-paper',
-    'pkgver=0.1.0',
+    'pkgver=0.2.0',
     'pkgrel=1',
     "arch=('x86_64')",
     "license=('GPL-3.0-only' 'MIT' 'CC-BY-4.0')",
-    "depends=('bash' 'electron43' 'nodejs' 'plasma-workspace' 'kwin' 'kconfig' 'qt6-tools' 'systemd' 'pipewire' 'pipewire-audio' 'wireplumber')",
+    "depends=('bash' 'electron43' 'nodejs' 'plasma-workspace' 'kwin>=6.7' 'kconfig' 'qt6-tools' 'systemd' 'pipewire' 'pipewire-audio' 'wireplumber')",
     "optdepends=('geoclue: automatic location through XDG Desktop Portal')",
     "makedepends=('npm')",
     "options=('!strip')",
@@ -70,13 +70,26 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
   assert.doesNotMatch(pkgbuild, /SKIP|node_modules\/electron|161-2\.jpeg/);
   assert.match(pkgbuild, /cp -a bin config resources scripts src assets node_modules package\.json/);
   assert.match(installHook, /Run: mip-paper setup/);
-  assert.doesNotMatch(installHook, /setup --image/);
-  assert.match(installHook, /mip-paper restart/);
+  assert.match(installHook, /setup \[--image/);
+  assert.match(installHook, /QWeather/);
   assert.match(packageLicense, /Copyright Arch Linux Contributors/);
   assert.match(packageLicense, /Permission to use, copy, modify, and\/or distribute/);
   assert.match(wallpaperAttribution, /Photograph by LaT-SKY/);
   assert.match(wallpaperAttribution, /CC BY 4\.0/);
   assert.match(wallpaperAttribution, /removing metadata and recompressing/);
+});
+
+test('release preparation enforces tag-first AUR metadata generation', async () => {
+  const source = await readFile('scripts/prepare-aur-release.mjs', 'utf8');
+  assert.match(source, /rev-parse.*tag/si);
+  assert.match(source, /ls-remote.*--tags.*origin/si);
+  assert.match(source, /publishedCommit !== localCommit/);
+  assert.match(source, /freeze and tag the final/);
+  assert.match(source, /github\.com\/.*archive\/refs\/tags/);
+  assert.match(source, /createHash\('sha256'\)/);
+  assert.match(source, /makepkg.*--printsrcinfo/si);
+  assert.match(source, /\.SRCINFO/);
+  assert.match(source, /AUR repository must be clean/);
 });
 
 test('rejects mutable or malformed PKGBUILD inputs', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "mip-paper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "GPL-3.0-only",
   "private": true,
   "type": "module",
@@ -8,7 +8,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "find src test -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check"
+    "check": "find src test scripts -type f -name '*.mjs' -print0 | xargs -0 -n1 node --check",
+    "release:aur": "node scripts/prepare-aur-release.mjs"
   },
   "dependencies": {
     "dbus-next": "0.10.2",
