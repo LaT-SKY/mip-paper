@@ -4,7 +4,7 @@ import path from 'node:path';
 export const DEFAULT_CONFIG = Object.freeze({
   interactionEnabled: true,
   wallpaper: Object.freeze({ mode: 'kde' }),
-  color: Object.freeze({ mode: 'default', transitionDurationMs: 900 }),
+  color: Object.freeze({ mode: 'hybrid', transitionDurationMs: 900 }),
   audio: Object.freeze({
     enabled: true,
     gain: 1,
@@ -14,7 +14,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   }),
   frameRate: Object.freeze({
     interactive: 60,
-    drift: 30,
+    drift: 12,
   }),
   motion: Object.freeze({
     interactionSpeed: 1.15,
@@ -147,8 +147,9 @@ function validateShape(value, schema, prefix = '') {
     if (rule === 'boolean' && typeof fieldValue !== 'boolean') {
       throw new TypeError(`${fieldPath} must be a boolean`);
     }
-    if (rule === 'frameRate' && (!Number.isFinite(fieldValue) || fieldValue < 30)) {
-      throw new RangeError(`${fieldPath} must be at least 30`);
+    if (rule === 'frameRate' && (!Number.isInteger(fieldValue)
+      || fieldValue < 1 || fieldValue > 180)) {
+      throw new RangeError(`${fieldPath} must be an integer between 1 and 180`);
     }
     if (rule === 'positive' && (!Number.isFinite(fieldValue) || fieldValue <= 0)) {
       throw new RangeError(`${fieldPath} must be a finite number greater than 0`);

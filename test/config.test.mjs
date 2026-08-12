@@ -15,7 +15,7 @@ test('defaults match the approved v1 design', () => {
   assert.deepEqual(DEFAULT_CONFIG, {
     interactionEnabled: true,
     wallpaper: { mode: 'kde' },
-    color: { mode: 'default', transitionDurationMs: 900 },
+    color: { mode: 'hybrid', transitionDurationMs: 900 },
     audio: {
       enabled: true,
       gain: 1,
@@ -25,7 +25,7 @@ test('defaults match the approved v1 design', () => {
     },
     frameRate: {
       interactive: 60,
-      drift: 30,
+      drift: 12,
     },
     motion: {
       interactionSpeed: 1.15,
@@ -133,7 +133,7 @@ test('accepts KDE and manual wallpaper modes and rejects other values', () => {
 });
 
 test('accepts color modes and transition duration boundaries', () => {
-  assert.deepEqual(DEFAULT_CONFIG.color, { mode: 'default', transitionDurationMs: 900 });
+  assert.deepEqual(DEFAULT_CONFIG.color, { mode: 'hybrid', transitionDurationMs: 900 });
   for (const mode of ['default', 'kde', 'wallpaper', 'hybrid']) {
     assert.equal(validateConfig({ color: { mode } }).color.mode, mode);
   }
@@ -151,11 +151,22 @@ test('rejects unknown fields with their full path', () => {
   );
 });
 
-test('rejects a render frame rate below 30', () => {
-  assert.throws(
-    () => validateConfig({ frameRate: { interactive: 29 } }),
-    /frameRate\.interactive must be at least 30/,
-  );
+test('accepts integer render frame rates from 1 through 180', () => {
+  for (const field of ['interactive', 'drift']) {
+    assert.equal(validateConfig({ frameRate: { [field]: 1 } }).frameRate[field], 1);
+    assert.equal(validateConfig({ frameRate: { [field]: 180 } }).frameRate[field], 180);
+  }
+});
+
+test('rejects render frame rates outside the integer range from 1 through 180', () => {
+  for (const field of ['interactive', 'drift']) {
+    for (const value of [0, -1, 1.5, 181, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(
+        () => validateConfig({ frameRate: { [field]: value } }),
+        new RegExp(`frameRate\\.${field} must be an integer between 1 and 180`),
+      );
+    }
+  }
 });
 
 test('rejects non-finite and negative motion values', () => {
