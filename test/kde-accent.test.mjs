@@ -41,18 +41,35 @@ test('watches atomic replacements with a 350ms debounce', async () => {
     onError: () => {},
   });
   watcher.start();
+  await watcher.whenIdle();
+  assert.equal(reads, 1);
+  assert.deepEqual(accents, [[10, 20, 30]]);
   emitter.emit('change', 'change', 'kdeglobals');
   emitter.emit('change', 'rename', 'kdeglobals');
   emitter.emit('change', 'change', 'other');
   clock.advance(349);
-  assert.equal(reads, 0);
+  assert.equal(reads, 1);
   clock.advance(1);
   await watcher.whenIdle();
   assert.deepEqual(directories, ['/home/tester/.config']);
-  assert.equal(reads, 1);
-  assert.deepEqual(accents, [[10, 20, 30]]);
+  assert.equal(reads, 2);
+  assert.deepEqual(accents, [[10, 20, 30], [10, 20, 30]]);
   watcher.stop();
   assert.equal(emitter.closed, true);
+});
+
+test('loads the current KDE accent immediately when started', async () => {
+  const accents = [];
+  const watcher = createKdeAccentWatcher({
+    pathname: '/config/kdeglobals',
+    read: async () => '[General]\nAccentColor=12,34,56\n',
+    watch: () => ({ close() {}, on() {} }),
+    onAccent: (accent) => accents.push(accent),
+  });
+  watcher.start();
+  await watcher.whenIdle();
+  assert.deepEqual(accents, [[12, 34, 56]]);
+  watcher.stop();
 });
 
 test('reload publishes null and errors without stale work after stop', async () => {
@@ -72,6 +89,8 @@ test('reload publishes null and errors without stale work after stop', async () 
     onError: (error) => errors.push(error),
   });
   watcher.start();
+  await watcher.whenIdle();
+  accents.length = 0;
   await watcher.reload();
   value = new Error('unavailable');
   await watcher.reload();

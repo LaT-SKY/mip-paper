@@ -145,11 +145,12 @@ Current weather refreshes every 30 minutes; forecasts and tides refresh every 6 
 
 ## Configuration
 
-The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Complete defaults:
+The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Choose `color.mode` as `default` to keep the approved palette, `kde` to follow KDE's accent, `wallpaper` to analyze each display's wallpaper, or `hybrid` to prefer wallpaper and fall back to KDE. `color.transitionDurationMs` defaults to `900` ms and accepts `0–5000`; `0` switches immediately. Reduced motion preferences disable transitions automatically. Color settings support live reload without restarting. Complete defaults:
 
 ```json
 {
   "interactionEnabled": true,
+  "color": { "mode": "default", "transitionDurationMs": 900 },
   "audio": {
     "enabled": true,
     "gain": 1,
@@ -187,7 +188,7 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
 }
 ```
 
-Unknown fields are rejected. Outside `audio.*`, invalid types or ranges prevent startup and are reported in the service log. Invalid audio values fall back to their defaults.
+Unknown fields are rejected. `audio.*` and `color.*` support live reload; other settings require a restart. Outside audio settings, invalid types or ranges prevent startup and are reported in the service log. Invalid audio values fall back to their defaults.
 
 ### Top Level and Frame Rates
 
@@ -196,6 +197,13 @@ Unknown fields are rejected. Outside `audio.*`, invalid types or ranges prevent 
 | `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Restart |
 | `frameRate.interactive` | number, `>= 30` FPS | `60` | Target rate during interaction and return | Restart |
 | `frameRate.drift` | number, `>= 30` FPS | `30` | Target rate during idle drift | Restart |
+
+### Dynamic Accent Color
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `color.mode` | `default`, `kde`, `wallpaper`, or `hybrid` | `default` | Keep the default palette, follow KDE, analyze each display wallpaper, or fall back wallpaper → KDE → default | Live reload |
+| `color.transitionDurationMs` | integer, `0–5000 ms` | `900` | Accent transition duration; `0` is immediate and reduced motion forces `0` | Live reload |
 
 ### Audio Visualization
 

@@ -77,6 +77,7 @@ export function createKdeAccentWatcher({
         running = false;
         onError(error);
       }
+      if (running) void reload();
     },
     stop() {
       if (!running && !fsWatcher) return;
