@@ -128,12 +128,13 @@ test('renderer uses a non-alpha high-DPI Canvas without blur effects', async () 
   assert.doesNotMatch(script, /motionBlur|filter\s*=|shadowBlur/);
 });
 
-test('renderer loads only the user-managed bootstrap wallpaper image', async () => {
+test('renderer loads only atomic user-managed wallpaper transactions', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
 
-  assert.match(script, /loadImage\(bootstrap\.wallpaperUrl\)/);
+  assert.match(script, /wallpaperCoordinator\.apply\(bootstrap\.wallpaper\)/);
   assert.match(script, /onWallpaperUpdated/);
-  assert.match(script, /loadImage\(wallpaperUrl\)/);
+  assert.match(script, /createWallpaperTransactionCoordinator/);
+  assert.doesNotMatch(script, /loadedWallpaperUrl|wallpaperGeneration|analyzeIfRequested/);
   assert.doesNotMatch(script, /assets\/161-2\.jpeg/);
 });
 
