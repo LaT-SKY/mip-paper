@@ -4,7 +4,7 @@
     "mode": "kde"
   },
   "color": {
-    "mode": "default",
+    "mode": "hybrid",
     "transitionDurationMs": 900
   },
   "audio": {
@@ -16,7 +16,7 @@
   },
   "frameRate": {
     "interactive": 60,
-    "drift": 30
+    "drift": 12
   },
   "motion": {
     "interactionSpeed": 1.15,

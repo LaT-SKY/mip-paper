@@ -102,7 +102,7 @@ test('returning uses interactive FPS until every camera component converges', ()
     advanceMotion(state, SIMULATION_STEP, 2 + (step + 1) * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
   }
   assert.equal(state.mode, 'drift');
-  assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 30);
+  assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 12);
 });
 
 test('effective input switches immediately to interactive mode', () => {
