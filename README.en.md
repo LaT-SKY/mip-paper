@@ -235,7 +235,7 @@ Unknown fields are rejected. Every valid saved field takes effect without restar
 
 ### Dynamic Accent Color
 
-Each display owns an independent accent derived from its current wallpaper: different wallpapers can use different colors, and both the information cards and all three audio-ribbon layers consume that display's color. Results are cached by wallpaper content instead of display ID, so identical images can share one result and an A → B → A switch or service restart restores A's previous color.
+Each display owns an independent accent and perceived luminance derived from its current wallpaper: different wallpapers can use different colors, and both the information cards and all three audio-ribbon layers consume that display's palette. Results are cached by wallpaper content instead of display ID, so identical images can share one result and an A → B → A switch or service restart restores A's previous color.
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
@@ -255,6 +255,8 @@ Every `audio.*` setting live reloads and updates the active spectrum controller 
 | `audio.fadeInMs` | `0–3000 ms` | `160` | Fade-in time; `0` is immediate | Live reload |
 
 ### Motion and Parallax
+
+After effective pointer input stops for `0.95` seconds, the scene begins a fixed `1.5` second smooth return. Interaction and return use the interactive frame rate; once the camera joins the continuously moving drift trajectory, the scheduler automatically restores the configured drift frame rate. New input during return restarts the complete recovery.
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
@@ -310,7 +312,7 @@ Run the renderer scheduling probe with `mip-paper probe --duration 60`.
 
 The visualizer follows the current default PipeWire output device. It connects to sink monitor ports with `stream.capture.sink=true` and identifies the stream as `Stream/Input/Audio/Internal`. It never connects to a microphone, never records audio, and does not appear as a recording application in Plasma's microphone list.
 
-Raw PCM exists only briefly inside the main-process FFT pipeline. It is never written to disk, logs, cache, IPC, or the renderer. A white upward curve represents the left channel, a mirrored pink downward curve represents the right channel, and a wider cyan combined spectrum shows overall energy behind their shared baseline. The strokes have no glow, frosted background, border, or panel shadow.
+Raw PCM exists only briefly inside the main-process FFT pipeline. It is never written to disk, logs, cache, IPC, or the renderer. Three curves share one baseline: the right channel uses that display's wallpaper accent, the left channel uses its complementary color, and the combined spectrum uses pure black or pure white. Each display independently selects the higher-contrast neutral from its own wallpaper luminance, so light wallpapers use pure black and dark wallpapers use pure white. The strokes have no glow, frosted background, border, or panel shadow.
 
 ### Licenses and Third-Party Components
 

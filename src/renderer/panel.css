@@ -4,8 +4,8 @@
   --accent-shadow: rgb(255 52 120 / 0.76);
   --accent-glow: rgb(255 52 120 / 0.75);
   --accent-audio-primary: rgb(255 52 120);
-  --accent-audio-energy: rgb(255 109 158);
-  --accent-audio-aux: rgb(255 190 212);
+  --accent-audio-complement: rgb(74 233 180);
+  --accent-audio-neutral: rgb(255 255 255);
   --accent-transition-ms: 900ms;
 }
 
@@ -123,13 +123,13 @@
 }
 
 .audio-path-energy {
-  stroke: var(--accent-audio-energy);
+  stroke: var(--accent-audio-neutral);
   stroke-width: 3.4;
   transition: stroke var(--accent-transition-ms) ease;
 }
 
 .audio-path-left {
-  stroke: var(--accent-audio-aux);
+  stroke: var(--accent-audio-complement);
   stroke-width: 2.4;
   transition: stroke var(--accent-transition-ms) ease;
 }
