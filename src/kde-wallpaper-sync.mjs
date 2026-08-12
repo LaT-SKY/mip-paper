@@ -147,7 +147,9 @@ export function createKdeWallpaperSync({
           if (!previous) {
             try { previous = JSON.parse(await readFile(displayWallpaperMetadataPath(display.id, env, homedir || os.homedir()), 'utf8')); } catch {}
           }
-          if (!previous || previous.sourcePath !== candidate.sourcePath || previous.size !== metadata.size || previous.mtimeMs !== metadata.mtimeMs) {
+          if (!previous || previous.sourcePath !== candidate.sourcePath || previous.size !== metadata.size
+              || previous.mtimeMs !== metadata.mtimeMs
+              || !/^sha256:[0-9a-f]{64}$/.test(previous.contentKey)) {
             await importDisplay(candidate.sourcePath, destination, { displayId: display.id, screenIndex: index, sourcePath: candidate.sourcePath, size: metadata.size, mtimeMs: metadata.mtimeMs });
             if (!running || mode !== 'kde' || currentGeneration !== generation) return;
             imageChanged = true;
