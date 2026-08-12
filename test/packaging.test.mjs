@@ -51,6 +51,18 @@ test('uses the maintained D-Bus fork without the vulnerable legacy dependency ch
   assert.match(generator, /node_modules\/@particle\/dbus-next\/LICENSE/);
 });
 
+test('has no image-size dependency or packaging residue', async () => {
+  const [packageJson, lockfile, generator] = await Promise.all([
+    readFile('package.json', 'utf8').then(JSON.parse),
+    readFile('package-lock.json', 'utf8').then(JSON.parse),
+    readFile('scripts/generate-pkgbuild.mjs', 'utf8'),
+  ]);
+
+  assert.equal(packageJson.dependencies['image-size'], undefined);
+  assert.equal(lockfile.packages['node_modules/image-size'], undefined);
+  assert.doesNotMatch(generator, /node_modules\/image-size/);
+});
+
 test('generates fixed-checksum Arch metadata and package ownership', async () => {
   const checksum = 'a'.repeat(64);
   const [{ stdout: pkgbuild }, installHook, packageLicense, wallpaperAttribution] = await Promise.all([

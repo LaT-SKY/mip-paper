@@ -41,11 +41,6 @@ async function fixture({
     path.join(repositoryRoot, 'src', 'wallpaper-image.mjs'),
     path.join(installRoot, 'src', 'wallpaper-image.mjs'),
   );
-  await cp(
-    path.join(repositoryRoot, 'node_modules', 'image-size'),
-    path.join(installRoot, 'node_modules', 'image-size'),
-    { recursive: true },
-  );
   await writeFile(path.join(installRoot, 'src', 'config.mjs'), "import { readFile } from 'node:fs/promises'; export async function loadConfig(pathname) { return JSON.parse(await readFile(pathname, 'utf8')); }\n");
   await writeFile(
     path.join(installRoot, 'src', 'pipewire-audio.mjs'),
