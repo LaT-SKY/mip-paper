@@ -148,6 +148,7 @@ export async function inspectWallpaper(pathname) {
       pathname,
       format: dimensions.format,
       size: metadata.size,
+      mtimeMs: metadata.mtimeMs,
       width: dimensions.width,
       height: dimensions.height,
       contentKey: await wallpaperContentKey(pathname),

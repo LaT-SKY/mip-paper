@@ -62,11 +62,43 @@ export function createKdeWallpaperSync({
   async function cachedRecord(display, reason) {
     const pathname = displayWallpaperPath(display.id, env, homedir || os.homedir());
     try {
-      await inspect(pathname);
-      return { displayId: display.id, mode: 'kde', status: 'preserved', wallpaperPath: pathname, reason };
+      const inspected = await inspect(pathname);
+      return {
+        displayId: display.id,
+        mode: 'kde',
+        status: 'preserved',
+        wallpaperPath: pathname,
+        size: inspected.size,
+        mtimeMs: inspected.mtimeMs ?? 0,
+        contentKey: inspected.contentKey,
+        reason,
+      };
     } catch {
-      return { displayId: display.id, mode: 'kde', status: 'fallback', wallpaperPath: defaultWallpaper, reason };
+      const inspected = await inspect(defaultWallpaper);
+      return {
+        displayId: display.id,
+        mode: 'kde',
+        status: 'fallback',
+        wallpaperPath: defaultWallpaper,
+        size: inspected.size,
+        mtimeMs: inspected.mtimeMs ?? 0,
+        contentKey: inspected.contentKey,
+        reason,
+      };
     }
+  }
+
+  function publishRecord(record) {
+    onUpdate({
+      displayId: record.displayId,
+      wallpaperUrl: record.wallpaperUrl,
+      wallpaperIdentity: {
+        path: record.wallpaperPath,
+        size: record.size ?? 0,
+        mtimeMs: record.mtimeMs ?? 0,
+      },
+      contentKey: record.contentKey,
+    });
   }
 
   async function reconcile() {
@@ -76,11 +108,20 @@ export function createKdeWallpaperSync({
       for (const display of displays) {
         if (!running || mode !== 'manual' || currentGeneration !== generation) return;
         const url = pathToFileURL(manualWallpaper).href;
-        let metadata = { size: 0, mtimeMs: 0 };
-        try { metadata = await stat(manualWallpaper); } catch {}
+        const inspected = await inspect(manualWallpaper);
         if (!running || mode !== 'manual' || currentGeneration !== generation) return;
-        sources.set(display.id, { displayId: display.id, mode: 'manual', status: 'manual', wallpaperPath: manualWallpaper, wallpaperUrl: url });
-        onUpdate(display.id, url, { path: manualWallpaper, size: metadata.size, mtimeMs: metadata.mtimeMs });
+        const record = {
+          displayId: display.id,
+          mode: 'manual',
+          status: 'manual',
+          wallpaperPath: manualWallpaper,
+          wallpaperUrl: url,
+          size: inspected.size,
+          mtimeMs: inspected.mtimeMs ?? 0,
+          contentKey: inspected.contentKey,
+        };
+        sources.set(display.id, record);
+        publishRecord(record);
       }
       return;
     }
@@ -111,9 +152,18 @@ export function createKdeWallpaperSync({
             if (!running || mode !== 'kde' || currentGeneration !== generation) return;
             imageChanged = true;
           }
-          await inspect(destination);
+          const inspected = await inspect(destination);
           if (!running || mode !== 'kde' || currentGeneration !== generation) return;
-          record = { displayId: display.id, mode: 'kde', status: 'synchronized', wallpaperPath: destination, sourcePath: candidate.sourcePath, size: metadata.size, mtimeMs: metadata.mtimeMs };
+          record = {
+            displayId: display.id,
+            mode: 'kde',
+            status: 'synchronized',
+            wallpaperPath: destination,
+            sourcePath: candidate.sourcePath,
+            size: metadata.size,
+            mtimeMs: metadata.mtimeMs,
+            contentKey: inspected.contentKey,
+          };
         } catch (error) {
           record = await cachedRecord(display, error.message);
         }
@@ -126,8 +176,10 @@ export function createKdeWallpaperSync({
       await persistStatus(display.id, record);
       if (!running || mode !== 'kde' || currentGeneration !== generation) return;
       sources.set(display.id, record);
-      if (!previousRecord || imageChanged || previousRecord.wallpaperPath !== record.wallpaperPath) {
-        onUpdate(display.id, record.wallpaperUrl, { path: record.wallpaperPath, size: record.size ?? 0, mtimeMs: record.mtimeMs ?? 0 });
+      if (!previousRecord || imageChanged || previousRecord.wallpaperPath !== record.wallpaperPath
+          || previousRecord.size !== record.size || previousRecord.mtimeMs !== record.mtimeMs
+          || previousRecord.contentKey !== record.contentKey) {
+        publishRecord(record);
       }
       onStatus(record);
     }
