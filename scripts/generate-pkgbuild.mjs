@@ -23,7 +23,7 @@ export function generatePkgbuild(version, sourceUrl, checksum) {
     throw new TypeError('SOURCE_URL must use HTTPS or file');
   }
 
-  return `# Maintainer: LaT-SKY <liujunzhe070611 at gmail dot com>
+  return `# Maintainer: LaT-SKY <miprota at 163 dot com>
 pkgname=mip-paper
 pkgver=${version}
 pkgrel=1
