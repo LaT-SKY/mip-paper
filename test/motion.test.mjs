@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { DEFAULT_CONFIG } from '../src/config.mjs';
 import {
+  RETURN_DURATION_SECONDS,
   SIMULATION_STEP,
   advanceMotion,
   applyPointerSample,
@@ -81,7 +82,7 @@ test('render cadence does not change simulated motion speed', () => {
   assert.ok(Math.abs(at30.driftTime - at60.driftTime) < 1e-12);
 });
 
-test('returning uses interactive FPS until every camera component converges', () => {
+test('returning uses interactive FPS for the full bounded recovery duration', () => {
   const state = createMotionState(DEFAULT_CONFIG, VIEWPORT);
   state.mode = 'returning';
   Object.assign(state.camera, state.driftReference);
@@ -90,19 +91,73 @@ test('returning uses interactive FPS until every camera component converges', ()
   assert.equal(hasReturnedToDrift(state.camera, state.driftReference), false);
   assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 60);
 
-  state.camera = createCamera();
-  state.driftReference = createCamera();
-  state.settledDuration = 0.19;
-  advanceMotion(state, SIMULATION_STEP, 2, DEFAULT_CONFIG, VIEWPORT);
+  const returningSteps = Math.round(RETURN_DURATION_SECONDS / SIMULATION_STEP);
+  for (let step = 0; step < returningSteps - 1; step += 1) {
+    advanceMotion(state, SIMULATION_STEP, 2 + (step + 1) * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
+  }
   assert.equal(state.mode, 'returning');
   assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 60);
 
-  for (let step = 0; step < 120 && state.mode !== 'drift'; step += 1) {
-    Object.assign(state.camera, state.driftReference);
-    advanceMotion(state, SIMULATION_STEP, 2 + (step + 1) * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
-  }
+  advanceMotion(state, SIMULATION_STEP, 2 + returningSteps * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
   assert.equal(state.mode, 'drift');
   assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), 12);
+});
+
+test('real pointer interaction returns to drift after bounded smooth recovery', () => {
+  const state = createMotionState(DEFAULT_CONFIG, VIEWPORT);
+  applyPointerSample(state.pointer, 960, 540, 0, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
+  applyPointerSample(state.pointer, 1500, 800, 0.1, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
+  const transitions = [];
+  let previousMode = state.mode;
+
+  for (let step = 1; step <= 120 * 5; step += 1) {
+    const time = step * SIMULATION_STEP;
+    advanceMotion(state, SIMULATION_STEP, time, DEFAULT_CONFIG, VIEWPORT);
+    if (state.mode !== previousMode) {
+      transitions.push(`${previousMode}->${state.mode}`);
+      previousMode = state.mode;
+    }
+  }
+
+  assert.deepEqual(transitions, [
+    'drift->interactive',
+    'interactive->returning',
+    'returning->drift',
+  ]);
+  assert.equal(state.mode, 'drift');
+  assert.equal(requestedFrameRate(state, DEFAULT_CONFIG), DEFAULT_CONFIG.frameRate.drift);
+});
+
+test('new pointer input restarts the full return duration', () => {
+  const state = createMotionState(DEFAULT_CONFIG, VIEWPORT);
+  applyPointerSample(state.pointer, 960, 540, 0, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
+  applyPointerSample(state.pointer, 1500, 800, 0.1, DEFAULT_CONFIG.motion.deadZonePx, VIEWPORT);
+
+  for (let step = 1; state.mode !== 'returning'; step += 1) {
+    advanceMotion(state, SIMULATION_STEP, step * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
+  }
+  for (let step = 1; step <= 60; step += 1) {
+    advanceMotion(state, SIMULATION_STEP, 1.05 + step * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
+  }
+  assert.ok(state.returnElapsed > 0);
+
+  const accepted = applyPointerSample(
+    state.pointer,
+    1200,
+    500,
+    1.6,
+    DEFAULT_CONFIG.motion.deadZonePx,
+    VIEWPORT,
+  );
+  assert.equal(accepted, true);
+  advanceMotion(state, SIMULATION_STEP, 1.6, DEFAULT_CONFIG, VIEWPORT);
+  assert.equal(state.mode, 'interactive');
+  assert.equal(state.returnElapsed, 0);
+
+  for (let step = 1; step <= 120 * 3; step += 1) {
+    advanceMotion(state, SIMULATION_STEP, 1.6 + step * SIMULATION_STEP, DEFAULT_CONFIG, VIEWPORT);
+  }
+  assert.equal(state.mode, 'drift');
 });
 
 test('effective input switches immediately to interactive mode', () => {
