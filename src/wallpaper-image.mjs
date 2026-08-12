@@ -102,7 +102,7 @@ export function wallpaperPath(env = process.env, homedir) {
   return path.join(wallpaperDataDirectory(env, homedir), FILE_NAME);
 }
 
-function displayKey(value) {
+export function displayKey(value) {
   const normalized = String(value).replace(/[^A-Za-z0-9_.-]/g, '_');
   return normalized || 'unknown';
 }

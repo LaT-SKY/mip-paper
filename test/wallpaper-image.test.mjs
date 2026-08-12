@@ -14,6 +14,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  displayKey,
   importWallpaper,
   inspectWallpaper,
   wallpaperDataDirectory,
@@ -36,6 +37,7 @@ async function exists(pathname) {
 }
 
 test('resolves the managed wallpaper under XDG data storage', () => {
+  assert.equal(displayKey('DP/1'), 'DP_1');
   assert.equal(
     wallpaperPath({ XDG_DATA_HOME: '/tmp/data' }, '/home/user'),
     '/tmp/data/mip-paper/wallpaper',
