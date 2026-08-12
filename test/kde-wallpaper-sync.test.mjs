@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -113,4 +113,42 @@ test('manual mode publishes one managed image to every display', async () => {
     ['a', 'file:///manual.jpg', `sha256:${'d'.repeat(64)}`],
     ['b', 'file:///manual.jpg', `sha256:${'d'.repeat(64)}`],
   ]);
+});
+
+test('upgrades matching legacy metadata that has no content key', async () => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'mip-paper-sync-'));
+  try {
+    const source = path.join(dataHome, 'source.png');
+    const displayDirectory = path.join(dataHome, 'mip-paper', 'wallpapers', 'a');
+    const destination = path.join(displayDirectory, 'wallpaper');
+    const metadata = await writeFile(source, 'fixture').then(async () => {
+      const stats = await import('node:fs/promises').then(({ stat }) => stat(source));
+      return { size: stats.size, mtimeMs: stats.mtimeMs };
+    });
+    await mkdir(displayDirectory, { recursive: true });
+    await writeFile(destination, 'fixture');
+    await writeFile(path.join(displayDirectory, 'metadata.json'), JSON.stringify({
+      displayId: 'a', screenIndex: 0, sourcePath: source,
+      size: metadata.size, mtimeMs: metadata.mtimeMs,
+    }));
+    let imports = 0;
+    const sync = createKdeWallpaperSync({
+      config: { wallpaper: { mode: 'kde' } },
+      plasmaConfigPath: '/config/plasma-org.kde.plasma.desktop-appletsrc',
+      env: { XDG_DATA_HOME: dataHome },
+      homedir: '/home/tester',
+      getDisplays: () => [{ id: 'a' }],
+      readConfig: async () => 'fixture',
+      parse: () => [{ screenIndex: 0, sourcePath: source, status: 'supported' }],
+      inspect: async () => ({ format: 'png', size: metadata.size, mtimeMs: metadata.mtimeMs, contentKey: `sha256:${'e'.repeat(64)}` }),
+      importDisplay: async () => { imports += 1; },
+      defaultWallpaper: '/default.jpg',
+    });
+    sync.start();
+    await sync.whenIdle();
+    assert.equal(imports, 1);
+    sync.stop();
+  } finally {
+    await rm(dataHome, { recursive: true, force: true });
+  }
 });
