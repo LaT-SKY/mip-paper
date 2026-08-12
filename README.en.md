@@ -185,6 +185,7 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
 ```json
 {
   "interactionEnabled": true,
+  "wallpaper": { "mode": "kde" },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "audio": {
     "enabled": true,
@@ -230,7 +231,7 @@ Unknown fields are rejected. `audio.*` and `color.*` support live reload; other 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
 | `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Restart |
-| `frameRate.interactive` | number, `>= 30` FPS | `60` | Target rate during interaction and return | Restart |
+| `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction and return | Restart |
 | `frameRate.drift` | integer, `1–180` FPS | `12` | Target rate during idle drift | Restart |
 
 ### Dynamic Accent Color
