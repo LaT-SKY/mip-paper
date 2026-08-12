@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import test from 'node:test';
 
 const configurationFields = [
@@ -70,6 +70,44 @@ test('publishes complete linked Chinese and English guides', async () => {
   assert.match(english, /former third-party wallpaper is not included/i);
 });
 
+test('keeps the guides organized around the user workflows and bundled showcase', async () => {
+  const [chinese, english, bundledImage] = await Promise.all([
+    readFile('README.md', 'utf8'),
+    readFile('README.en.md', 'utf8'),
+    stat('assets/default-wallpaper.jpg'),
+  ]);
+  assert.ok(bundledImage.isFile());
+  assert.ok(bundledImage.size > 0);
+  for (const heading of ['## 壁纸与展示', '## 安装与卸载', '## 使用方法', '## 配置文件']) {
+    assert.match(chinese, new RegExp(`^${heading}$`, 'm'));
+  }
+  for (const heading of ['## Wallpaper and Showcase', '## Installation and Removal', '## Usage', '## Configuration']) {
+    assert.match(english, new RegExp(`^${heading}$`, 'm'));
+  }
+  for (const readme of [chinese, english]) {
+    assert.match(readme, /assets\/default-wallpaper\.jpg/);
+    assert.doesNotMatch(readme, /<img[^>]+(?:docs\/images\/mip-paper-desktop\.webp|assets\/default-wallpaper\.jpg)/i);
+    const screenshotMentions = [...readme.matchAll(/docs\/images\/mip-paper-desktop\.webp/g)];
+    assert.equal(screenshotMentions.length, 1);
+    for (const mention of screenshotMentions) {
+      const lineStart = readme.lastIndexOf('\n', mention.index) + 1;
+      const lineEnd = readme.indexOf('\n', mention.index);
+      assert.match(readme.slice(lineStart, lineEnd === -1 ? readme.length : lineEnd), /^\s*<!--.*-->\s*$/);
+    }
+  }
+});
+
+test('documents safe runtime defaults and purge commands', async () => {
+  const [chinese, english] = await Promise.all([readFile('README.md', 'utf8'), readFile('README.en.md', 'utf8')]);
+  for (const readme of [chinese, english]) {
+    assert.match(readme, /"mode":\s*"hybrid"/);
+    assert.match(readme, /"drift":\s*12/);
+    assert.match(readme, /`frameRate\.drift`[^\n]*1[–-]180/);
+    assert.match(readme, /mip-paper teardown --purge/);
+    assert.match(readme, /mip-paper uninstall --purge/);
+  }
+});
+
 test('documents default per-display KDE wallpaper synchronization', async () => {
   const [chinese, english] = await Promise.all([readFile('README.md', 'utf8'), readFile('README.en.md', 'utf8')]);
   for (const readme of [chinese, english]) {
@@ -109,7 +147,7 @@ test('documents GeoClue setup and QWeather Icons attribution', async () => {
   assert.match(readme, /XDG Desktop Portal/);
 });
 
-test('documents the supported KWin version and release order', async () => {
+test('documents the supported KWin version', async () => {
   const [chinese, english] = await Promise.all([
     readFile('README.md', 'utf8'),
     readFile('README.en.md', 'utf8'),
@@ -117,8 +155,7 @@ test('documents the supported KWin version and release order', async () => {
   for (const readme of [chinese, english]) {
     assert.match(readme, /KWin\s*(?:>=|≥)\s*6\.7/);
   }
-  assert.match(english, /tag[\s\S]{0,160}(?:SHA-256|checksum)[\s\S]{0,160}\.SRCINFO/i);
-  assert.match(english, /npm run release:aur -- 0\.2\.0/);
+  assert.doesNotMatch(english, /release:aur|0\.2 Release|Release and AUR Workflow/i);
 });
 
 test('documents live accent modes, transition timing, and reduced motion', async () => {

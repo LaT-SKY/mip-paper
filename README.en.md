@@ -6,7 +6,7 @@ Mip-Paper is a dynamic desktop wallpaper engine for KDE Plasma 6, KWin 6, and Wa
 
 Mip-Paper is not a native Plasma wallpaper plugin and does not open a normal application window. Electron windows are managed by KWin on the desktop layer and are excluded from the taskbar, pager, Alt+Tab, and application launcher.
 
-## Features
+### Feature Overview
 
 - Independent rendering for displays with different resolutions, scales, layouts, and hot-plug events.
 - Pointer-driven pan, zoom, and slight rotation, followed by a smooth return to idle drift.
@@ -15,7 +15,11 @@ Mip-Paper is not a native Plasma wallpaper plugin and does not open a normal app
 - A stereo audio ribbon that reacts only to media playing through the current default output device.
 - A Plasma-owned systemd user service with orderly cleanup during logout, shutdown, and restart.
 
-## Images and Copyright
+## Wallpaper and Showcase
+
+![Mip-Paper bundled default wallpaper](assets/default-wallpaper.jpg)
+
+<!-- Reserved full desktop screenshot: docs/images/mip-paper-desktop.webp -->
 
 Mip-Paper includes a default photograph by LaT-SKY under CC BY 4.0; see the [image attribution](assets/ATTRIBUTION.md). EXIF and other metadata are removed from the distributed copy. The former third-party wallpaper is not included, and Mip-Paper does not download external images automatically.
 
@@ -46,12 +50,6 @@ mip-paper wallpaper use-kde
 
 A failed replacement preserves the previous valid image. A successful replacement restarts the service when it is active.
 
-## Privacy: Media Output Only
-
-The visualizer follows the current default PipeWire output device. It connects to sink monitor ports with `stream.capture.sink=true` and identifies the stream as `Stream/Input/Audio/Internal`. It never connects to a microphone, never records audio, and does not appear as a recording application in Plasma's microphone list.
-
-Raw PCM exists only briefly inside the main-process FFT pipeline. It is never written to disk, logs, cache, IPC, or the renderer. A white upward curve represents the left channel, a mirrored pink downward curve represents the right channel, and a wider cyan combined spectrum shows overall energy behind their shared baseline. The strokes have no glow, frosted background, border, or panel shadow.
-
 ## Requirements
 
 - Arch Linux or a compatible environment
@@ -60,7 +58,9 @@ Raw PCM exists only briefly inside the main-process FFT pipeline. It is never wr
 - PipeWire, WirePlumber, `pw-cat`, and `pw-metadata`
 - GeoClue for automatic location only
 
-## Install from AUR
+## Installation and Removal
+
+### Install from AUR
 
 With yay:
 
@@ -88,7 +88,42 @@ After completion, setup reports the active wallpaper file, the replacement comma
 mip-paper wallpaper set /path/to/image.jpg
 ```
 
-## Manage the Wallpaper and Service
+### Source Installation and Development Checks
+
+Source installs also use system `electron43` and do not copy npm Electron:
+
+```bash
+sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
+./bin/mip-paper install
+```
+
+Prepare without starting:
+
+```bash
+./bin/mip-paper install --no-start
+```
+
+Development checks:
+
+```bash
+npm ci
+npm test
+npm run check
+bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
+```
+
+### Removal
+
+For AUR installs, remove per-user integration before pacman-owned files:
+
+```bash
+mip-paper teardown
+sudo pacman -R mip-paper
+```
+
+Normal teardown preserves configuration, credentials, and the managed image. Explicitly remove all Mip-Paper user data with `mip-paper teardown --purge`. Source installs use `mip-paper uninstall` or `mip-paper uninstall --purge`.
+
+## Usage
 
 ```bash
 mip-paper start
@@ -145,12 +180,12 @@ Current weather refreshes every 30 minutes; forecasts and tides refresh every 6 
 
 ## Configuration
 
-The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Choose `color.mode` as `default` to keep the approved palette, `kde` to follow KDE's accent, `wallpaper` to analyze each display's wallpaper, or `hybrid` to prefer wallpaper and fall back to KDE. `color.transitionDurationMs` defaults to `900` ms and accepts `0–5000`; `0` switches immediately. Reduced motion preferences disable transitions automatically. Color settings support live reload without restarting. Complete defaults:
+The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Choose `color.mode` as `default` to keep the approved palette, `kde` to follow KDE's accent, `wallpaper` to analyze each display's wallpaper, or `hybrid` (default) to prefer wallpaper and fall back to KDE. `color.transitionDurationMs` defaults to `900` ms and accepts `0–5000`; `0` switches immediately. Reduced motion preferences disable transitions automatically. Color settings support live reload without restarting. Complete defaults:
 
 ```json
 {
   "interactionEnabled": true,
-  "color": { "mode": "default", "transitionDurationMs": 900 },
+  "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "audio": {
     "enabled": true,
     "gain": 1,
@@ -158,7 +193,7 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "fadeOutMs": 450,
     "fadeInMs": 160
   },
-  "frameRate": { "interactive": 60, "drift": 30 },
+  "frameRate": { "interactive": 60, "drift": 12 },
   "motion": {
     "interactionSpeed": 1.15,
     "returnSpeed": 0.3,
@@ -196,13 +231,13 @@ Unknown fields are rejected. `audio.*` and `color.*` support live reload; other 
 | --- | --- | --- | --- | --- |
 | `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Restart |
 | `frameRate.interactive` | number, `>= 30` FPS | `60` | Target rate during interaction and return | Restart |
-| `frameRate.drift` | number, `>= 30` FPS | `30` | Target rate during idle drift | Restart |
+| `frameRate.drift` | integer, `1–180` FPS | `12` | Target rate during idle drift | Restart |
 
 ### Dynamic Accent Color
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
-| `color.mode` | `default`, `kde`, `wallpaper`, or `hybrid` | `default` | Keep the default palette, follow KDE, analyze each display wallpaper, or fall back wallpaper → KDE → default | Live reload |
+| `color.mode` | `default`, `kde`, `wallpaper`, or `hybrid` | `hybrid` | Keep the default palette, follow KDE, analyze each display wallpaper, or fall back wallpaper → KDE → default | Live reload |
 | `color.transitionDurationMs` | integer, `0–5000 ms` | `900` | Accent transition duration; `0` is immediate and reduced motion forces `0` | Live reload |
 
 ### Audio Visualization
@@ -263,56 +298,17 @@ journalctl --user -u mip-paper.service -n 100 --no-pager
 - Unavailable weather: check credential mode, Portal permission, and network access. The key is never printed.
 - No normal window after `start`: expected; the windows live on the desktop layer.
 
-## Source Installation and Development
-
-Source installs also use system `electron43` and do not copy npm Electron:
-
-```bash
-sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
-./bin/mip-paper install
-```
-
-Prepare without starting:
-
-```bash
-./bin/mip-paper install --no-start
-```
-
-Development checks:
-
-```bash
-npm ci
-npm test
-npm run check
-bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
-```
-
-## 0.2 Release and AUR Workflow
-
-The release order is fixed: finish and commit 0.2, create and push the `v0.2.0` tag, verify the GitHub tag archive, calculate its SHA-256 checksum, generate PKGBUILD, and finally generate `.SRCINFO` with `makepkg --printsrcinfo`. Never calculate the release checksum before pushing the final tag.
-
-After the tag is published at the final commit, run:
-
-```bash
-npm run release:aur -- 0.2.0 /home/neo/Code/Projects/mip-paper-aur
-```
-
-The command verifies that the local and `origin` tag commits match, downloads `https://github.com/LaT-SKY/mip-paper/archive/refs/tags/v0.2.0.tar.gz`, calculates its SHA-256, and atomically updates `PKGBUILD`, `.SRCINFO`, `mip-paper.install`, and `LICENSE` in the AUR working tree. Then run the AUR `makepkg` checks, review the diff, and commit both PKGBUILD and `.SRCINFO`.
-
 Run the renderer scheduling probe with `mip-paper probe --duration 60`.
 
-## Uninstall
+## Privacy and Licenses
 
-For AUR installs, remove per-user integration before pacman-owned files:
+### Media Output Only
 
-```bash
-mip-paper teardown
-sudo pacman -R mip-paper
-```
+The visualizer follows the current default PipeWire output device. It connects to sink monitor ports with `stream.capture.sink=true` and identifies the stream as `Stream/Input/Audio/Internal`. It never connects to a microphone, never records audio, and does not appear as a recording application in Plasma's microphone list.
 
-Normal teardown preserves configuration, credentials, and the managed image. Explicitly remove all Mip-Paper user data with `mip-paper teardown --purge`. Source installs use `mip-paper uninstall` or `mip-paper uninstall --purge`.
+Raw PCM exists only briefly inside the main-process FFT pipeline. It is never written to disk, logs, cache, IPC, or the renderer. A white upward curve represents the left channel, a mirrored pink downward curve represents the right channel, and a wider cyan combined spectrum shows overall energy behind their shared baseline. The strokes have no glow, frosted background, border, or panel shadow.
 
-## Licenses and Third-Party Components
+### Licenses and Third-Party Components
 
 Mip-Paper program code is `GPL-3.0-only`; see [LICENSE](LICENSE). Copyright (C) 2026 LaT-SKY.
 

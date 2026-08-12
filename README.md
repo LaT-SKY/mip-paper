@@ -6,7 +6,7 @@ Mip-Paper 是面向 KDE Plasma 6、KWin 6 和 Wayland 的动态桌面壁纸引�
 
 Mip-Paper 不是 Plasma 原生 wallpaper plugin，也不会打开普通应用窗口。它由 Electron 创建受 KWin 管理的桌面层窗口；窗口不会进入任务栏、分页器、Alt+Tab 或应用启动器。
 
-## 功能
+### 功能概览
 
 - 每台显示器独立渲染，支持不同分辨率、缩放、布局和热插拔。
 - 指针移动驱动平移、缩放与轻微旋转；停止交互后平滑回归并进入缓慢漂移。
@@ -15,7 +15,11 @@ Mip-Paper 不是 Plasma 原生 wallpaper plugin，也不会打开普通应用窗
 - 音频声带显示左声道、右声道和合并频谱，只响应当前默认输出设备正在播放的媒体音频。
 - systemd 用户服务随 Plasma 工作区启动，并在注销、关机和重启时完成有序清理。
 
-## 图片与版权
+## 壁纸与展示
+
+![Mip-Paper 随包默认壁纸](assets/default-wallpaper.jpg)
+
+<!-- 完整桌面效果截图预留位置：docs/images/mip-paper-desktop.webp -->
 
 Mip-Paper 附带一张由 LaT-SKY 拍摄并以 CC BY 4.0 授权的默认照片，详见 [图片归属说明](assets/ATTRIBUTION.md)。发行副本已移除 EXIF 等元数据。项目不附带第三方壁纸，也不会自动下载外部图片。
 
@@ -46,12 +50,6 @@ mip-paper wallpaper use-kde
 
 替换失败时会保留上一张有效图片。若服务正在运行，成功更换后会自动重启壁纸。
 
-## 隐私：只响应媒体输出
-
-音频可视化通过 PipeWire 跟随当前默认输出设备。实现使用 `stream.capture.sink=true` 连接输出设备的 monitor 端口，并把流标记为 `Stream/Input/Audio/Internal`。它不会连接麦克风，不会录制或保存 PCM 音频，也不会作为录音应用出现在 Plasma 麦克风列表中。
-
-原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、缓存、IPC 或 renderer。白色曲线向上显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在共同基线后层显示总体能量。
-
 ## 环境要求
 
 - Arch Linux 或兼容环境
@@ -60,7 +58,9 @@ mip-paper wallpaper use-kde
 - PipeWire、WirePlumber、`pw-cat`、`pw-metadata`
 - GeoClue（仅自动定位需要）
 
-## 通过 AUR 安装
+## 安装与卸载
+
+### 通过 AUR 安装
 
 使用 yay：
 
@@ -88,7 +88,48 @@ mip-paper setup
 mip-paper wallpaper set /path/to/image.jpg
 ```
 
-## 管理壁纸与服务
+### 从源码安装与开发验证
+
+源码安装仍使用系统的 `electron43`，不会复制 npm Electron：
+
+```bash
+sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
+./bin/mip-paper install
+```
+
+只准备文件、不启动服务：
+
+```bash
+./bin/mip-paper install --no-start
+```
+
+开发检查：
+
+```bash
+npm ci
+npm test
+npm run check
+bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
+```
+
+### 卸载
+
+AUR 安装先清理当前用户集成，再由 pacman 删除系统文件：
+
+```bash
+mip-paper teardown
+sudo pacman -R mip-paper
+```
+
+普通 teardown 保留配置、天气凭据和用户图片。显式清除所有 Mip-Paper 用户数据：
+
+```bash
+mip-paper teardown --purge
+```
+
+源码安装使用 `mip-paper uninstall` 或 `mip-paper uninstall --purge`。
+
+## 使用方法
 
 ```bash
 mip-paper start
@@ -145,12 +186,12 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 
 ## 配置文件
 
-配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。强调色通过 `color.mode` 选择：`default` 保留当前粉色默认配色，`kde` 跟随 KDE 强调色，`wallpaper` 从每台显示器壁纸取色，`hybrid` 优先壁纸再回退 KDE。`color.transitionDurationMs` 默认 `900` ms，范围 `0–5000`；`0` 立即切换。系统启用“减少动态效果”时过渡自动关闭。颜色配置支持实时热加载。完整默认值：
+配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。强调色通过 `color.mode` 选择：`default` 保留当前粉色默认配色，`kde` 跟随 KDE 强调色，`wallpaper` 从每台显示器壁纸取色，`hybrid`（默认）优先壁纸再回退 KDE。`color.transitionDurationMs` 默认 `900` ms，范围 `0–5000`；`0` 立即切换。系统启用“减少动态效果”时过渡自动关闭。颜色配置支持实时热加载。完整默认值：
 
 ```json
 {
   "interactionEnabled": true,
-  "color": { "mode": "default", "transitionDurationMs": 900 },
+  "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "audio": {
     "enabled": true,
     "gain": 1,
@@ -160,7 +201,7 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
   },
   "frameRate": {
     "interactive": 60,
-    "drift": 30
+    "drift": 12
   },
   "motion": {
     "interactionSpeed": 1.15,
@@ -202,13 +243,13 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | --- | --- | --- | --- | --- |
 | `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 重启 |
 | `frameRate.interactive` | 数值，`>= 30` FPS | `60` | 交互与回归阶段目标帧率 | 重启 |
-| `frameRate.drift` | 数值，`>= 30` FPS | `30` | 待机漂移阶段目标帧率 | 重启 |
+| `frameRate.drift` | 整数，`1–180` FPS | `12` | 待机漂移阶段目标帧率 | 重启 |
 
 ### 动态强调色
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
-| `color.mode` | `default`、`kde`、`wallpaper` 或 `hybrid` | `default` | 保留默认配色、跟随 KDE、按屏幕壁纸取色，或按壁纸→KDE→默认顺序回退 | 实时热加载 |
+| `color.mode` | `default`、`kde`、`wallpaper` 或 `hybrid` | `hybrid` | 保留默认配色、跟随 KDE、按屏幕壁纸取色，或按壁纸→KDE→默认顺序回退 | 实时热加载 |
 | `color.transitionDurationMs` | 整数，`0–5000 ms` | `900` | 强调色切换时长；`0` 为立即切换，减少动态效果时强制为 `0` | 实时热加载 |
 
 ### 音频可视化
@@ -269,66 +310,21 @@ journalctl --user -u mip-paper.service -n 100 --no-pager
 - 天气 unavailable：检查凭据权限、Portal 定位权限和网络，日志不会打印 Key。
 - `start` 没有普通窗口：这是预期行为，壁纸位于桌面层。
 
-## 从源码安装与开发验证
-
-源码安装仍使用系统的 `electron43`，不会复制 npm Electron：
-
-```bash
-sudo pacman -S electron43 nodejs npm pipewire pipewire-audio wireplumber
-./bin/mip-paper install
-```
-
-只准备文件、不启动服务：
-
-```bash
-./bin/mip-paper install --no-start
-```
-
-开发检查：
-
-```bash
-npm ci
-npm test
-npm run check
-bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
-```
-
-## 0.2 发布与 AUR 流程
-
-发布顺序固定为：完成并提交 0.2 代码，创建并推送 `v0.2.0` tag，确认 GitHub tag archive 可下载，然后计算 SHA-256，生成 PKGBUILD，最后由 `makepkg --printsrcinfo` 生成 `.SRCINFO`。不得在 tag 推送前预先生成校验和。
-
-tag 已推送并指向最终提交后运行：
-
-```bash
-npm run release:aur -- 0.2.0 /home/neo/Code/Projects/mip-paper-aur
-```
-
-该命令会核对本地与 `origin` 的 tag commit，下载 `https://github.com/LaT-SKY/mip-paper/archive/refs/tags/v0.2.0.tar.gz`，计算 SHA-256，并原子更新 AUR 工作副本中的 `PKGBUILD`、`.SRCINFO`、`mip-paper.install` 和 `LICENSE`。随后必须在 AUR 仓库运行 `makepkg` 检查、审阅差异并提交；`.SRCINFO` 必须与 PKGBUILD 一同提交。
-
 渲染调度性能实验：
 
 ```bash
 mip-paper probe --duration 60
 ```
 
-## 卸载
+## 隐私与许可证
 
-AUR 安装先清理当前用户集成，再由 pacman 删除系统文件：
+### 只响应媒体输出
 
-```bash
-mip-paper teardown
-sudo pacman -R mip-paper
-```
+音频可视化通过 PipeWire 跟随当前默认输出设备。实现使用 `stream.capture.sink=true` 连接输出设备的 monitor 端口，并把流标记为 `Stream/Input/Audio/Internal`。它不会连接麦克风，不会录制或保存 PCM 音频，也不会作为录音应用出现在 Plasma 麦克风列表中。
 
-普通 teardown 保留配置、天气凭据和用户图片。显式清除所有 Mip-Paper 用户数据：
+原始 PCM 只在主进程内短暂进入 FFT 管线，不会写入磁盘、日志、缓存、IPC 或 renderer。白色曲线向上显示左声道，粉色曲线向下镜像显示右声道，较粗的青色合并频谱在共同基线后层显示总体能量。
 
-```bash
-mip-paper teardown --purge
-```
-
-源码安装使用 `mip-paper uninstall` 或 `mip-paper uninstall --purge`。
-
-## 许可证与第三方组件
+### 许可证与第三方组件
 
 Mip-Paper 程序代码采用 `GPL-3.0-only`，详见 [LICENSE](LICENSE)。Copyright (C) 2026 LaT-SKY。
 
