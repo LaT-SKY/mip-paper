@@ -155,7 +155,12 @@ async function run() {
         identity: source.wallpaperIdentity,
         contentKey: source.contentKey,
       });
-      const wallpaper = { ...source, generation: color.generation, color };
+      const wallpaper = {
+        ...source,
+        generation: color.generation,
+        wallpaperLuminance: color.wallpaperLuminance ?? null,
+        color,
+      };
       wallpaperTransactions.set(source.displayId, wallpaper);
       manager?.updateWallpaper(source.displayId, wallpaper);
     },
@@ -178,12 +183,18 @@ async function run() {
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
     wallpaperUrl,
-    getWallpaperTransaction: (display) => wallpaperTransactions.get(display.id) || {
-      wallpaperUrl,
-      wallpaperIdentity: { path: wallpaperPathname, size: 0, mtimeMs: 0 },
-      contentKey: null,
-      generation: 0,
-      color: colorService.getState(display.id),
+    getWallpaperTransaction: (display) => {
+      const active = wallpaperTransactions.get(display.id);
+      if (active) return active;
+      const color = colorService.getState(display.id);
+      return {
+        wallpaperUrl,
+        wallpaperIdentity: { path: wallpaperPathname, size: 0, mtimeMs: 0 },
+        contentKey: null,
+        generation: 0,
+        wallpaperLuminance: color?.wallpaperLuminance ?? null,
+        color,
+      };
     },
     onDisplaysChanged: () => {
       void colorService.reconcileDisplays();

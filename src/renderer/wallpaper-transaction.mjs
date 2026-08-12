@@ -9,6 +9,9 @@ function validTransaction(value) {
     && validIdentity(value.wallpaperIdentity)
     && /^sha256:[0-9a-f]{64}$/.test(value.contentKey)
     && Number.isInteger(value.generation) && value.generation >= 0
+    && (value.wallpaperLuminance === null
+      || (Number.isFinite(value.wallpaperLuminance)
+        && value.wallpaperLuminance >= 0 && value.wallpaperLuminance <= 1))
     && value.color && value.color.contentKey === value.contentKey
     && value.color.generation === value.generation);
 }
@@ -32,12 +35,13 @@ export function createWallpaperTransactionCoordinator({
       const image = await loadImage(transaction.wallpaperUrl);
       if (token !== latestToken) return false;
       promoteImage(image, transaction);
-      applyColor(transaction.color);
+      applyColor({ ...transaction.color, wallpaperLuminance: transaction.wallpaperLuminance });
       if (!transaction.color.analyzeWallpaper) return true;
-      const rgb = await analyzeImage(image);
-      if (token !== latestToken || !rgb) return false;
+      const analysis = await analyzeImage(image);
+      if (token !== latestToken || !analysis) return false;
       await submitAccent({
-        rgb,
+        rgb: analysis.rgb,
+        luminance: analysis.luminance,
         wallpaperIdentity: transaction.wallpaperIdentity,
         contentKey: transaction.contentKey,
         generation: transaction.generation,

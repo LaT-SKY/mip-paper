@@ -12,6 +12,8 @@ const keyA = `sha256:${'a'.repeat(64)}`;
 const keyB = `sha256:${'b'.repeat(64)}`;
 const colorA = Object.freeze([31, 173, 158]);
 const colorB = Object.freeze([220, 90, 70]);
+const luminanceA = 0.32;
+const luminanceB = 0.08;
 
 function fakeKdeWatcher() {
   let listener = null;
@@ -50,6 +52,7 @@ test('default mode never analyzes and publishes the approved accent per display'
     await f.service.start();
     assert.deepEqual(f.service.getState('DP-1'), {
       rgb: [255, 52, 120], source: 'default', transitionDurationMs: 900,
+      wallpaperLuminance: null,
       analyzeWallpaper: false, wallpaperIdentity: null, contentKey: null, generation: 0,
     });
     assert.equal(f.kdeWatcher.startCalls, 0);
@@ -77,18 +80,21 @@ test('A to B to A restores the cached color for A instead of inheriting B', asyn
     const a1 = await f.service.wallpaperChanged('DP-1', wallpaper(identityA, keyA));
     assert.equal(a1.analyzeWallpaper, true);
     assert.equal(await f.service.submitWallpaperAccent('DP-1', {
-      rgb: colorA, wallpaperIdentity: identityA, contentKey: keyA, generation: a1.generation,
+      rgb: colorA, luminance: luminanceA,
+      wallpaperIdentity: identityA, contentKey: keyA, generation: a1.generation,
     }), true);
     const b = await f.service.wallpaperChanged('DP-1', wallpaper(identityB, keyB));
     assert.equal(b.analyzeWallpaper, true);
     assert.equal(b.source, 'fallback');
     assert.equal(await f.service.submitWallpaperAccent('DP-1', {
-      rgb: colorB, wallpaperIdentity: identityB, contentKey: keyB, generation: b.generation,
+      rgb: colorB, luminance: luminanceB,
+      wallpaperIdentity: identityB, contentKey: keyB, generation: b.generation,
     }), true);
     const a2 = await f.service.wallpaperChanged('DP-1', wallpaper(identityA, keyA));
     assert.deepEqual(a2.rgb, colorA);
     assert.equal(a2.source, 'wallpaper');
     assert.equal(a2.analyzeWallpaper, false);
+    assert.equal(a2.wallpaperLuminance, luminanceA);
   } finally { f.service.stop(); await f.cleanup(); }
 });
 
@@ -99,17 +105,22 @@ test('different displays retain independent colors while identical content reuse
     const first = await f.service.wallpaperChanged('DP-1', wallpaper(identityA, keyA));
     const second = await f.service.wallpaperChanged('HDMI-1', wallpaper(identityB, keyB));
     await f.service.submitWallpaperAccent('DP-1', {
-      rgb: colorA, wallpaperIdentity: identityA, contentKey: keyA, generation: first.generation,
+      rgb: colorA, luminance: luminanceA,
+      wallpaperIdentity: identityA, contentKey: keyA, generation: first.generation,
     });
     await f.service.submitWallpaperAccent('HDMI-1', {
-      rgb: colorB, wallpaperIdentity: identityB, contentKey: keyB, generation: second.generation,
+      rgb: colorB, luminance: luminanceB,
+      wallpaperIdentity: identityB, contentKey: keyB, generation: second.generation,
     });
     assert.deepEqual(f.service.getState('DP-1').rgb, colorA);
     assert.deepEqual(f.service.getState('HDMI-1').rgb, colorB);
+    assert.equal(f.service.getState('DP-1').wallpaperLuminance, luminanceA);
+    assert.equal(f.service.getState('HDMI-1').wallpaperLuminance, luminanceB);
 
     const shared = await f.service.wallpaperChanged('HDMI-1', wallpaper(identityA, keyA));
     assert.deepEqual(shared.rgb, colorA);
     assert.equal(shared.analyzeWallpaper, false);
+    assert.equal(shared.wallpaperLuminance, luminanceA);
   } finally { f.service.stop(); await f.cleanup(); }
 });
 
@@ -120,7 +131,8 @@ test('content cache survives service restart and a changed display id', async ()
     await first.service.start();
     const request = await first.service.wallpaperChanged('DP-OLD', wallpaper(identityA, keyA));
     await first.service.submitWallpaperAccent('DP-OLD', {
-      rgb: colorA, wallpaperIdentity: identityA, contentKey: keyA, generation: request.generation,
+      rgb: colorA, luminance: luminanceA,
+      wallpaperIdentity: identityA, contentKey: keyA, generation: request.generation,
     });
     first.service.stop();
 
@@ -130,6 +142,7 @@ test('content cache survives service restart and a changed display id', async ()
       const restored = await second.service.wallpaperChanged('DP-NEW', wallpaper(identityA, keyA));
       assert.deepEqual(restored.rgb, colorA);
       assert.equal(restored.analyzeWallpaper, false);
+      assert.equal(restored.wallpaperLuminance, luminanceA);
     } finally { second.service.stop(); }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -157,13 +170,15 @@ test('writes versioned content cache and ignores stale or malformed entries', as
     await f.service.start();
     const request = await f.service.wallpaperChanged('DP-1', wallpaper(identityA, keyA));
     await f.service.submitWallpaperAccent('DP-1', {
-      rgb: colorA, wallpaperIdentity: identityA, contentKey: keyA, generation: request.generation,
+      rgb: colorA, luminance: luminanceA,
+      wallpaperIdentity: identityA, contentKey: keyA, generation: request.generation,
     });
     const pathname = path.join(f.root, 'by-content', `${'a'.repeat(64)}.json`);
     const cached = JSON.parse(await readFile(pathname, 'utf8'));
-    assert.equal(cached.version, 2);
-    assert.equal(cached.algorithmVersion, 1);
+    assert.equal(cached.version, 3);
+    assert.equal(cached.algorithmVersion, 2);
     assert.equal(cached.contentKey, keyA);
+    assert.equal(cached.luminance, luminanceA);
 
     await writeFile(pathname, JSON.stringify({ ...cached, algorithmVersion: 0, rgb: colorB }));
     f.service.stop();
@@ -176,7 +191,7 @@ test('writes versioned content cache and ignores stale or malformed entries', as
     } finally { stale.service.stop(); }
 
     await mkdir(path.dirname(pathname), { recursive: true });
-    await writeFile(pathname, JSON.stringify({ version: 2, algorithmVersion: 1, contentKey: keyA, rgb: [999, 0, 0] }));
+    await writeFile(pathname, JSON.stringify({ version: 3, algorithmVersion: 2, contentKey: keyA, rgb: [999, 0, 0], luminance: 0.4 }));
     const malformed = await fixture('wallpaper', { root: f.root, displayIds: ['OTHER'] });
     try {
       await malformed.service.start();
@@ -185,13 +200,34 @@ test('writes versioned content cache and ignores stale or malformed entries', as
   } finally { await f.cleanup(); }
 });
 
+test('ignores content caches with missing or out-of-range luminance', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'mip-paper-colors-'));
+  const pathname = path.join(root, 'by-content', `${'a'.repeat(64)}.json`);
+  try {
+    await mkdir(path.dirname(pathname), { recursive: true });
+    for (const value of [undefined, -0.1, 1.1]) {
+      const entry = {
+        version: 3, algorithmVersion: 2, contentKey: keyA, rgb: colorA,
+        ...(value === undefined ? {} : { luminance: value }),
+      };
+      await writeFile(pathname, JSON.stringify(entry));
+      const f = await fixture('wallpaper', { root, displayIds: [`DISPLAY-${String(value)}`] });
+      await f.service.start();
+      const state = await f.service.wallpaperChanged(`DISPLAY-${String(value)}`, wallpaper(identityA, keyA));
+      assert.equal(state.analyzeWallpaper, true);
+      f.service.stop();
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('hot config changes modes and transition duration without losing valid state', async () => {
   const f = await fixture('wallpaper');
   try {
     await f.service.start();
     const request = await f.service.wallpaperChanged('DP-1', wallpaper(identityA, keyA));
     await f.service.submitWallpaperAccent('DP-1', {
-      rgb: colorA, wallpaperIdentity: identityA, contentKey: keyA, generation: request.generation,
+      rgb: colorA, luminance: luminanceA,
+      wallpaperIdentity: identityA, contentKey: keyA, generation: request.generation,
     });
     f.service.updateConfig({ mode: 'default', transitionDurationMs: 0 });
     assert.deepEqual(f.service.getState('DP-1').rgb, [255, 52, 120]);

@@ -38,3 +38,10 @@ test('main owns both configuration watchers and the runtime coordinator', async 
   assert.match(lifecycle, /event\.preventDefault\(\)/);
   assert.match(lifecycle, /await stop\('audio spectrum',\s*stopAudioSpectrum\)/);
 });
+
+test('main binds wallpaper luminance into live and bootstrap transactions', async () => {
+  const main = await readFile(new URL('../src/main.mjs', import.meta.url), 'utf8');
+  assert.match(main, /wallpaperLuminance:\s*color\.wallpaperLuminance\s*\?\?\s*null/);
+  assert.match(main, /const color = colorService\.getState\(display\.id\)/);
+  assert.match(main, /wallpaperLuminance:\s*color\?\.wallpaperLuminance\s*\?\?\s*null/);
+});
