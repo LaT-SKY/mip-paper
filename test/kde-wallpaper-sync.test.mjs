@@ -39,18 +39,21 @@ test('reconciles each display and debounces Plasma changes', async () => {
       { screenIndex: 1, containmentId: 2, plugin: 'org.kde.image', sourcePath: '/two.png', status: 'supported' },
     ],
     watch: (_directory, callback) => { watcher.on('change', callback); return watcher; },
-    inspect: async () => ({ format: 'png' }),
+    inspect: async (pathname) => ({ format: 'png', size: 7, contentKey: pathname.includes('/a/') ? `sha256:${'a'.repeat(64)}` : `sha256:${'b'.repeat(64)}` }),
     importDisplay: async (source, destination) => { imports.push([source, destination]); },
     defaultWallpaper: '/default.jpg',
     manualWallpaper: '/manual.jpg',
     timers: clock,
-    onUpdate: (id, url, identity) => updates.push([id, url, identity]),
+    onUpdate: (source) => updates.push(source),
     onStatus: (status) => statuses.push(status),
   });
   sync.start();
   await sync.whenIdle();
   assert.equal(imports.length, 0); // missing real source files fall back independently
   assert.equal(updates.length, 2);
+  assert.equal(updates[0].displayId, 'a');
+  assert.equal(updates[1].displayId, 'b');
+  assert.notEqual(updates[0].contentKey, updates[1].contentKey);
   watcher.emit('change', 'change', 'plasma-org.kde.plasma.desktop-appletsrc');
   watcher.emit('change', 'rename', 'plasma-org.kde.plasma.desktop-appletsrc');
   watcher.emit('change', 'change', 'unrelatedrc');
@@ -77,15 +80,17 @@ test('keeps an unchanged cached source synchronized', async () => {
     getDisplays: () => [{ id: 'a' }],
     readConfig: async () => 'fixture',
     parse: () => [{ screenIndex: 0, sourcePath: source, status: 'supported' }],
-    inspect: async () => ({ format: 'png' }),
+    inspect: async () => ({ format: 'png', size: 7, contentKey: `sha256:${'c'.repeat(64)}` }),
     importDisplay: async () => {},
     defaultWallpaper: '/default.jpg',
+    onUpdate: (record) => statuses.push({ update: record }),
     onStatus: (status) => statuses.push(status),
   });
   sync.start();
   await sync.whenIdle();
   await sync.reconcile();
   assert.equal(statuses.at(-1).status, 'synchronized');
+  assert.equal(statuses.find((entry) => entry.update)?.update.contentKey, `sha256:${'c'.repeat(64)}`);
   sync.stop();
   await rm(dataHome, { recursive: true, force: true });
 });
@@ -99,9 +104,13 @@ test('manual mode publishes one managed image to every display', async () => {
     homedir: '/home/tester',
     getDisplays: () => [{ id: 'a' }, { id: 'b' }],
     manualWallpaper: '/manual.jpg',
-    onUpdate: (id, url, identity) => updates.push([id, url, identity]),
+    inspect: async () => ({ format: 'png', size: 7, contentKey: `sha256:${'d'.repeat(64)}` }),
+    onUpdate: (source) => updates.push(source),
   });
   sync.start();
   await sync.whenIdle();
-  assert.deepEqual(updates.map(([id, url]) => [id, url]), [['a', 'file:///manual.jpg'], ['b', 'file:///manual.jpg']]);
+  assert.deepEqual(updates.map(({ displayId, wallpaperUrl, contentKey }) => [displayId, wallpaperUrl, contentKey]), [
+    ['a', 'file:///manual.jpg', `sha256:${'d'.repeat(64)}`],
+    ['b', 'file:///manual.jpg', `sha256:${'d'.repeat(64)}`],
+  ]);
 });
