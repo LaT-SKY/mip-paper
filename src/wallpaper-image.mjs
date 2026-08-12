@@ -182,7 +182,7 @@ export async function importDisplayWallpaper(source, destination, metadata = {})
   const metadataPath = path.join(path.dirname(destination), 'metadata.json');
   const temporary = `${metadataPath}.${process.pid}.tmp`;
   const { writeFile } = await import('node:fs/promises');
-  await writeFile(temporary, JSON.stringify({ ...metadata, ...result }) + '\n', { mode: 0o600 });
+  await writeFile(temporary, JSON.stringify({ ...result, ...metadata, contentKey: result.contentKey }) + '\n', { mode: 0o600 });
   await rename(temporary, metadataPath);
   return result;
 }

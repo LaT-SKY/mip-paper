@@ -141,7 +141,7 @@ test('identifies managed wallpapers by their validated content and persists the 
     await writeFile(secondSource, images.png);
     await writeFile(thirdSource, images.jpeg);
 
-    const first = await importDisplayWallpaper(firstSource, firstDestination, { displayId: 'first' });
+    const first = await importDisplayWallpaper(firstSource, firstDestination, { displayId: 'first', mtimeMs: 12345 });
     const second = await importDisplayWallpaper(secondSource, secondDestination, { displayId: 'second' });
     const third = await importDisplayWallpaper(thirdSource, thirdDestination, { displayId: 'third' });
 
@@ -150,6 +150,7 @@ test('identifies managed wallpapers by their validated content and persists the 
     assert.notEqual(third.contentKey, first.contentKey);
     const metadata = JSON.parse(await readFile(path.join(path.dirname(firstDestination), 'metadata.json'), 'utf8'));
     assert.equal(metadata.contentKey, first.contentKey);
+    assert.equal(metadata.mtimeMs, 12345);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
