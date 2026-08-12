@@ -32,5 +32,5 @@ XDG Desktop Portal 可连接，但系统返回 `org.freedesktop.portal.Error.Not
 
 ## 剩余风险
 
-- `dbus-next@0.10.2` 的旧传递依赖在安装时报告 10 个 npm audit 问题（6 moderate、1 high、3 critical），并有一个可选原生安装脚本被 npm 阻止。当前 Portal D-Bus 调用可到达系统并得到明确策略错误，但依赖风险仍需后续替换或隔离评估。
+- `dbus-next@0.10.2` 已替换为 API 兼容的 `@particle/dbus-next@0.11.4`。新依赖移除了 `usocket` 原生构建链，并使用已修复的 `xml2js@0.6.2`；Portal D-Bus 调用行为保持不变。
 - 和风文档已宣布未来收紧 API Key 支持；认证模块应保留迁移到 JWT 的边界。

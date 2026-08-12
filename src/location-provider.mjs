@@ -1,4 +1,4 @@
-import dbus from 'dbus-next';
+import dbus from '@particle/dbus-next';
 
 const REQUEST_XML = `
 <node>
