@@ -4,8 +4,8 @@ import path from 'node:path';
 import { DEFAULT_ACCENT_RGB, normalizeRgb } from './accent-color.mjs';
 
 const MODES = new Set(['default', 'kde', 'wallpaper', 'hybrid']);
-const CACHE_VERSION = 2;
-const ALGORITHM_VERSION = 1;
+const CACHE_VERSION = 3;
+const ALGORITHM_VERSION = 2;
 const CONTENT_KEY_PATTERN = /^sha256:([0-9a-f]{64})$/;
 
 function normalizeConfig(value) {
@@ -48,8 +48,9 @@ function recordFor(displayId) {
     identity: null,
     contentKey: null,
     generation: 0,
-    wallpaperRgb: null,
+    wallpaperAnalysis: null,
     lastValidRgb: null,
+    lastValidLuminance: null,
   };
 }
 
@@ -84,13 +85,17 @@ export function createColorService({
   function selected(record) {
     if (colorConfig.mode === 'kde' && kdeRgb) return { rgb: kdeRgb, source: 'kde' };
     if (colorConfig.mode === 'wallpaper') {
-      if (record.wallpaperRgb) return { rgb: record.wallpaperRgb, source: 'wallpaper' };
-      if (record.lastValidRgb) return { rgb: record.lastValidRgb, source: 'fallback' };
+      if (record.wallpaperAnalysis) return { ...record.wallpaperAnalysis, source: 'wallpaper' };
+      if (record.lastValidRgb) return {
+        rgb: record.lastValidRgb, luminance: record.lastValidLuminance, source: 'fallback',
+      };
     }
     if (colorConfig.mode === 'hybrid') {
-      if (record.wallpaperRgb) return { rgb: record.wallpaperRgb, source: 'wallpaper' };
+      if (record.wallpaperAnalysis) return { ...record.wallpaperAnalysis, source: 'wallpaper' };
       if (kdeRgb) return { rgb: kdeRgb, source: 'kde' };
-      if (record.lastValidRgb) return { rgb: record.lastValidRgb, source: 'fallback' };
+      if (record.lastValidRgb) return {
+        rgb: record.lastValidRgb, luminance: record.lastValidLuminance, source: 'fallback',
+      };
     }
     return { rgb: DEFAULT_ACCENT_RGB, source: 'default' };
   }
@@ -100,9 +105,10 @@ export function createColorService({
     return {
       rgb: [...choice.rgb],
       source: choice.source,
+      wallpaperLuminance: choice.luminance ?? record.lastValidLuminance,
       transitionDurationMs: colorConfig.transitionDurationMs,
       analyzeWallpaper: (colorConfig.mode === 'wallpaper' || colorConfig.mode === 'hybrid')
-        && Boolean(record.identity && record.contentKey) && !record.wallpaperRgb,
+        && Boolean(record.identity && record.contentKey) && !record.wallpaperAnalysis,
       wallpaperIdentity: copyIdentity(record.identity),
       contentKey: record.contentKey,
       generation: record.generation,
@@ -140,19 +146,25 @@ export function createColorService({
 
   async function loadContentColor(contentKey) {
     if (contentCache.has(contentKey)) return contentCache.get(contentKey);
-    let rgb = null;
+    let analysis = null;
     try {
       const value = JSON.parse(await readFile(cachePath(contentKey), 'utf8'));
       if (value.version === CACHE_VERSION && value.algorithmVersion === ALGORITHM_VERSION
-          && value.contentKey === contentKey) rgb = normalizeRgb(value.rgb);
+          && value.contentKey === contentKey) {
+        const rgb = normalizeRgb(value.rgb);
+        if (rgb && Number.isFinite(value.luminance)
+            && value.luminance >= 0 && value.luminance <= 1) {
+          analysis = Object.freeze({ rgb, luminance: value.luminance });
+        }
+      }
     } catch {
       // Missing, stale, or malformed content cache is non-fatal.
     }
-    contentCache.set(contentKey, rgb);
-    return rgb;
+    contentCache.set(contentKey, analysis);
+    return analysis;
   }
 
-  async function persistContentColor(contentKey, rgb, generation) {
+  async function persistContentColor(contentKey, analysis, generation) {
     const pathname = cachePath(contentKey);
     await mkdir(path.dirname(pathname), { recursive: true, mode: 0o700 });
     const temporary = `${pathname}.${process.pid}.${generation}.tmp`;
@@ -160,7 +172,8 @@ export function createColorService({
       version: CACHE_VERSION,
       algorithmVersion: ALGORITHM_VERSION,
       contentKey,
-      rgb: [...rgb],
+      rgb: [...analysis.rgb],
+      luminance: analysis.luminance,
       updatedAt: now().toISOString(),
     };
     await writeFile(temporary, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
@@ -229,8 +242,11 @@ export function createColorService({
         record.identity = identity;
         record.contentKey = contentKey;
         record.generation += 1;
-        record.wallpaperRgb = await loadContentColor(contentKey);
-        if (record.wallpaperRgb) record.lastValidRgb = record.wallpaperRgb;
+        record.wallpaperAnalysis = await loadContentColor(contentKey);
+        if (record.wallpaperAnalysis) {
+          record.lastValidRgb = record.wallpaperAnalysis.rgb;
+          record.lastValidLuminance = record.wallpaperAnalysis.luminance;
+        }
       }
       if (started) publish(displayId);
       return stateFor(record);
@@ -250,13 +266,19 @@ export function createColorService({
       if (!sameIdentity(record.identity, identity) || record.contentKey !== contentKey) return false;
       const rgb = normalizeRgb(submission.rgb);
       if (!rgb) throw new TypeError('invalid RGB');
-      contentCache.set(contentKey, rgb);
+      if (!Number.isFinite(submission.luminance)
+          || submission.luminance < 0 || submission.luminance > 1) {
+        throw new TypeError('invalid wallpaper luminance');
+      }
+      const analysis = Object.freeze({ rgb, luminance: submission.luminance });
+      contentCache.set(contentKey, analysis);
       for (const active of records.values()) {
         if (active.contentKey !== contentKey) continue;
-        active.wallpaperRgb = rgb;
+        active.wallpaperAnalysis = analysis;
         active.lastValidRgb = rgb;
+        active.lastValidLuminance = analysis.luminance;
       }
-      await persistContentColor(contentKey, rgb, record.generation);
+      await persistContentColor(contentKey, analysis, record.generation);
       if (started) {
         for (const active of records.values()) {
           if (active.contentKey === contentKey) publish(active.displayId);
