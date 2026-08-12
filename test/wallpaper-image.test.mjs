@@ -15,6 +15,7 @@ import test from 'node:test';
 
 import {
   displayKey,
+  importDisplayWallpaper,
   importWallpaper,
   inspectWallpaper,
   wallpaperDataDirectory,
@@ -122,6 +123,33 @@ test('cleans a staged file when destination validation fails', async () => {
       (await readdir(destinationDirectory)).filter((name) => name.startsWith('.wallpaper-')),
       [],
     );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('identifies managed wallpapers by their validated content and persists the key', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'mip-paper-images-'));
+  try {
+    const firstSource = path.join(directory, 'first.png');
+    const secondSource = path.join(directory, 'second.png');
+    const thirdSource = path.join(directory, 'third.jpg');
+    const firstDestination = path.join(directory, 'displays', 'first', 'wallpaper');
+    const secondDestination = path.join(directory, 'displays', 'second', 'wallpaper');
+    const thirdDestination = path.join(directory, 'displays', 'third', 'wallpaper');
+    await writeFile(firstSource, images.png);
+    await writeFile(secondSource, images.png);
+    await writeFile(thirdSource, images.jpeg);
+
+    const first = await importDisplayWallpaper(firstSource, firstDestination, { displayId: 'first' });
+    const second = await importDisplayWallpaper(secondSource, secondDestination, { displayId: 'second' });
+    const third = await importDisplayWallpaper(thirdSource, thirdDestination, { displayId: 'third' });
+
+    assert.match(first.contentKey, /^sha256:[0-9a-f]{64}$/);
+    assert.equal(second.contentKey, first.contentKey);
+    assert.notEqual(third.contentKey, first.contentKey);
+    const metadata = JSON.parse(await readFile(path.join(path.dirname(firstDestination), 'metadata.json'), 'utf8'));
+    assert.equal(metadata.contentKey, first.contentKey);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

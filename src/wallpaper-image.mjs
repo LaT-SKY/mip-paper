@@ -7,6 +7,8 @@ import {
   rm,
   stat,
 } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 const APP_ID = 'mip-paper';
@@ -93,6 +95,12 @@ async function imageDimensions(pathname, size) {
   }
 }
 
+async function wallpaperContentKey(pathname) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(pathname)) hash.update(chunk);
+  return `sha256:${hash.digest('hex')}`;
+}
+
 export function wallpaperDataDirectory(env = process.env, homedir) {
   const base = env.XDG_DATA_HOME || path.join(homedir, '.local', 'share');
   return path.join(base, APP_ID);
@@ -142,6 +150,7 @@ export async function inspectWallpaper(pathname) {
       size: metadata.size,
       width: dimensions.width,
       height: dimensions.height,
+      contentKey: await wallpaperContentKey(pathname),
     });
   } catch (error) {
     if (error instanceof TypeError && /^Wallpaper must/.test(error.message)) {
