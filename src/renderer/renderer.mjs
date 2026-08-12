@@ -79,6 +79,9 @@ async function loadImage(url) {
 
 async function start() {
   const bootstrap = await window.wallpaper.getBootstrap();
+  let pendingColorState = bootstrap.color;
+  let handleColorUpdate = (nextColor) => { pendingColorState = nextColor; };
+  const unsubscribeColor = window.wallpaper.onColorUpdated((nextColor) => handleColorUpdate(nextColor));
   let image;
   const [initialImage, information] = await Promise.all([
     loadImage(bootstrap.wallpaperUrl),
@@ -87,7 +90,7 @@ async function start() {
   image = initialImage;
   let loadedWallpaperUrl = bootstrap.wallpaperUrl;
   let wallpaperGeneration = 0;
-  let colorState = bootstrap.color;
+  let colorState = pendingColorState;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const applyColor = (nextColor) => {
     colorState = nextColor;
@@ -132,12 +135,12 @@ async function start() {
   const unsubscribeAudioConfig = window.wallpaper.onAudioConfigUpdated((audioConfig) => {
     audioRibbon.setConfig(audioConfig);
   });
-  const unsubscribeColor = window.wallpaper.onColorUpdated((nextColor) => {
+  handleColorUpdate = (nextColor) => {
     applyColor(nextColor);
     void analyzeIfRequested(image, nextColor).catch((error) => {
       console.error(`Wallpaper color analysis failed: ${error?.message || error}`);
     });
-  });
+  };
   const unsubscribeWallpaper = window.wallpaper.onWallpaperUpdated(async ({ wallpaperUrl }) => {
     const generation = ++wallpaperGeneration;
     try {

@@ -5,6 +5,8 @@ import test from 'node:test';
 const configurationFields = [
   'interactionEnabled',
   'wallpaper.mode',
+  'color.mode',
+  'color.transitionDurationMs',
   'audio.enabled',
   'audio.gain',
   'audio.silenceDelayMs',
@@ -114,8 +116,18 @@ test('documents the supported KWin version and release order', async () => {
   ]);
   for (const readme of [chinese, english]) {
     assert.match(readme, /KWin\s*(?:>=|≥)\s*6\.7/);
-    assert.match(readme, /tag[\s\S]{0,160}(?:SHA-256|checksum|校验和)[\s\S]{0,160}\.SRCINFO/i);
-    assert.match(readme, /npm run release:aur -- 0\.2\.0/);
+  }
+  assert.match(english, /tag[\s\S]{0,160}(?:SHA-256|checksum)[\s\S]{0,160}\.SRCINFO/i);
+  assert.match(english, /npm run release:aur -- 0\.2\.0/);
+});
+
+test('documents live accent modes, transition timing, and reduced motion', async () => {
+  const [chinese, english] = await Promise.all([readFile('README.md', 'utf8'), readFile('README.en.md', 'utf8')]);
+  for (const readme of [chinese, english]) {
+    for (const mode of ['default', 'kde', 'wallpaper', 'hybrid']) assert.ok(readme.includes(`\`${mode}\``));
+    assert.match(readme, /900`?\s*ms/i);
+    assert.match(readme, /(减少动态效果|reduced motion)/i);
+    assert.match(readme, /(实时热加载|live reload)/i);
   }
 });
 

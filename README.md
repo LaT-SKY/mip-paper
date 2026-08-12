@@ -145,11 +145,12 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 
 ## 配置文件
 
-配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。完整默认值：
+配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。强调色通过 `color.mode` 选择：`default` 保留当前粉色默认配色，`kde` 跟随 KDE 强调色，`wallpaper` 从每台显示器壁纸取色，`hybrid` 优先壁纸再回退 KDE。`color.transitionDurationMs` 默认 `900` ms，范围 `0–5000`；`0` 立即切换。系统启用“减少动态效果”时过渡自动关闭。颜色配置支持实时热加载。完整默认值：
 
 ```json
 {
   "interactionEnabled": true,
+  "color": { "mode": "default", "transitionDurationMs": 900 },
   "audio": {
     "enabled": true,
     "gain": 1,
@@ -193,7 +194,7 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 }
 ```
 
-未知字段会被拒绝。`audio.*` 字段支持实时热加载；其他配置修改后需要重启壁纸服务，请运行 `mip-paper restart`。除 `audio.*` 外，错误类型或越界值会阻止服务启动并写入日志；音频字段的错误值会回退到默认值。
+未知字段会被拒绝。`audio.*` 与 `color.*` 字段支持实时热加载；其他配置修改后需要重启壁纸服务，请运行 `mip-paper restart`。除音频字段外，错误类型或越界值会阻止服务启动并写入日志；音频字段的错误值会回退到默认值。
 
 ### 顶层与帧率
 
@@ -202,6 +203,13 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 重启 |
 | `frameRate.interactive` | 数值，`>= 30` FPS | `60` | 交互与回归阶段目标帧率 | 重启 |
 | `frameRate.drift` | 数值，`>= 30` FPS | `30` | 待机漂移阶段目标帧率 | 重启 |
+
+### 动态强调色
+
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `color.mode` | `default`、`kde`、`wallpaper` 或 `hybrid` | `default` | 保留默认配色、跟随 KDE、按屏幕壁纸取色，或按壁纸→KDE→默认顺序回退 | 实时热加载 |
+| `color.transitionDurationMs` | 整数，`0–5000 ms` | `900` | 强调色切换时长；`0` 为立即切换，减少动态效果时强制为 `0` | 实时热加载 |
 
 ### 音频可视化
 
