@@ -2,24 +2,20 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { DEFAULT_ACCENT_RGB, normalizeRgb } from './accent-color.mjs';
-import { displayKey } from './wallpaper-image.mjs';
 
 const MODES = new Set(['default', 'kde', 'wallpaper', 'hybrid']);
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
+const ALGORITHM_VERSION = 1;
+const CONTENT_KEY_PATTERN = /^sha256:([0-9a-f]{64})$/;
 
 function normalizeConfig(value) {
   const color = value?.color ?? value;
-  if (!color || !MODES.has(color.mode)) {
-    throw new TypeError('invalid color mode');
-  }
+  if (!color || !MODES.has(color.mode)) throw new TypeError('invalid color mode');
   if (!Number.isInteger(color.transitionDurationMs)
       || color.transitionDurationMs < 0 || color.transitionDurationMs > 5000) {
     throw new TypeError('invalid color transition duration');
   }
-  return Object.freeze({
-    mode: color.mode,
-    transitionDurationMs: color.transitionDurationMs,
-  });
+  return Object.freeze({ mode: color.mode, transitionDurationMs: color.transitionDurationMs });
 }
 
 function normalizeIdentity(value) {
@@ -31,11 +27,15 @@ function normalizeIdentity(value) {
   return Object.freeze({ path: value.path, size: value.size, mtimeMs: value.mtimeMs });
 }
 
+function normalizeContentKey(value) {
+  const match = typeof value === 'string' ? CONTENT_KEY_PATTERN.exec(value) : null;
+  if (!match) throw new TypeError('invalid wallpaper content key');
+  return Object.freeze({ value, digest: match[1] });
+}
+
 function sameIdentity(left, right) {
-  return Boolean(left && right
-    && left.path === right.path
-    && left.size === right.size
-    && left.mtimeMs === right.mtimeMs);
+  return Boolean(left && right && left.path === right.path
+    && left.size === right.size && left.mtimeMs === right.mtimeMs);
 }
 
 function copyIdentity(value) {
@@ -46,10 +46,10 @@ function recordFor(displayId) {
   return {
     displayId,
     identity: null,
+    contentKey: null,
     generation: 0,
     wallpaperRgb: null,
     lastValidRgb: null,
-    cached: null,
   };
 }
 
@@ -71,11 +71,10 @@ export function createColorService({
   let started = false;
   let watcherStarted = false;
   const records = new Map();
+  const contentCache = new Map();
   const root = cacheRoot;
 
-  if (typeof root !== 'string' || root.length === 0) {
-    throw new TypeError('cacheRoot is required');
-  }
+  if (typeof root !== 'string' || root.length === 0) throw new TypeError('cacheRoot is required');
 
   function ensureRecord(displayId) {
     if (!records.has(displayId)) records.set(displayId, recordFor(displayId));
@@ -86,26 +85,26 @@ export function createColorService({
     if (colorConfig.mode === 'kde' && kdeRgb) return { rgb: kdeRgb, source: 'kde' };
     if (colorConfig.mode === 'wallpaper') {
       if (record.wallpaperRgb) return { rgb: record.wallpaperRgb, source: 'wallpaper' };
-      if (record.lastValidRgb) return { rgb: record.lastValidRgb, source: 'wallpaper' };
+      if (record.lastValidRgb) return { rgb: record.lastValidRgb, source: 'fallback' };
     }
     if (colorConfig.mode === 'hybrid') {
       if (record.wallpaperRgb) return { rgb: record.wallpaperRgb, source: 'wallpaper' };
       if (kdeRgb) return { rgb: kdeRgb, source: 'kde' };
-      if (record.lastValidRgb) return { rgb: record.lastValidRgb, source: 'wallpaper' };
+      if (record.lastValidRgb) return { rgb: record.lastValidRgb, source: 'fallback' };
     }
     return { rgb: DEFAULT_ACCENT_RGB, source: 'default' };
   }
 
   function stateFor(record) {
     const choice = selected(record);
-    const analyzeWallpaper = (colorConfig.mode === 'wallpaper' || colorConfig.mode === 'hybrid')
-      && Boolean(record.identity) && !record.wallpaperRgb;
     return {
       rgb: [...choice.rgb],
       source: choice.source,
       transitionDurationMs: colorConfig.transitionDurationMs,
-      analyzeWallpaper,
+      analyzeWallpaper: (colorConfig.mode === 'wallpaper' || colorConfig.mode === 'hybrid')
+        && Boolean(record.identity && record.contentKey) && !record.wallpaperRgb,
       wallpaperIdentity: copyIdentity(record.identity),
+      contentKey: record.contentKey,
       generation: record.generation,
     };
   }
@@ -134,30 +133,34 @@ export function createColorService({
     }
   }
 
-  async function loadCache(record) {
-    try {
-      const contents = await readFile(path.join(root, `${displayKey(record.displayId)}.json`), 'utf8');
-      const value = JSON.parse(contents);
-      if (value.version !== CACHE_VERSION || value.displayId !== record.displayId) return;
-      const rgb = normalizeRgb(value.rgb);
-      const wallpaperIdentity = normalizeIdentity(value.wallpaperIdentity);
-      if (!rgb) return;
-      record.cached = { rgb, wallpaperIdentity };
-      record.lastValidRgb = rgb;
-    } catch {
-      // A missing, stale, or malformed cache is non-fatal.
-    }
+  function cachePath(contentKey) {
+    const { digest } = normalizeContentKey(contentKey);
+    return path.join(root, 'by-content', `${digest}.json`);
   }
 
-  async function persist(record) {
-    await mkdir(root, { recursive: true, mode: 0o700 });
-    const pathname = path.join(root, `${displayKey(record.displayId)}.json`);
-    const temporary = `${pathname}.${process.pid}.${record.generation}.tmp`;
+  async function loadContentColor(contentKey) {
+    if (contentCache.has(contentKey)) return contentCache.get(contentKey);
+    let rgb = null;
+    try {
+      const value = JSON.parse(await readFile(cachePath(contentKey), 'utf8'));
+      if (value.version === CACHE_VERSION && value.algorithmVersion === ALGORITHM_VERSION
+          && value.contentKey === contentKey) rgb = normalizeRgb(value.rgb);
+    } catch {
+      // Missing, stale, or malformed content cache is non-fatal.
+    }
+    contentCache.set(contentKey, rgb);
+    return rgb;
+  }
+
+  async function persistContentColor(contentKey, rgb, generation) {
+    const pathname = cachePath(contentKey);
+    await mkdir(path.dirname(pathname), { recursive: true, mode: 0o700 });
+    const temporary = `${pathname}.${process.pid}.${generation}.tmp`;
     const payload = {
       version: CACHE_VERSION,
-      displayId: record.displayId,
-      rgb: [...record.wallpaperRgb],
-      wallpaperIdentity: copyIdentity(record.identity),
+      algorithmVersion: ALGORITHM_VERSION,
+      contentKey,
+      rgb: [...rgb],
       updatedAt: now().toISOString(),
     };
     await writeFile(temporary, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
@@ -167,12 +170,10 @@ export function createColorService({
   async function reconcileDisplays() {
     const active = new Set();
     for (const display of displays()) {
-      if (!display || typeof display.id !== 'string' || display.id.length === 0) continue;
-      active.add(display.id);
-      if (!records.has(display.id)) {
-        const record = ensureRecord(display.id);
-        await loadCache(record);
-      }
+      if (!display || (typeof display.id !== 'string' && typeof display.id !== 'number')) continue;
+      const displayId = display.id;
+      active.add(displayId);
+      ensureRecord(displayId);
     }
     for (const displayId of records.keys()) {
       if (!active.has(displayId)) records.delete(displayId);
@@ -205,9 +206,8 @@ export function createColorService({
     },
 
     setKdeAccent(value) {
-      if (value === null) {
-        kdeRgb = null;
-      } else {
+      if (value === null) kdeRgb = null;
+      else {
         const rgb = normalizeRgb(value);
         if (!rgb) throw new TypeError('invalid RGB');
         kdeRgb = rgb;
@@ -223,16 +223,14 @@ export function createColorService({
 
     async wallpaperChanged(displayId, value) {
       const record = ensureRecord(displayId);
-      const identity = normalizeIdentity(value);
-      if (!sameIdentity(record.identity, identity)) {
+      const identity = normalizeIdentity(value?.identity);
+      const contentKey = normalizeContentKey(value?.contentKey).value;
+      if (!sameIdentity(record.identity, identity) || record.contentKey !== contentKey) {
         record.identity = identity;
+        record.contentKey = contentKey;
         record.generation += 1;
-        if (record.cached && sameIdentity(record.cached.wallpaperIdentity, identity)) {
-          record.wallpaperRgb = record.cached.rgb;
-          record.lastValidRgb = record.cached.rgb;
-        } else {
-          record.wallpaperRgb = null;
-        }
+        record.wallpaperRgb = await loadContentColor(contentKey);
+        if (record.wallpaperRgb) record.lastValidRgb = record.wallpaperRgb;
       }
       if (started) publish(displayId);
       return stateFor(record);
@@ -241,20 +239,29 @@ export function createColorService({
     async submitWallpaperAccent(displayId, submission) {
       const record = records.get(displayId);
       if (!record || !submission || submission.generation !== record.generation) return false;
-      let identityValue;
+      let identity;
+      let contentKey;
       try {
-        identityValue = normalizeIdentity(submission.wallpaperIdentity);
+        identity = normalizeIdentity(submission.wallpaperIdentity);
+        contentKey = normalizeContentKey(submission.contentKey).value;
       } catch {
         return false;
       }
-      if (!sameIdentity(record.identity, identityValue)) return false;
+      if (!sameIdentity(record.identity, identity) || record.contentKey !== contentKey) return false;
       const rgb = normalizeRgb(submission.rgb);
       if (!rgb) throw new TypeError('invalid RGB');
-      record.wallpaperRgb = rgb;
-      record.lastValidRgb = rgb;
-      record.cached = { rgb, wallpaperIdentity: record.identity };
-      await persist(record);
-      if (started) publish(displayId);
+      contentCache.set(contentKey, rgb);
+      for (const active of records.values()) {
+        if (active.contentKey !== contentKey) continue;
+        active.wallpaperRgb = rgb;
+        active.lastValidRgb = rgb;
+      }
+      await persistContentColor(contentKey, rgb, record.generation);
+      if (started) {
+        for (const active of records.values()) {
+          if (active.contentKey === contentKey) publish(active.displayId);
+        }
+      }
       return true;
     },
   };
