@@ -18,14 +18,15 @@ test('applies validated accent roles and the configured duration', () => {
   const root = fakeRoot();
   assert.equal(applyAccentState(root, {
     rgb: [31, 173, 158], source: 'wallpaper', transitionDurationMs: 900,
+    wallpaperLuminance: 0.8,
   }, { reducedMotion: false }), true);
   assert.equal(root.style.getPropertyValue('--accent'), 'rgb(31 173 158)');
   assert.equal(root.style.getPropertyValue('--accent-dark'), 'rgb(22 120 110)');
   assert.equal(root.style.getPropertyValue('--accent-shadow'), 'rgb(31 173 158 / 0.76)');
   assert.equal(root.style.getPropertyValue('--accent-glow'), 'rgb(31 173 158 / 0.75)');
   assert.equal(root.style.getPropertyValue('--accent-audio-primary'), 'rgb(31 173 158)');
-  assert.equal(root.style.getPropertyValue('--accent-audio-energy'), 'rgb(94 196 185)');
-  assert.equal(root.style.getPropertyValue('--accent-audio-aux'), 'rgb(183 229 224)');
+  assert.equal(root.style.getPropertyValue('--accent-audio-complement'), 'rgb(208 37 55)');
+  assert.equal(root.style.getPropertyValue('--accent-audio-neutral'), 'rgb(0 0 0)');
   assert.equal(root.style.getPropertyValue('--accent-transition-ms'), '900ms');
   assert.equal(root.dataset.accentSource, 'wallpaper');
 });
@@ -50,8 +51,9 @@ test('samples a decoded wallpaper through a bounded 64 pixel canvas', () => {
       getImageData: () => ({ data: pixels }),
     }),
   };
-  const rgb = analyzeWallpaperImage({ naturalWidth: 4000, naturalHeight: 2000 }, { createCanvas: () => canvas });
-  assert.deepEqual(rgb, [22, 182, 166]);
+  const analysis = analyzeWallpaperImage({ naturalWidth: 4000, naturalHeight: 2000 }, { createCanvas: () => canvas });
+  assert.deepEqual(analysis.rgb, [22, 182, 166]);
+  assert.ok(analysis.luminance > 0 && analysis.luminance < 1);
   assert.equal(canvas.width, 64);
   assert.equal(canvas.height, 32);
   assert.deepEqual(calls[0].slice(1), [0, 0, 64, 32]);

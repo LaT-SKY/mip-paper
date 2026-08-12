@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  analyzeWallpaperPixels,
+  complementaryRgb,
+  contrastingNeutral,
   DEFAULT_ACCENT_RGB,
   normalizeRgb,
+  relativeLuminance,
   rgbToCss,
   selectWallpaperAccent,
 } from '../src/accent-color.mjs';
@@ -54,4 +58,21 @@ test('resolves equal scores by count and then stable numeric bin order', () => {
     { rgb: [255, 0, 0], count: 2 },
   ]);
   assert.deepEqual(selectWallpaperAccent(equal), [28, 227, 28]);
+});
+
+test('derives complementary and contrast-neutral audio colors', () => {
+  assert.equal(relativeLuminance([0, 0, 0]), 0);
+  assert.equal(relativeLuminance([255, 255, 255]), 1);
+  assert.deepEqual(complementaryRgb([31, 173, 158]), [208, 37, 55]);
+  assert.deepEqual(contrastingNeutral(0), [255, 255, 255]);
+  assert.deepEqual(contrastingNeutral(1), [0, 0, 0]);
+  assert.deepEqual(contrastingNeutral(0.179), [255, 255, 255]);
+  assert.deepEqual(contrastingNeutral(0.18), [0, 0, 0]);
+});
+
+test('analyzes accent and luminance from the same opaque wallpaper sample', () => {
+  const analysis = analyzeWallpaperPixels(pixels([{ rgb: [20, 180, 160], count: 4 }]));
+  assert.deepEqual(analysis.rgb, [22, 182, 166]);
+  assert.ok(Number.isFinite(analysis.luminance));
+  assert.ok(analysis.luminance > 0 && analysis.luminance < 1);
 });
