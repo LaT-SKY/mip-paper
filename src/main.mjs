@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { appendFile, stat } from 'node:fs/promises';
+import { appendFile } from 'node:fs/promises';
 import { watch as nodeWatch } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -40,7 +40,7 @@ let runtimeCoordinator;
 let wallpaperSync;
 let colorService;
 let kdeAccentWatcher;
-const wallpaperUrls = new Map();
+const wallpaperTransactions = new Map();
 
 const shutdownCoordinator = createShutdownCoordinator({
   quit: () => app.quit(),
@@ -130,22 +130,6 @@ async function run() {
   informationService = await buildInformationService(config);
   audioSpectrumService = createAudioSpectrumService({ config: config.audio });
 
-  wallpaperSync = createKdeWallpaperSync({
-    config,
-    plasmaConfigPath: path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'plasma-org.kde.plasma.desktop-appletsrc'),
-    getDisplays: () => screen.getAllDisplays(),
-    defaultWallpaper: wallpaperPathname,
-    manualWallpaper: wallpaperPathname,
-    watch: nodeWatch,
-    onUpdate(displayId, nextUrl, identity) {
-      wallpaperUrls.set(displayId, nextUrl);
-      manager?.updateWallpaper(displayId, nextUrl);
-      void colorService?.wallpaperChanged(displayId, identity);
-    },
-    onStatus: (status) => {
-      if (status.status === 'watch-error' || status.status === 'config-error') console.error(`KDE wallpaper sync: ${status.reason}`);
-    },
-  });
   kdeAccentWatcher = createKdeAccentWatcher({
     pathname: path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'kdeglobals'),
     onAccent: (rgb) => colorService?.setKdeAccent(rgb),
@@ -157,6 +141,27 @@ async function run() {
     cacheRoot: colorCacheDirectory(process.env, os.homedir()),
     kdeWatcher: kdeAccentWatcher,
     onUpdate: (displayId, state) => manager?.updateColor(displayId, state),
+  });
+  await colorService.start();
+  wallpaperSync = createKdeWallpaperSync({
+    config,
+    plasmaConfigPath: path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'plasma-org.kde.plasma.desktop-appletsrc'),
+    getDisplays: () => screen.getAllDisplays(),
+    defaultWallpaper: wallpaperPathname,
+    manualWallpaper: wallpaperPathname,
+    watch: nodeWatch,
+    async onUpdate(source) {
+      const color = await colorService.wallpaperChanged(source.displayId, {
+        identity: source.wallpaperIdentity,
+        contentKey: source.contentKey,
+      });
+      const wallpaper = { ...source, generation: color.generation, color };
+      wallpaperTransactions.set(source.displayId, wallpaper);
+      manager?.updateWallpaper(source.displayId, wallpaper);
+    },
+    onStatus: (status) => {
+      if (status.status === 'watch-error' || status.status === 'config-error') console.error(`KDE wallpaper sync: ${status.reason}`);
+    },
   });
   wallpaperSync.start();
   await wallpaperSync.whenIdle();
@@ -173,7 +178,13 @@ async function run() {
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
     wallpaperUrl,
-    getWallpaperUrl: (display) => wallpaperUrls.get(display.id) || wallpaperUrl,
+    getWallpaperTransaction: (display) => wallpaperTransactions.get(display.id) || {
+      wallpaperUrl,
+      wallpaperIdentity: { path: wallpaperPathname, size: 0, mtimeMs: 0 },
+      contentKey: null,
+      generation: 0,
+      color: colorService.getState(display.id),
+    },
     onDisplaysChanged: () => {
       void colorService.reconcileDisplays();
       void wallpaperSync.reconcile();
@@ -186,18 +197,6 @@ async function run() {
     } : null,
   });
   await manager.start();
-  await colorService.start();
-  for (const [displayId, source] of wallpaperSync.getDisplaySources()) {
-    let metadata = { size: source.size ?? 0, mtimeMs: source.mtimeMs ?? 0 };
-    if (source.size === undefined || source.mtimeMs === undefined) {
-      try { metadata = await stat(source.wallpaperPath); } catch {}
-    }
-    await colorService.wallpaperChanged(displayId, {
-      path: source.wallpaperPath,
-      size: metadata.size,
-      mtimeMs: metadata.mtimeMs,
-    });
-  }
   informationService.start();
   await audioSpectrumService.start();
   const credentialsPathname = weatherCredentialsPath(process.env, os.homedir());

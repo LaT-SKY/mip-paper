@@ -88,8 +88,8 @@ export function createKdeWallpaperSync({
     }
   }
 
-  function publishRecord(record) {
-    onUpdate({
+  async function publishRecord(record) {
+    await onUpdate({
       displayId: record.displayId,
       wallpaperUrl: record.wallpaperUrl,
       wallpaperIdentity: {
@@ -121,7 +121,7 @@ export function createKdeWallpaperSync({
           contentKey: inspected.contentKey,
         };
         sources.set(display.id, record);
-        publishRecord(record);
+        await publishRecord(record);
       }
       return;
     }
@@ -179,7 +179,7 @@ export function createKdeWallpaperSync({
       if (!previousRecord || imageChanged || previousRecord.wallpaperPath !== record.wallpaperPath
           || previousRecord.size !== record.size || previousRecord.mtimeMs !== record.mtimeMs
           || previousRecord.contentKey !== record.contentKey) {
-        publishRecord(record);
+        await publishRecord(record);
       }
       onStatus(record);
     }
