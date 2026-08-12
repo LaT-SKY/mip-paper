@@ -15,6 +15,7 @@ test('defaults match the approved v1 design', () => {
   assert.deepEqual(DEFAULT_CONFIG, {
     interactionEnabled: true,
     wallpaper: { mode: 'kde' },
+    color: { mode: 'default', transitionDurationMs: 900 },
     audio: {
       enabled: true,
       gain: 1,
@@ -129,6 +130,18 @@ test('accepts KDE and manual wallpaper modes and rejects other values', () => {
   assert.equal(validateConfig({ wallpaper: { mode: 'manual' } }).wallpaper.mode, 'manual');
   assert.throws(() => validateConfig({ wallpaper: { mode: 'auto' } }), /wallpaper\.mode must be kde or manual/);
   assert.throws(() => validateConfig({ wallpaper: { image: 'x' } }), /Unknown configuration field: wallpaper\.image/);
+});
+
+test('accepts color modes and transition duration boundaries', () => {
+  assert.deepEqual(DEFAULT_CONFIG.color, { mode: 'default', transitionDurationMs: 900 });
+  for (const mode of ['default', 'kde', 'wallpaper', 'hybrid']) {
+    assert.equal(validateConfig({ color: { mode } }).color.mode, mode);
+  }
+  assert.equal(validateConfig({ color: { transitionDurationMs: 0 } }).color.transitionDurationMs, 0);
+  assert.equal(validateConfig({ color: { transitionDurationMs: 5000 } }).color.transitionDurationMs, 5000);
+  assert.throws(() => validateConfig({ color: { mode: 'auto' } }), /color\.mode/);
+  assert.throws(() => validateConfig({ color: { transitionDurationMs: 5001 } }), /color\.transitionDurationMs/);
+  assert.throws(() => validateConfig({ color: { transitionDurationMs: 1.5 } }), /color\.transitionDurationMs/);
 });
 
 test('rejects unknown fields with their full path', () => {
