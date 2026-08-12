@@ -170,6 +170,18 @@ test('documents live accent modes, transition timing, and reduced motion', async
   }
 });
 
+test('documents per-display content-based accent restoration', async () => {
+  const [chinese, english] = await Promise.all([readFile('README.md', 'utf8'), readFile('README.en.md', 'utf8')]);
+  assert.match(chinese, /每块屏幕.{0,30}(独立|各自).{0,30}强调色/s);
+  assert.match(chinese, /壁纸内容.{0,30}缓存/s);
+  assert.match(chinese, /A\s*→\s*B\s*→\s*A/);
+  assert.match(chinese, /重启.{0,30}(恢复|保持).{0,30}颜色/s);
+  assert.match(english, /each display.{0,40}(independent|own).{0,40}accent/is);
+  assert.match(english, /cache.{0,30}wallpaper content/is);
+  assert.match(english, /A\s*→\s*B\s*→\s*A/);
+  assert.match(english, /restart.{0,30}(restore|preserve).{0,30}color/is);
+});
+
 test('documents PipeWire audio visualization, live timing config and privacy boundaries', async () => {
   const readme = await readFile('README.md', 'utf8');
   for (const required of [
@@ -189,9 +201,8 @@ test('documents PipeWire audio visualization, live timing config and privacy bou
     '右声道',
     '合并频谱',
     '共同基线',
-    '白色曲线向上',
-    '粉色曲线向下',
-    '青色合并频谱',
+    '三层曲线',
+    '动态强调色',
     'Stream/Input/Audio/Internal',
     'Plasma 麦克风列表',
     'mip-paper doctor',

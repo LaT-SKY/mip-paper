@@ -235,6 +235,8 @@ Unknown fields are rejected. Every valid saved field takes effect without restar
 
 ### Dynamic Accent Color
 
+Each display owns an independent accent derived from its current wallpaper: different wallpapers can use different colors, and both the information cards and all three audio-ribbon layers consume that display's color. Results are cached by wallpaper content instead of display ID, so identical images can share one result and an A → B → A switch or service restart restores A's previous color.
+
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
 | `color.mode` | `default`, `kde`, `wallpaper`, or `hybrid` | `hybrid` | Keep the default palette, follow KDE, analyze each display wallpaper, or fall back wallpaper → KDE → default | Live reload |
