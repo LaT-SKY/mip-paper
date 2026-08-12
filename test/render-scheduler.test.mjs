@@ -88,6 +88,28 @@ test('adaptive drift mode skips alternate VSync callbacks at 30 FPS', () => {
   scheduler.stop();
 });
 
+test('adaptive adopts drift cadence on the frame that completes recovery', () => {
+  const clock = createClock();
+  const state = { mode: 'returning' };
+  const draws = [];
+  const reports = [];
+  const scheduler = createScheduler('adaptive', clock);
+  scheduler.start({
+    state,
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    advance(nextState) { nextState.mode = 'drift'; },
+    draw: (...args) => draws.push(args),
+    report: (event) => reports.push(event),
+  });
+
+  for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60]) clock.runRaf(time);
+
+  assert.equal(draws.length, 2);
+  assert.ok(reports.every((event) => event.targetFrameRate === 30));
+  scheduler.stop();
+});
+
 test('raf honors the 30 FPS drift deadline', () => {
   const { clock, scheduler, draws } = setup('raf', 'drift');
   for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60]) clock.runRaf(time);

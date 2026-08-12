@@ -194,6 +194,24 @@ async function start() {
           viewport,
         );
       }, 16);
+    } else if (probe.scenario === 'return') {
+      const sampleTime = performance.now() / 1000;
+      applyPointerSample(
+        state.pointer,
+        viewport.width / 2,
+        viewport.height / 2,
+        sampleTime,
+        currentConfig.motion.deadZonePx,
+        viewport,
+      );
+      applyPointerSample(
+        state.pointer,
+        viewport.width * 0.8,
+        viewport.height * 0.7,
+        sampleTime,
+        currentConfig.motion.deadZonePx,
+        viewport,
+      );
     }
     window.setInterval(() => {
       const summary = collector.flush();

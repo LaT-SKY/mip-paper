@@ -152,6 +152,12 @@ test('renderer consumes the motion core and read-only preload bootstrap', async 
   assert.match(script, /createScheduler\('adaptive'\)/);
 });
 
+test('return probe injects one interaction instead of continuous sweep input', async () => {
+  const script = await readFile('src/renderer/renderer.mjs', 'utf8');
+  assert.match(script, /probe\.scenario === 'return'[\s\S]*applyPointerSample/);
+  assert.match(script, /probe\.scenario === 'sweep'[\s\S]*setInterval/);
+});
+
 test('renderer analyzes requested wallpapers and applies explicit accent transitions', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
   const panelCss = await readFile('src/renderer/panel.css', 'utf8');
