@@ -23,6 +23,27 @@ export function wallpaperPath(env = process.env, homedir) {
   return path.join(wallpaperDataDirectory(env, homedir), FILE_NAME);
 }
 
+function displayKey(value) {
+  const normalized = String(value).replace(/[^A-Za-z0-9_.-]/g, '_');
+  return normalized || 'unknown';
+}
+
+export function displayWallpaperDirectory(displayId, env = process.env, homedir) {
+  return path.join(wallpaperDataDirectory(env, homedir), 'wallpapers', displayKey(displayId));
+}
+
+export function displayWallpaperPath(displayId, env = process.env, homedir) {
+  return path.join(displayWallpaperDirectory(displayId, env, homedir), FILE_NAME);
+}
+
+export function displayWallpaperMetadataPath(displayId, env = process.env, homedir) {
+  return path.join(displayWallpaperDirectory(displayId, env, homedir), 'metadata.json');
+}
+
+export function displayWallpaperStatusPath(displayId, env = process.env, homedir) {
+  return path.join(displayWallpaperDirectory(displayId, env, homedir), 'status.json');
+}
+
 export async function inspectWallpaper(pathname) {
   const metadata = await stat(pathname);
   if (!metadata.isFile()) {
@@ -66,4 +87,14 @@ export async function importWallpaper(source, destination) {
   } finally {
     await rm(temporary, { force: true });
   }
+}
+
+export async function importDisplayWallpaper(source, destination, metadata = {}) {
+  const result = await importWallpaper(source, destination);
+  const metadataPath = path.join(path.dirname(destination), 'metadata.json');
+  const temporary = `${metadataPath}.${process.pid}.tmp`;
+  const { writeFile } = await import('node:fs/promises');
+  await writeFile(temporary, JSON.stringify({ ...metadata, ...result }) + '\n', { mode: 0o600 });
+  await rename(temporary, metadataPath);
+  return result;
 }

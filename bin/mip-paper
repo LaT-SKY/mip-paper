@@ -52,7 +52,8 @@ Commands:
   status                Show the user service status
   doctor                Diagnose the installation and Plasma integration
   wallpaper set PATH    Import and use a JPEG, PNG or WebP image
-  wallpaper status      Show the managed wallpaper image status
+  wallpaper use-kde     Follow each display's KDE static wallpaper
+  wallpaper status      Show wallpaper mode and managed image status
   probe [OPTION]        Compare renderer scheduling strategies on the live desktop
 EOF
   exit 2
@@ -148,7 +149,8 @@ validate_source() {
   for required_path in \
     package.json package-lock.json src/main.mjs src/renderer/index.html \
     config/default.json scripts/kwin-rules.sh scripts/wallpaper-image.mjs \
-    src/wallpaper-image.mjs assets/default-wallpaper.jpg assets/ATTRIBUTION.md \
+    scripts/wallpaper-mode.mjs src/wallpaper-image.mjs src/plasma-wallpaper.mjs \
+    src/kde-wallpaper-sync.mjs assets/default-wallpaper.jpg assets/ATTRIBUTION.md \
     scripts/kwin-script.sh kwin/$APP_ID/metadata.json \
     kwin/$APP_ID/contents/code/main.js bin/mip-paper \
     resources/mip-paper.service.in; do
@@ -281,6 +283,9 @@ install_app() {
     install -m 644 "$INSTALL_ROOT/config/default.json" "$CONFIG_PATH"
     config_created=1
   fi
+  if [[ -n "$image_source" ]]; then
+    node "$INSTALL_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual
+  fi
   if [[ ! -e "$WEATHER_CREDENTIALS_PATH" ]]; then
     install -m 600 /dev/null "$WEATHER_CREDENTIALS_PATH"
     credentials_created=1
@@ -384,6 +389,9 @@ setup_app() {
   if [[ ! -e "$CONFIG_PATH" ]]; then
     install -m 644 "$SOURCE_ROOT/config/default.json" "$CONFIG_PATH"
   fi
+  if [[ -n "$image_source" ]]; then
+    node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual
+  fi
   if [[ ! -e "$WEATHER_CREDENTIALS_PATH" ]]; then
     install -m 600 /dev/null "$WEATHER_CREDENTIALS_PATH"
   else
@@ -441,17 +449,44 @@ service_command() {
 
 wallpaper_command() {
   local action=${1:-}
+  if [[ ! -e "$CONFIG_PATH" ]]; then
+    mkdir -p "$CONFIG_DIRECTORY"
+    install -m 644 "$SOURCE_ROOT/config/default.json" "$CONFIG_PATH"
+  fi
   case "$action" in
     set)
       (($# == 2)) || usage
       node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$2"
+      node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual
       if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then
         systemctl --user restart "$SERVICE_NAME"
       fi
       ;;
+    use-kde)
+      (($# == 1)) || usage
+      node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" kde
+      if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then
+        systemctl --user restart "$SERVICE_NAME"
+      fi
+      printf 'Wallpaper mode: kde (following each display static KDE wallpaper)\n'
+      ;;
     status)
       (($# == 1)) || usage
-      node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status
+      local mode
+      mode=$(node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" get "$CONFIG_PATH")
+      printf 'Wallpaper mode: %s\n' "$mode"
+      if [[ "$mode" == manual ]]; then
+        node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status
+      elif [[ -d "$DATA_DIRECTORY/wallpapers" ]]; then
+        find "$DATA_DIRECTORY/wallpapers" -mindepth 2 -maxdepth 2 -name status.json -type f -print0 \
+          | sort -z | xargs -0 -r -n1 node --input-type=module -e '
+import { readFile } from "node:fs/promises";
+const value = JSON.parse(await readFile(process.argv[1], "utf8"));
+console.log(`Display ${value.displayId ?? "unknown"}: ${value.status}${value.sourcePath ? ` source=${value.sourcePath}` : ""}${value.reason ? ` reason=${value.reason}` : ""}`);
+'
+      else
+        printf 'No per-display KDE wallpaper cache yet; start or restart mip-paper.\n'
+      fi
       ;;
     *) usage ;;
   esac

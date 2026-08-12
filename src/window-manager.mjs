@@ -4,6 +4,7 @@ export const INFORMATION_CHANNEL = 'wallpaper:get-information';
 export const INFORMATION_UPDATED_CHANNEL = 'wallpaper:information-updated';
 export const AUDIO_SPECTRUM_UPDATED_CHANNEL = 'wallpaper:audio-spectrum-updated';
 export const AUDIO_CONFIG_UPDATED_CHANNEL = 'wallpaper:audio-config-updated';
+export const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -20,10 +21,12 @@ export function createWindowManager({
   rendererPath,
   preloadPath,
   wallpaperUrl,
+  getWallpaperUrl = () => wallpaperUrl,
   probe = null,
   onProbeReport = null,
   informationService = null,
   audioSpectrumService = null,
+  onDisplaysChanged = () => {},
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
@@ -38,9 +41,9 @@ export function createWindowManager({
     return queue;
   };
 
-  const onDisplayAdded = () => { enqueueReconcile(); };
-  const onDisplayRemoved = () => { enqueueReconcile(); };
-  const onDisplayMetricsChanged = () => { enqueueReconcile(); };
+  const onDisplayAdded = () => { enqueueReconcile(); onDisplaysChanged(); };
+  const onDisplayRemoved = () => { enqueueReconcile(); onDisplaysChanged(); };
+  const onDisplayMetricsChanged = () => { enqueueReconcile(); onDisplaysChanged(); };
 
   function secureWebContents(webContents) {
     webContents.on('will-navigate', (event) => event.preventDefault());
@@ -83,7 +86,7 @@ export function createWindowManager({
     bootstrapByWebContents.set(webContentsId, {
       config: currentConfig,
       display,
-      wallpaperUrl,
+      wallpaperUrl: getWallpaperUrl(display),
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
       ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
       ...(probe ? { probe } : {}),
@@ -131,7 +134,7 @@ export function createWindowManager({
       bootstrapByWebContents.set(window.webContents.id, {
         config: currentConfig,
         display,
-        wallpaperUrl,
+        wallpaperUrl: getWallpaperUrl(display),
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
         ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
         ...(probe ? { probe } : {}),
@@ -216,10 +219,21 @@ export function createWindowManager({
     }
   }
 
+  function updateWallpaper(displayId, nextWallpaperUrl) {
+    const window = windows.get(displayId);
+    if (!window) return false;
+    const bootstrap = bootstrapByWebContents.get(window.webContents.id);
+    if (!bootstrap) return false;
+    bootstrapByWebContents.set(window.webContents.id, { ...bootstrap, wallpaperUrl: nextWallpaperUrl });
+    window.webContents.send(WALLPAPER_UPDATED_CHANNEL, { wallpaperUrl: nextWallpaperUrl });
+    return true;
+  }
+
   return {
     start,
     stop,
     updateAudioConfig,
+    updateWallpaper,
     whenIdle: () => queue,
   };
 }

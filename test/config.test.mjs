@@ -14,6 +14,7 @@ import {
 test('defaults match the approved v1 design', () => {
   assert.deepEqual(DEFAULT_CONFIG, {
     interactionEnabled: true,
+    wallpaper: { mode: 'kde' },
     audio: {
       enabled: true,
       gain: 1,
@@ -120,6 +121,14 @@ test('merges a partial configuration with defaults', () => {
   assert.equal(value.motion.deadZonePx, 5);
   assert.equal(value.motion.interactionSpeed, 1.15);
   assert.deepEqual(value.frameRate, DEFAULT_CONFIG.frameRate);
+  assert.equal(value.wallpaper.mode, 'kde');
+});
+
+test('accepts KDE and manual wallpaper modes and rejects other values', () => {
+  assert.equal(validateConfig({ wallpaper: { mode: 'kde' } }).wallpaper.mode, 'kde');
+  assert.equal(validateConfig({ wallpaper: { mode: 'manual' } }).wallpaper.mode, 'manual');
+  assert.throws(() => validateConfig({ wallpaper: { mode: 'auto' } }), /wallpaper\.mode must be kde or manual/);
+  assert.throws(() => validateConfig({ wallpaper: { image: 'x' } }), /Unknown configuration field: wallpaper\.image/);
 });
 
 test('rejects unknown fields with their full path', () => {

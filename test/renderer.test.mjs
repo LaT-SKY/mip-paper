@@ -130,6 +130,8 @@ test('renderer loads only the user-managed bootstrap wallpaper image', async () 
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
 
   assert.match(script, /loadImage\(bootstrap\.wallpaperUrl\)/);
+  assert.match(script, /onWallpaperUpdated/);
+  assert.match(script, /loadImage\(wallpaperUrl\)/);
   assert.doesNotMatch(script, /assets\/161-2\.jpeg/);
 });
 
