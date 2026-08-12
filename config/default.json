@@ -3,6 +3,10 @@
   "wallpaper": {
     "mode": "kde"
   },
+  "color": {
+    "mode": "default",
+    "transitionDurationMs": 900
+  },
   "audio": {
     "enabled": true,
     "gain": 1,

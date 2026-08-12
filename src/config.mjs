@@ -4,6 +4,7 @@ import path from 'node:path';
 export const DEFAULT_CONFIG = Object.freeze({
   interactionEnabled: true,
   wallpaper: Object.freeze({ mode: 'kde' }),
+  color: Object.freeze({ mode: 'default', transitionDurationMs: 900 }),
   audio: Object.freeze({
     enabled: true,
     gain: 1,
@@ -46,6 +47,7 @@ export const DEFAULT_CONFIG = Object.freeze({
 const SCHEMA = {
   interactionEnabled: 'boolean',
   wallpaper: { mode: 'wallpaperMode' },
+  color: { mode: 'colorMode', transitionDurationMs: 'colorTransitionDuration' },
   audio: {
     enabled: 'boolean',
     gain: 'positive',
@@ -166,6 +168,13 @@ function validateShape(value, schema, prefix = '') {
     if (rule === 'wallpaperMode' && !['kde', 'manual'].includes(fieldValue)) {
       throw new TypeError(`${fieldPath} must be kde or manual`);
     }
+    if (rule === 'colorMode' && !['default', 'kde', 'wallpaper', 'hybrid'].includes(fieldValue)) {
+      throw new TypeError(`${fieldPath} must be default, kde, wallpaper, or hybrid`);
+    }
+    if (rule === 'colorTransitionDuration' && (!Number.isInteger(fieldValue)
+      || fieldValue < 0 || fieldValue > 5000)) {
+      throw new RangeError(`${fieldPath} must be an integer between 0 and 5000`);
+    }
     if (rule === 'nullableLatitude' && fieldValue !== null
       && (!Number.isFinite(fieldValue) || fieldValue < -90 || fieldValue > 90)) {
       throw new RangeError(`${fieldPath} must be null or between -90 and 90`);
@@ -186,6 +195,10 @@ function mergeConfig(value) {
     wallpaper: {
       ...DEFAULT_CONFIG.wallpaper,
       ...(value.wallpaper ?? {}),
+    },
+    color: {
+      ...DEFAULT_CONFIG.color,
+      ...(value.color ?? {}),
     },
     audio: {
       ...DEFAULT_CONFIG.audio,
