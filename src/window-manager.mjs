@@ -23,7 +23,7 @@ export function createWindowManager({
   rendererPath,
   preloadPath,
   wallpaperUrl,
-  getWallpaperUrl = () => wallpaperUrl,
+  getWallpaperTransaction = (display) => ({ wallpaperUrl, displayId: display.id }),
   probe = null,
   onProbeReport = null,
   informationService = null,
@@ -89,7 +89,7 @@ export function createWindowManager({
     bootstrapByWebContents.set(webContentsId, {
       config: currentConfig,
       display,
-      wallpaperUrl: getWallpaperUrl(display),
+      wallpaper: getWallpaperTransaction(display),
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
       ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
       ...(colorService ? { color: colorService.getState(display.id) } : {}),
@@ -138,7 +138,7 @@ export function createWindowManager({
       bootstrapByWebContents.set(window.webContents.id, {
         config: currentConfig,
         display,
-        wallpaperUrl: getWallpaperUrl(display),
+        wallpaper: getWallpaperTransaction(display),
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
         ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
         ...(colorService ? { color: colorService.getState(display.id) } : {}),
@@ -230,13 +230,13 @@ export function createWindowManager({
     }
   }
 
-  function updateWallpaper(displayId, nextWallpaperUrl) {
+  function updateWallpaper(displayId, wallpaper) {
     const window = windows.get(displayId);
     if (!window) return false;
     const bootstrap = bootstrapByWebContents.get(window.webContents.id);
     if (!bootstrap) return false;
-    bootstrapByWebContents.set(window.webContents.id, { ...bootstrap, wallpaperUrl: nextWallpaperUrl });
-    window.webContents.send(WALLPAPER_UPDATED_CHANNEL, { wallpaperUrl: nextWallpaperUrl });
+    bootstrapByWebContents.set(window.webContents.id, { ...bootstrap, wallpaper });
+    window.webContents.send(WALLPAPER_UPDATED_CHANNEL, wallpaper);
     return true;
   }
 
@@ -245,7 +245,11 @@ export function createWindowManager({
     if (!window) return false;
     const bootstrap = bootstrapByWebContents.get(window.webContents.id);
     if (!bootstrap) return false;
-    bootstrapByWebContents.set(window.webContents.id, { ...bootstrap, color });
+    bootstrapByWebContents.set(window.webContents.id, {
+      ...bootstrap,
+      color,
+      ...(bootstrap.wallpaper ? { wallpaper: { ...bootstrap.wallpaper, color } } : {}),
+    });
     window.webContents.send(COLOR_UPDATED_CHANNEL, color);
     return true;
   }

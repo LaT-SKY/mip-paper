@@ -11,6 +11,7 @@ import {
   INFORMATION_CHANNEL,
   INFORMATION_UPDATED_CHANNEL,
   CONFIG_UPDATED_CHANNEL,
+  WALLPAPER_UPDATED_CHANNEL,
   createWindowManager,
   formatDisplayTargetTitle,
 } from '../src/window-manager.mjs';
@@ -169,8 +170,20 @@ function createFixture(config = DEFAULT_CONFIG) {
     },
   };
   const colorSubmissions = [];
+  const wallpaperTransactions = new Map(displays.map((display, index) => [display.id, {
+    wallpaperUrl: `file:///home/test/.local/share/mip-paper/wallpapers/${display.id}/wallpaper?v=${index + 1}`,
+    wallpaperIdentity: { path: `/wallpapers/${display.id}/wallpaper`, size: 123 + index, mtimeMs: 456 + index },
+    contentKey: `sha256:${String(index + 1).repeat(64)}`,
+    generation: 1,
+    color: {
+      rgb: display.id === 11 ? [255, 52, 120] : [10, 20, 30],
+      source: 'wallpaper', transitionDurationMs: 900, analyzeWallpaper: false,
+      wallpaperIdentity: { path: `/wallpapers/${display.id}/wallpaper`, size: 123 + index, mtimeMs: 456 + index },
+      contentKey: `sha256:${String(index + 1).repeat(64)}`, generation: 1,
+    },
+  }]));
   const colorService = {
-    getState: (displayId) => ({ rgb: displayId === 11 ? [255, 52, 120] : [10, 20, 30], source: 'default', transitionDurationMs: 900, analyzeWallpaper: false, wallpaperIdentity: null, generation: 0 }),
+    getState: (displayId) => ({ rgb: displayId === 11 ? [255, 52, 120] : [10, 20, 30], source: 'default', transitionDurationMs: 900, analyzeWallpaper: false, wallpaperIdentity: null, contentKey: null, generation: 0 }),
     submitWallpaperAccent: async (displayId, submission) => { colorSubmissions.push([displayId, submission]); return true; },
   };
   const manager = createWindowManager({
@@ -184,7 +197,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     colorService,
     rendererPath: '/app/src/renderer/index.html',
     preloadPath: '/app/src/preload.mjs',
-    wallpaperUrl: 'file:///home/test/.local/share/mip-paper/wallpaper',
+    getWallpaperTransaction: (display) => wallpaperTransactions.get(display.id),
   });
   return {
     manager,
@@ -196,6 +209,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     audioListeners,
     audioSnapshot,
     colorSubmissions,
+    wallpaperTransactions,
   };
 }
 
@@ -226,7 +240,7 @@ test('creates hardened windows for full display bounds', async () => {
 });
 
 test('provides bootstrap data only to a managed renderer', async () => {
-  const { manager, displays, ipcMain } = createFixture();
+  const { manager, displays, ipcMain, wallpaperTransactions } = createFixture();
   await manager.start();
   const first = FakeWindow.instances[0];
   const handler = ipcMain.handlers.get(BOOTSTRAP_CHANNEL);
@@ -234,7 +248,7 @@ test('provides bootstrap data only to a managed renderer', async () => {
   assert.deepEqual(await handler({ sender: first.webContents }), {
     config: DEFAULT_CONFIG,
     display: displays[0],
-    wallpaperUrl: 'file:///home/test/.local/share/mip-paper/wallpaper',
+    wallpaper: wallpaperTransactions.get(11),
     information: { weather: { status: 'fresh' } },
     audioSpectrum: {
       status: 'unavailable',
@@ -246,7 +260,7 @@ test('provides bootstrap data only to a managed renderer', async () => {
     },
     color: {
       rgb: [255, 52, 120], source: 'default', transitionDurationMs: 900,
-      analyzeWallpaper: false, wallpaperIdentity: null, generation: 0,
+      analyzeWallpaper: false, wallpaperIdentity: null, contentKey: null, generation: 0,
     },
   });
   await assert.rejects(handler({ sender: { id: 999 } }), /Unknown wallpaper renderer/);
@@ -259,6 +273,7 @@ test('scopes wallpaper accent submissions and updates to the owning display', as
   const submission = {
     rgb: [31, 173, 158],
     wallpaperIdentity: { path: '/wallpaper', size: 12, mtimeMs: 34 },
+    contentKey: `sha256:${'a'.repeat(64)}`,
     generation: 1,
   };
   assert.equal(await ipcMain.handlers.get(COLOR_SUBMIT_CHANNEL)({ sender: first.webContents }, submission), true);
@@ -271,6 +286,31 @@ test('scopes wallpaper accent submissions and updates to the owning display', as
   assert.equal(manager.updateColor(11, { rgb: [1, 2, 3] }), true);
   assert.deepEqual(first.webContents.sent.at(-1), { channel: COLOR_UPDATED_CHANNEL, value: { rgb: [1, 2, 3] } });
   assert.equal(manager.updateColor(999, { rgb: [1, 2, 3] }), false);
+});
+
+test('publishes one complete wallpaper transaction to only the owning display', async () => {
+  const { manager } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+  const second = FakeWindow.instances[1];
+  const transaction = {
+    wallpaperUrl: 'file:///wallpapers/a?v=2',
+    wallpaperIdentity: { path: '/wallpapers/a', size: 10, mtimeMs: 20 },
+    contentKey: `sha256:${'a'.repeat(64)}`,
+    generation: 2,
+    color: {
+      rgb: [31, 173, 158], source: 'wallpaper', transitionDurationMs: 900,
+      analyzeWallpaper: false, wallpaperIdentity: { path: '/wallpapers/a', size: 10, mtimeMs: 20 },
+      contentKey: `sha256:${'a'.repeat(64)}`, generation: 2,
+    },
+  };
+
+  assert.equal(manager.updateWallpaper(11, transaction), true);
+  assert.deepEqual(first.webContents.sent.at(-1), { channel: WALLPAPER_UPDATED_CHANNEL, value: transaction });
+  assert.equal(second.webContents.sent.some(({ channel }) => channel === WALLPAPER_UPDATED_CHANNEL), false);
+  const bootstrap = await manager.whenIdle().then(() => true);
+  assert.equal(bootstrap, true);
+  assert.equal(manager.updateWallpaper(999, transaction), false);
 });
 
 test('streams one spectrum service to every window and unsubscribes closed windows', async () => {
