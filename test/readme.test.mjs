@@ -84,11 +84,26 @@ test('documents GeoClue setup and QWeather Icons attribution', async () => {
     'qweather-icons@1.8.0',
     'MIT',
     'CC BY 4.0',
+    'https://console.qweather.com/',
+    'chmod 600',
+    'mip-paper restart',
   ]) {
     assert.ok(readme.includes(required), `README is missing: ${required}`);
   }
 
   assert.match(readme, /XDG Desktop Portal/);
+});
+
+test('documents the supported KWin version and release order', async () => {
+  const [chinese, english] = await Promise.all([
+    readFile('README.md', 'utf8'),
+    readFile('README.en.md', 'utf8'),
+  ]);
+  for (const readme of [chinese, english]) {
+    assert.match(readme, /KWin\s*(?:>=|≥)\s*6\.7/);
+    assert.match(readme, /tag[\s\S]{0,160}(?:SHA-256|checksum|校验和)[\s\S]{0,160}\.SRCINFO/i);
+    assert.match(readme, /npm run release:aur -- 0\.2\.0/);
+  }
 });
 
 test('documents PipeWire audio visualization, live timing config and privacy boundaries', async () => {

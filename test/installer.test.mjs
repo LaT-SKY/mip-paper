@@ -74,6 +74,8 @@ if [[ "\${FAKE_QDBUS_FAIL:-0}" == 1 ]]; then exit 9; fi
 exit 0
 `);
   await writeExecutable(path.join(fakeBin, 'electron43'), '#!/usr/bin/env bash\nexit 0\n');
+  await writeExecutable(path.join(fakeBin, 'plasmashell'), '#!/usr/bin/env bash\nprintf "plasmashell 6.7.4\\n"\n');
+  await writeExecutable(path.join(fakeBin, 'kwin_wayland'), '#!/usr/bin/env bash\nprintf "kwin 6.7.4\\n"\n');
 
   const env = {
     ...process.env,
@@ -251,12 +253,17 @@ test('install re-enables and starts the Plasma session service by default', asyn
 test('install imports the default wallpaper before first start', async () => {
   const fixture = await createFixture();
   try {
-    await runCli(['install'], fixture);
+    const { stdout } = await runCli(['install'], fixture);
     assert.deepEqual(
       await readFile(fixture.wallpaper),
       await readFile(path.join(repositoryRoot, 'assets', 'default-wallpaper.jpg')),
     );
     assert.match(await readFile(fixture.systemctlLog, 'utf8'), /reenable --now/);
+    assert.match(stdout, /Wallpaper file:/);
+    assert.match(stdout, /mip-paper wallpaper set/);
+    assert.match(stdout, /Weather is not configured yet/);
+    assert.match(stdout, /console\.qweather\.com/);
+    assert.match(stdout, /chmod 600/);
   } finally {
     await cleanup(fixture);
   }
@@ -365,7 +372,7 @@ test('normal uninstall preserves config and purge removes it', async () => {
 test('packaged setup imports an image and enables per-user integration', async () => {
   const fixture = await createPackagedFixture();
   try {
-    await runCli(['setup', '--image', fixture.sourceImage], fixture);
+    const { stdout } = await runCli(['setup', '--image', fixture.sourceImage], fixture);
     assert.deepEqual(await readFile(fixture.wallpaper), png);
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.credentials), true);
@@ -373,6 +380,41 @@ test('packaged setup imports an image and enables per-user integration', async (
     assert.equal(await exists(fixture.kwinScript), false);
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
     assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user enable --now mip-paper\.service/);
+    assert.match(stdout, /Imported custom wallpaper/);
+    assert.match(stdout, /mip-paper wallpaper set/);
+    assert.match(stdout, /Weather is not configured yet/);
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('setup rejects KWin versions older than 6.7', async () => {
+  const fixture = await createPackagedFixture();
+  try {
+    await writeExecutable(
+      path.join(fixture.home, 'fake-bin', 'kwin_wayland'),
+      '#!/usr/bin/env bash\nprintf "kwin 6.6.5\\n"\n',
+    );
+    await assert.rejects(runCli(['setup'], fixture), (error) => {
+      assert.match(error.stderr, /KWin 6\.7 or newer is required.*6\.6\.5/);
+      return true;
+    });
+  } finally {
+    await cleanup(fixture);
+  }
+});
+
+test('setup reports an unparseable KWin version', async () => {
+  const fixture = await createPackagedFixture();
+  try {
+    await writeExecutable(
+      path.join(fixture.home, 'fake-bin', 'kwin_wayland'),
+      '#!/usr/bin/env bash\nprintf "unknown\\n"\n',
+    );
+    await assert.rejects(runCli(['setup'], fixture), (error) => {
+      assert.match(error.stderr, /Unable to determine the KWin version/);
+      return true;
+    });
   } finally {
     await cleanup(fixture);
   }

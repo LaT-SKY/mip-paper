@@ -45,7 +45,7 @@ Raw PCM exists only briefly inside the main-process FFT pipeline. It is never wr
 ## Requirements
 
 - Arch Linux or a compatible environment
-- KDE Plasma 6 and KWin 6 in a Wayland session
+- KDE Plasma 6 and KWin >= 6.7 in a Wayland session; KWin scripting APIs before 6.7 are unsupported
 - A systemd user manager
 - PipeWire, WirePlumber, `pw-cat`, and `pw-metadata`
 - GeoClue for automatic location only
@@ -71,6 +71,12 @@ mip-paper setup
 ```
 
 Setup creates missing configuration and weather credentials, imports the default photograph on first use, installs the user's KWin rule, enables the system KWin coordinator, and starts `mip-paper.service`. Existing configuration, credentials, and managed images are preserved. To select your own image immediately, run `mip-paper setup --image /path/to/image.png`.
+
+After completion, setup reports the active wallpaper file, the replacement command, and whether weather still needs configuration. The bundled photograph is only the initial value. Replace it at any time with:
+
+```bash
+mip-paper wallpaper set /path/to/image.jpg
+```
 
 ## Manage the Wallpaper and Service
 
@@ -114,6 +120,13 @@ Weather credentials are stored separately at `~/.config/mip-paper/weather-creden
   "apiHost": "your-project-host.qweatherapi.com",
   "apiKey": "your-api-key"
 }
+```
+
+Create a project and API key in the [QWeather Console](https://console.qweather.com/), then put the assigned API Host and API Key into those fields. Restrict the file and restart:
+
+```bash
+chmod 600 ~/.config/mip-paper/weather-credentials.json
+mip-paper restart
 ```
 
 The host is an HTTPS domain without scheme, path, query, or user information. Only the main process reads the key; it never enters the renderer, URLs, logs, or cache. Run `mip-paper restart` after changing credentials.
@@ -255,6 +268,18 @@ npm test
 npm run check
 bash -n bin/mip-paper scripts/kwin-rules.sh scripts/kwin-script.sh
 ```
+
+## 0.2 Release and AUR Workflow
+
+The release order is fixed: finish and commit 0.2, create and push the `v0.2.0` tag, verify the GitHub tag archive, calculate its SHA-256 checksum, generate PKGBUILD, and finally generate `.SRCINFO` with `makepkg --printsrcinfo`. Never calculate the release checksum before pushing the final tag.
+
+After the tag is published at the final commit, run:
+
+```bash
+npm run release:aur -- 0.2.0 /home/neo/Code/Projects/mip-paper-aur
+```
+
+The command verifies that the local and `origin` tag commits match, downloads `https://github.com/LaT-SKY/mip-paper/archive/refs/tags/v0.2.0.tar.gz`, calculates its SHA-256, and atomically updates `PKGBUILD`, `.SRCINFO`, `mip-paper.install`, and `LICENSE` in the AUR working tree. Then run the AUR `makepkg` checks, review the diff, and commit both PKGBUILD and `.SRCINFO`.
 
 Run the renderer scheduling probe with `mip-paper probe --duration 60`.
 
