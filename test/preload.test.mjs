@@ -14,6 +14,8 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.match(preload, /onAudioSpectrumUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onAudioConfigUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onWallpaperUpdated\s*:\s*\(listener\)/);
+  assert.match(preload, /onColorUpdated\s*:\s*\(listener\)/);
+  assert.match(preload, /submitWallpaperAccent\s*:\s*\(submission\)\s*=>\s*ipcRenderer\.invoke/);
   assert.match(preload, /removeListener/);
   assert.doesNotMatch(preload, /getAudioSpectrum|pw-cat|pw-metadata|spawn|rawPcm|selectAudioDevice/i);
 });
