@@ -173,20 +173,19 @@ gsettings set org.gnome.system.location enabled true
 }
 ```
 
-先登录[和风天气控制台](https://console.qweather.com/)创建项目和 API Key；控制台分配的 API Host 与 API Key 分别填入上面的字段。写入后收紧权限并重启：
+先登录[和风天气控制台](https://console.qweather.com/)创建项目和 API Key；控制台分配的 API Host 与 API Key 分别填入上面的字段。写入后收紧权限：
 
 ```bash
 chmod 600 ~/.config/mip-paper/weather-credentials.json
-mip-paper restart
 ```
 
-Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 只由主进程读取，不进入 renderer、URL、日志或缓存。修改凭据后运行 `mip-paper restart`。
+Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户信息。Key 只由主进程读取，不进入 renderer、URL、日志或缓存。保存合法凭据后会立即重新定位并刷新天气；无效、不安全、未完整写入或被删除的文件会保留最后一份有效凭据，修正后自动恢复。
 
 实时天气每 30 分钟刷新，预报和潮汐每 6 小时刷新。缓存 6 小时内为 fresh，6 至 24 小时为 stale，超过 24 小时为 unavailable。天气数据由和风天气提供；`qweather-icons@1.8.0` 代码采用 MIT，图标采用 CC BY 4.0。
 
 ## 配置文件
 
-配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。强调色通过 `color.mode` 选择：`default` 保留当前粉色默认配色，`kde` 跟随 KDE 强调色，`wallpaper` 从每台显示器壁纸取色，`hybrid`（默认）优先壁纸再回退 KDE。`color.transitionDurationMs` 默认 `900` ms，范围 `0–5000`；`0` 立即切换。系统启用“减少动态效果”时过渡自动关闭。颜色配置支持实时热加载。完整默认值：
+配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。强调色通过 `color.mode` 选择：`default` 保留当前粉色默认配色，`kde` 跟随 KDE 强调色，`wallpaper` 从每台显示器壁纸取色，`hybrid`（默认）优先壁纸再回退 KDE。`color.transitionDurationMs` 默认 `900` ms，范围 `0–5000`；`0` 立即切换。系统启用“减少动态效果”时过渡自动关闭。所有配置均支持实时热加载。完整默认值：
 
 ```json
 {
@@ -236,15 +235,15 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 }
 ```
 
-未知字段会被拒绝。`audio.*` 与 `color.*` 字段支持实时热加载；其他配置修改后需要重启壁纸服务，请运行 `mip-paper restart`。除音频字段外，错误类型或越界值会阻止服务启动并写入日志；音频字段的错误值会回退到默认值。
+未知字段会被拒绝。保存合法文件后所有字段自动生效，不会重启 Electron 或壁纸窗口。JSON 错误、未知字段、越界值、未完整写入或删除文件都会保留最后一份有效配置；文件修正后自动恢复热加载。`mip-paper restart` 仍可用于服务管理和故障排查，但不是正常配置步骤。音频字段的错误值沿用兼容行为并回退到默认值。
 
 ### 顶层与帧率
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
-| `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 重启 |
-| `frameRate.interactive` | 整数，`1–180` FPS | `60` | 交互与回归阶段目标帧率 | 重启 |
-| `frameRate.drift` | 整数，`1–180` FPS | `12` | 待机漂移阶段目标帧率 | 重启 |
+| `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 实时热加载 |
+| `frameRate.interactive` | 整数，`1–180` FPS | `60` | 交互与回归阶段目标帧率 | 实时热加载 |
+| `frameRate.drift` | 整数，`1–180` FPS | `12` | 待机漂移阶段目标帧率 | 实时热加载 |
 
 ### 动态强调色
 
@@ -254,6 +253,8 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | `color.transitionDurationMs` | 整数，`0–5000 ms` | `900` | 强调色切换时长；`0` 为立即切换，减少动态效果时强制为 `0` | 实时热加载 |
 
 ### 音频可视化
+
+全部 `audio.*` 配置均实时热加载，并原位更新当前频谱控制器。
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
@@ -267,35 +268,35 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
-| `motion.interactionSpeed` | 有限数值，`> 0` | `1.15` | 指针交互追随速度 | 重启 |
-| `motion.returnSpeed` | 有限数值，`> 0` | `0.3` | 从交互姿态返回漂移轨迹的速度 | 重启 |
-| `motion.driftSpeed` | 有限数值，`> 0` | `1` | 待机漂移速度倍率 | 重启 |
-| `motion.deadZonePx` | 有限数值，`>= 0` px | `2` | 过滤细小指针抖动的滑动死区 | 重启 |
-| `motion.horizontalPanPercent` | 有限数值，`>= 0` % | `4.6` | 最大水平平移占视口宽度的比例 | 重启 |
-| `motion.verticalPanPercent` | 有限数值，`>= 0` % | `4.5` | 最大垂直平移占视口高度的比例 | 重启 |
-| `motion.maxRotationDegrees` | 有限数值，`>= 0` 度 | `0.7` | 最大画面旋转角度 | 重启 |
+| `motion.interactionSpeed` | 有限数值，`> 0` | `1.15` | 指针交互追随速度 | 实时热加载 |
+| `motion.returnSpeed` | 有限数值，`> 0` | `0.3` | 从交互姿态返回漂移轨迹的速度 | 实时热加载 |
+| `motion.driftSpeed` | 有限数值，`> 0` | `1` | 待机漂移速度倍率 | 实时热加载 |
+| `motion.deadZonePx` | 有限数值，`>= 0` px | `2` | 过滤细小指针抖动的滑动死区 | 实时热加载 |
+| `motion.horizontalPanPercent` | 有限数值，`>= 0` % | `4.6` | 最大水平平移占视口宽度的比例 | 实时热加载 |
+| `motion.verticalPanPercent` | 有限数值，`>= 0` % | `4.5` | 最大垂直平移占视口高度的比例 | 实时热加载 |
+| `motion.maxRotationDegrees` | 有限数值，`>= 0` 度 | `0.7` | 最大画面旋转角度 | 实时热加载 |
 
 ### 悬浮信息面板
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
-| `panel.autoExpandHide` | boolean | `true` | 按鼠标距离自动展开并延迟收起 | 重启 |
-| `panel.expandTriggerDistancePx` | 有限数值，`>= 0` px | `48` | 触发下一块面板展开所需的累计指针移动 | 重启 |
-| `panel.collapseDelaySeconds` | 有限数值，`>= 0` 秒 | `8` | 无交互后开始收起的等待时间 | 重启 |
-| `panel.expanded` | boolean | `true` | 禁用自动模式时使用的固定展开状态 | 重启 |
-| `panel.collapsedOpacity` | `0–1` | `0.08` | 收起面板的最低不透明度 | 重启 |
-| `panel.animation.staggerDelayMs` | 有限数值，`>= 0` ms | `60` | 多块面板依次动画的错开时间 | 重启 |
-| `panel.animation.durationMs` | 有限数值，`>= 400` ms | `950` | 包含两次回弹的单块面板动画时长 | 重启 |
+| `panel.autoExpandHide` | boolean | `true` | 按鼠标距离自动展开并延迟收起 | 实时热加载 |
+| `panel.expandTriggerDistancePx` | 有限数值，`>= 0` px | `48` | 触发下一块面板展开所需的累计指针移动 | 实时热加载 |
+| `panel.collapseDelaySeconds` | 有限数值，`>= 0` 秒 | `8` | 无交互后开始收起的等待时间 | 实时热加载 |
+| `panel.expanded` | boolean | `true` | 禁用自动模式时使用的固定展开状态 | 实时热加载 |
+| `panel.collapsedOpacity` | `0–1` | `0.08` | 收起面板的最低不透明度 | 实时热加载 |
+| `panel.animation.staggerDelayMs` | 有限数值，`>= 0` ms | `60` | 多块面板依次动画的错开时间 | 实时热加载 |
+| `panel.animation.durationMs` | 有限数值，`>= 400` ms | `950` | 包含两次回弹的单块面板动画时长 | 实时热加载 |
 
 ### 天气、定位与潮汐
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
-| `weather.location.mode` | `auto` 或 `fixed` | `auto` | 自动 Portal 定位或固定坐标 | 重启 |
-| `weather.location.latitude` | `null` 或 `-90–90` | `null` | fixed 模式纬度；必须与经度同时提供 | 重启 |
-| `weather.location.longitude` | `null` 或 `-180–180` | `null` | fixed 模式经度；必须与纬度同时提供 | 重启 |
-| `weather.location.fallbackLocationId` | 非空字符串 | `101281601` | 自动定位和缓存均失败时使用的和风 LocationID | 重启 |
-| `weather.tideStationId` | 非空字符串 | `P2352` | 潮汐观测站 ID | 重启 |
+| `weather.location.mode` | `auto` 或 `fixed` | `auto` | 自动 Portal 定位或固定坐标 | 实时热加载 |
+| `weather.location.latitude` | `null` 或 `-90–90` | `null` | fixed 模式纬度；必须与经度同时提供 | 实时热加载 |
+| `weather.location.longitude` | `null` 或 `-180–180` | `null` | fixed 模式经度；必须与纬度同时提供 | 实时热加载 |
+| `weather.location.fallbackLocationId` | 非空字符串 | `101281601` | 自动定位和缓存均失败时使用的和风 LocationID | 实时热加载 |
+| `weather.tideStationId` | 非空字符串 | `P2352` | 潮汐观测站 ID | 实时热加载 |
 
 `auto` 模式先请求 Portal，失败后使用缓存位置，最后使用 fallback LocationID。`fixed` 模式必须同时提供数值型纬度和经度，并且不会请求 Portal。
 

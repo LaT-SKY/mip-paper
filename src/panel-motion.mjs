@@ -37,6 +37,17 @@ export function createPanelState(config, cardCenters) {
   };
 }
 
+export function updatePanelConfig(state, config) {
+  if (!config || typeof config !== 'object') throw new TypeError('panel config is required');
+  state.config = config;
+  if (!config.autoExpandHide && state.expanded !== config.expanded) {
+    const pointer = state.lastPointer ?? { x: 0, y: 0 };
+    if (config.expanded) requestExpanded(state, pointer, state.timeMs);
+    else requestCollapsed(state, pointer, state.timeMs);
+  }
+  return state;
+}
+
 function begin(state, order, target, now) {
   state.expanded = target === 1;
   state.order = order.map(({ id }) => id);

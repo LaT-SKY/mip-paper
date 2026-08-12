@@ -167,20 +167,19 @@ Weather credentials are stored separately at `~/.config/mip-paper/weather-creden
 }
 ```
 
-Create a project and API key in the [QWeather Console](https://console.qweather.com/), then put the assigned API Host and API Key into those fields. Restrict the file and restart:
+Create a project and API key in the [QWeather Console](https://console.qweather.com/), then put the assigned API Host and API Key into those fields. Restrict the file:
 
 ```bash
 chmod 600 ~/.config/mip-paper/weather-credentials.json
-mip-paper restart
 ```
 
-The host is an HTTPS domain without scheme, path, query, or user information. Only the main process reads the key; it never enters the renderer, URLs, logs, or cache. Run `mip-paper restart` after changing credentials.
+The host is an HTTPS domain without scheme, path, query, or user information. Only the main process reads the key; it never enters the renderer, URLs, logs, or cache. Saving valid credentials immediately rebuilds the weather source and refreshes data. Invalid, unsafe, incomplete, or deleted files preserve the last valid credentials and recover automatically when fixed.
 
 Current weather refreshes every 30 minutes; forecasts and tides refresh every 6 hours. Cache state is fresh through 6 hours, stale from 6 to 24 hours, and unavailable after 24 hours. Weather data comes from QWeather. `qweather-icons@1.8.0` code is MIT and its icons are CC BY 4.0.
 
 ## Configuration
 
-The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Choose `color.mode` as `default` to keep the approved palette, `kde` to follow KDE's accent, `wallpaper` to analyze each display's wallpaper, or `hybrid` (default) to prefer wallpaper and fall back to KDE. `color.transitionDurationMs` defaults to `900` ms and accepts `0–5000`; `0` switches immediately. Reduced motion preferences disable transitions automatically. Color settings support live reload without restarting. Complete defaults:
+The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Choose `color.mode` as `default` to keep the approved palette, `kde` to follow KDE's accent, `wallpaper` to analyze each display's wallpaper, or `hybrid` (default) to prefer wallpaper and fall back to KDE. `color.transitionDurationMs` defaults to `900` ms and accepts `0–5000`; `0` switches immediately. Reduced motion preferences disable transitions automatically. Every setting supports live reload. Complete defaults:
 
 ```json
 {
@@ -224,15 +223,15 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
 }
 ```
 
-Unknown fields are rejected. `audio.*` and `color.*` support live reload; other settings require a restart. Outside audio settings, invalid types or ranges prevent startup and are reported in the service log. Invalid audio values fall back to their defaults.
+Unknown fields are rejected. Every valid saved field takes effect without restarting Electron or wallpaper windows. Invalid JSON, unknown fields, out-of-range values, incomplete writes, and deleted files retain the last valid configuration and recover automatically when fixed. `mip-paper restart` remains available for service management and troubleshooting, but is not a normal configuration step. Invalid audio values keep their compatibility behavior and fall back to defaults.
 
 ### Top Level and Frame Rates
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
-| `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Restart |
-| `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction and return | Restart |
-| `frameRate.drift` | integer, `1–180` FPS | `12` | Target rate during idle drift | Restart |
+| `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Live reload |
+| `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction and return | Live reload |
+| `frameRate.drift` | integer, `1–180` FPS | `12` | Target rate during idle drift | Live reload |
 
 ### Dynamic Accent Color
 
@@ -242,6 +241,8 @@ Unknown fields are rejected. `audio.*` and `color.*` support live reload; other 
 | `color.transitionDurationMs` | integer, `0–5000 ms` | `900` | Accent transition duration; `0` is immediate and reduced motion forces `0` | Live reload |
 
 ### Audio Visualization
+
+Every `audio.*` setting live reloads and updates the active spectrum controller in place.
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
@@ -255,35 +256,35 @@ Unknown fields are rejected. `audio.*` and `color.*` support live reload; other 
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
-| `motion.interactionSpeed` | finite number, `> 0` | `1.15` | Pointer-follow response speed | Restart |
-| `motion.returnSpeed` | finite number, `> 0` | `0.3` | Speed returning from interaction to drift | Restart |
-| `motion.driftSpeed` | finite number, `> 0` | `1` | Idle drift speed multiplier | Restart |
-| `motion.deadZonePx` | finite number, `>= 0` px | `2` | Sliding dead zone for pointer noise | Restart |
-| `motion.horizontalPanPercent` | finite number, `>= 0` % | `4.6` | Maximum horizontal pan as viewport percentage | Restart |
-| `motion.verticalPanPercent` | finite number, `>= 0` % | `4.5` | Maximum vertical pan as viewport percentage | Restart |
-| `motion.maxRotationDegrees` | finite number, `>= 0` degrees | `0.7` | Maximum image rotation | Restart |
+| `motion.interactionSpeed` | finite number, `> 0` | `1.15` | Pointer-follow response speed | Live reload |
+| `motion.returnSpeed` | finite number, `> 0` | `0.3` | Speed returning from interaction to drift | Live reload |
+| `motion.driftSpeed` | finite number, `> 0` | `1` | Idle drift speed multiplier | Live reload |
+| `motion.deadZonePx` | finite number, `>= 0` px | `2` | Sliding dead zone for pointer noise | Live reload |
+| `motion.horizontalPanPercent` | finite number, `>= 0` % | `4.6` | Maximum horizontal pan as viewport percentage | Live reload |
+| `motion.verticalPanPercent` | finite number, `>= 0` % | `4.5` | Maximum vertical pan as viewport percentage | Live reload |
+| `motion.maxRotationDegrees` | finite number, `>= 0` degrees | `0.7` | Maximum image rotation | Live reload |
 
 ### Floating Information Panels
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
-| `panel.autoExpandHide` | boolean | `true` | Expand by pointer proximity and collapse after delay | Restart |
-| `panel.expandTriggerDistancePx` | finite number, `>= 0` px | `48` | Accumulated pointer travel before the next panel expands | Restart |
-| `panel.collapseDelaySeconds` | finite number, `>= 0` seconds | `8` | Idle delay before collapse starts | Restart |
-| `panel.expanded` | boolean | `true` | Fixed state when automatic behavior is disabled | Restart |
-| `panel.collapsedOpacity` | `0–1` | `0.08` | Minimum opacity of collapsed panels | Restart |
-| `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `60` | Delay between panel animations | Restart |
-| `panel.animation.durationMs` | finite number, `>= 400` ms | `950` | Single-panel animation including two rebounds | Restart |
+| `panel.autoExpandHide` | boolean | `true` | Expand by pointer proximity and collapse after delay | Live reload |
+| `panel.expandTriggerDistancePx` | finite number, `>= 0` px | `48` | Accumulated pointer travel before the next panel expands | Live reload |
+| `panel.collapseDelaySeconds` | finite number, `>= 0` seconds | `8` | Idle delay before collapse starts | Live reload |
+| `panel.expanded` | boolean | `true` | Fixed state when automatic behavior is disabled | Live reload |
+| `panel.collapsedOpacity` | `0–1` | `0.08` | Minimum opacity of collapsed panels | Live reload |
+| `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `60` | Delay between panel animations | Live reload |
+| `panel.animation.durationMs` | finite number, `>= 400` ms | `950` | Single-panel animation including two rebounds | Live reload |
 
 ### Weather, Location, and Tides
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
-| `weather.location.mode` | `auto` or `fixed` | `auto` | Portal location or configured coordinates | Restart |
-| `weather.location.latitude` | `null` or `-90–90` | `null` | Fixed latitude; must be paired with longitude | Restart |
-| `weather.location.longitude` | `null` or `-180–180` | `null` | Fixed longitude; must be paired with latitude | Restart |
-| `weather.location.fallbackLocationId` | non-empty string | `101281601` | QWeather LocationID used after Portal and cache fail | Restart |
-| `weather.tideStationId` | non-empty string | `P2352` | Tide observation station ID | Restart |
+| `weather.location.mode` | `auto` or `fixed` | `auto` | Portal location or configured coordinates | Live reload |
+| `weather.location.latitude` | `null` or `-90–90` | `null` | Fixed latitude; must be paired with longitude | Live reload |
+| `weather.location.longitude` | `null` or `-180–180` | `null` | Fixed longitude; must be paired with latitude | Live reload |
+| `weather.location.fallbackLocationId` | non-empty string | `101281601` | QWeather LocationID used after Portal and cache fail | Live reload |
+| `weather.tideStationId` | non-empty string | `P2352` | Tide observation station ID | Live reload |
 
 Auto mode tries the Portal, then cached coordinates, then the fallback LocationID. Fixed mode requires numeric latitude and longitude and does not request the Portal.
 

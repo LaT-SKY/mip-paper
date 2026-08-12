@@ -3,6 +3,7 @@ import {
   createPanelState,
   getCardTransforms,
   recordPointer,
+  updatePanelConfig,
 } from '../panel-motion.mjs';
 import { buildMonthCalendar } from '../month-calendar.mjs';
 import { qweatherIconClass } from '../weather-icon.mjs';
@@ -52,6 +53,7 @@ export function createPanelController({ root, cards, config, viewport }) {
   }
 
   return {
+    setConfig(nextConfig) { updatePanelConfig(state, nextConfig); },
     recordPointer(x, y, nowMs) { recordPointer(state, x, y, nowMs); },
     resize(width, height) {
       viewport.width = width;

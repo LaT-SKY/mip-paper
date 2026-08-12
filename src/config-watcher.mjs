@@ -57,7 +57,9 @@ export function createConfigWatcher({
       running = true;
       try {
         fsWatcher = watch(directory, schedule);
-        fsWatcher.on?.('error', onError);
+        fsWatcher.on?.('error', (error) => {
+          if (running) onError(error);
+        });
       } catch (error) {
         running = false;
         fsWatcher = null;

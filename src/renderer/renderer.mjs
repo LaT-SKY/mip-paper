@@ -8,6 +8,7 @@ import { createProbeCollector } from '../performance-probe.mjs';
 import { createPanelController } from './panel.mjs';
 import { createAudioRibbonController } from './audio-ribbon.mjs';
 import { analyzeWallpaperImage, applyAccentState } from './accent.mjs';
+import { validateRuntimeConfig } from '../runtime-config.mjs';
 
 const canvas = document.getElementById('wallpaper');
 const errorOutput = document.getElementById('error');
@@ -113,18 +114,19 @@ async function start() {
   void analyzeIfRequested(image).catch((error) => {
     console.error(`Wallpaper color analysis failed: ${error?.message || error}`);
   });
-  const { config, display } = bootstrap;
+  const currentConfig = validateRuntimeConfig(bootstrap.config);
+  const { display } = bootstrap;
   const viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
-  const state = createMotionState(config, viewport, displayPhase(display.id));
+  const state = createMotionState(currentConfig, viewport, displayPhase(display.id));
   const panel = createPanelController({
     root: document.getElementById('information-panel'),
     cards: [...document.querySelectorAll('[data-panel-card]')],
-    config: config.panel,
+    config: currentConfig.panel,
     viewport,
   });
   const audioRibbon = createAudioRibbonController({
     root: document.querySelector('[data-audio-ribbon]'),
-    config: config.audio,
+    config: currentConfig.audio,
   });
   panel.setInformation(information ?? bootstrap.information);
   audioRibbon.setSnapshot(bootstrap.audioSpectrum, performance.now());
@@ -132,8 +134,19 @@ async function start() {
   const unsubscribeAudio = window.wallpaper.onAudioSpectrumUpdated((snapshot) => {
     audioRibbon.setSnapshot(snapshot, performance.now());
   });
-  const unsubscribeAudioConfig = window.wallpaper.onAudioConfigUpdated((audioConfig) => {
-    audioRibbon.setConfig(audioConfig);
+  const unsubscribeConfig = window.wallpaper.onConfigUpdated((candidate) => {
+    try {
+      const nextConfig = validateRuntimeConfig(candidate);
+      Object.assign(currentConfig, nextConfig);
+      panel.setConfig(currentConfig.panel);
+      audioRibbon.setConfig(currentConfig.audio);
+      if (!currentConfig.interactionEnabled) {
+        state.pointer.initialized = false;
+        state.pointer.lastInput = -Infinity;
+      }
+    } catch (error) {
+      console.error(`Runtime configuration ignored: ${error?.message || error}`);
+    }
   });
   handleColorUpdate = (nextColor) => {
     applyColor(nextColor);
@@ -157,7 +170,7 @@ async function start() {
   window.addEventListener('pagehide', () => {
     unsubscribeInformation();
     unsubscribeAudio();
-    unsubscribeAudioConfig();
+    unsubscribeConfig();
     unsubscribeColor();
     unsubscribeWallpaper();
     audioRibbon.destroy();
@@ -175,12 +188,12 @@ async function start() {
       displayId: display.id,
       mode: state.mode,
       scenario: probe.scenario,
-      targetFrameRate: config.frameRate.interactive,
+      targetFrameRate: currentConfig.frameRate.interactive,
     });
     const scheduler = createScheduler(probe.strategy);
     scheduler.start({
       state,
-      config,
+      config: currentConfig,
       viewport,
       advance: (...args) => {
         const started = performance.now();
@@ -207,7 +220,7 @@ async function start() {
           (Math.sin(phase) * 0.45 + 0.5) * viewport.width,
           (Math.cos(phase * 0.71) * 0.45 + 0.5) * viewport.height,
           performance.now() / 1000,
-          config.motion.deadZonePx,
+          currentConfig.motion.deadZonePx,
           viewport,
         );
       }, 16);
@@ -221,20 +234,21 @@ async function start() {
   const scheduler = createScheduler('adaptive');
   scheduler.start({
     state,
-    config,
+    config: currentConfig,
     viewport,
     advance: advanceScene,
     draw: (nextState, nextViewport) => draw(image, nextState, nextViewport),
   });
 
   canvas.addEventListener('pointermove', (event) => {
+    if (!currentConfig.interactionEnabled) return;
     const rect = canvas.getBoundingClientRect();
     const accepted = applyPointerSample(
       state.pointer,
       event.clientX - rect.left,
       event.clientY - rect.top,
       performance.now() / 1000,
-      config.motion.deadZonePx,
+      currentConfig.motion.deadZonePx,
       viewport,
     );
     if (accepted && state.mode === 'drift') {
