@@ -88,7 +88,7 @@ test('adaptive drift mode skips alternate VSync callbacks at 30 FPS', () => {
   scheduler.stop();
 });
 
-test('adaptive adopts drift cadence on the frame that completes recovery', () => {
+test('adaptive adopts drift cadence when motion requests the lower rate', () => {
   const clock = createClock();
   const state = { mode: 'returning' };
   const draws = [];

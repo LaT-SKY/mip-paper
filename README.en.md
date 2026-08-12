@@ -256,7 +256,7 @@ Every `audio.*` setting live reloads and updates the active spectrum controller 
 
 ### Motion and Parallax
 
-After effective pointer input stops for `0.95` seconds, the scene begins a fixed `1.5` second smooth return. Interaction and return use the interactive frame rate; once the camera joins the continuously moving drift trajectory, the scheduler automatically restores the configured drift frame rate. New input during return restarts the complete recovery.
+After effective pointer input stops for `0.95` seconds, the scene returns smoothly at the existing `motion.returnSpeed`; frame-rate switching does not change that setting or the camera trajectory. The first `1.5` seconds of return keep the interactive frame rate, then only the drawing cadence restores the configured drift frame rate while the camera continues its natural return at the original speed. New input restarts this frame-rate hold window.
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
