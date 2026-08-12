@@ -8,6 +8,7 @@ import { createProbeCollector } from '../performance-probe.mjs';
 import { createPanelController } from './panel.mjs';
 import { createAudioRibbonController } from './audio-ribbon.mjs';
 import { analyzeWallpaperImage, applyAccentState } from './accent.mjs';
+import { createWallpaperTransactionCoordinator } from './wallpaper-transaction.mjs';
 import { validateRuntimeConfig } from '../runtime-config.mjs';
 
 const canvas = document.getElementById('wallpaper');
@@ -80,40 +81,28 @@ async function loadImage(url) {
 
 async function start() {
   const bootstrap = await window.wallpaper.getBootstrap();
-  let pendingColorState = bootstrap.color;
-  let handleColorUpdate = (nextColor) => { pendingColorState = nextColor; };
-  const unsubscribeColor = window.wallpaper.onColorUpdated((nextColor) => handleColorUpdate(nextColor));
   let image;
-  const [initialImage, information] = await Promise.all([
-    loadImage(bootstrap.wallpaperUrl),
-    window.wallpaper.getInformationSnapshot(),
-  ]);
-  image = initialImage;
-  let loadedWallpaperUrl = bootstrap.wallpaperUrl;
-  let wallpaperGeneration = 0;
-  let colorState = pendingColorState;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const applyColor = (nextColor) => {
-    colorState = nextColor;
     applyAccentState(document.documentElement, nextColor, { reducedMotion: reducedMotion.matches });
   };
-  const analyzeIfRequested = async (nextImage, request = colorState) => {
-    if (!request?.analyzeWallpaper || !request.wallpaperIdentity) return;
-    let loadedPath;
-    try { loadedPath = decodeURIComponent(new URL(loadedWallpaperUrl).pathname); } catch { return; }
-    if (loadedPath !== request.wallpaperIdentity.path) return;
-    const rgb = analyzeWallpaperImage(nextImage);
-    if (!rgb) return;
-    await window.wallpaper.submitWallpaperAccent({
-      rgb,
-      wallpaperIdentity: request.wallpaperIdentity,
-      generation: request.generation,
-    });
-  };
-  applyColor(colorState);
-  void analyzeIfRequested(image).catch((error) => {
-    console.error(`Wallpaper color analysis failed: ${error?.message || error}`);
+  const wallpaperCoordinator = createWallpaperTransactionCoordinator({
+    loadImage,
+    analyzeImage: analyzeWallpaperImage,
+    submitAccent: (submission) => window.wallpaper.submitWallpaperAccent(submission),
+    applyColor,
+    promoteImage: (nextImage) => { image = nextImage; },
   });
+  const unsubscribeColor = window.wallpaper.onColorUpdated(applyColor);
+  const unsubscribeWallpaper = window.wallpaper.onWallpaperUpdated((wallpaper) => {
+    void wallpaperCoordinator.apply(wallpaper).catch((error) => {
+      console.error(`Wallpaper update failed: ${error?.message || error}`);
+    });
+  });
+  const [, information] = await Promise.all([
+    wallpaperCoordinator.apply(bootstrap.wallpaper),
+    window.wallpaper.getInformationSnapshot(),
+  ]);
   const currentConfig = validateRuntimeConfig(bootstrap.config);
   const { display } = bootstrap;
   const viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
@@ -146,25 +135,6 @@ async function start() {
       }
     } catch (error) {
       console.error(`Runtime configuration ignored: ${error?.message || error}`);
-    }
-  });
-  handleColorUpdate = (nextColor) => {
-    applyColor(nextColor);
-    void analyzeIfRequested(image, nextColor).catch((error) => {
-      console.error(`Wallpaper color analysis failed: ${error?.message || error}`);
-    });
-  };
-  const unsubscribeWallpaper = window.wallpaper.onWallpaperUpdated(async ({ wallpaperUrl }) => {
-    const generation = ++wallpaperGeneration;
-    try {
-      const nextImage = await loadImage(wallpaperUrl);
-      if (generation === wallpaperGeneration) {
-        image = nextImage;
-        loadedWallpaperUrl = wallpaperUrl;
-        await analyzeIfRequested(nextImage);
-      }
-    } catch (error) {
-      console.error(`Wallpaper update failed: ${error?.message || error}`);
     }
   });
   window.addEventListener('pagehide', () => {
