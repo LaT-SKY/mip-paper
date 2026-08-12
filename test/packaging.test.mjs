@@ -32,6 +32,25 @@ test('uses system Electron for source and packaged installations', async () => {
   assert.match(wrapper, /exec \/usr\/lib\/mip-paper\/bin\/mip-paper "\$@"/);
 });
 
+test('uses the maintained D-Bus fork without the vulnerable legacy dependency chain', async () => {
+  const [packageJson, lockfile, generator] = await Promise.all([
+    readFile('package.json', 'utf8').then(JSON.parse),
+    readFile('package-lock.json', 'utf8').then(JSON.parse),
+    readFile('scripts/generate-pkgbuild.mjs', 'utf8'),
+  ]);
+
+  assert.equal(packageJson.dependencies['dbus-next'], undefined);
+  assert.equal(packageJson.dependencies['@particle/dbus-next'], '0.11.4');
+  assert.equal(lockfile.packages['node_modules/dbus-next'], undefined);
+  assert.equal(lockfile.packages['node_modules/usocket'], undefined);
+  assert.equal(lockfile.packages['node_modules/request'], undefined);
+  assert.equal(
+    lockfile.packages['node_modules/@particle/dbus-next/node_modules/xml2js'].version,
+    '0.6.2',
+  );
+  assert.match(generator, /node_modules\/@particle\/dbus-next\/LICENSE/);
+});
+
 test('generates fixed-checksum Arch metadata and package ownership', async () => {
   const checksum = 'a'.repeat(64);
   const [{ stdout: pkgbuild }, installHook, packageLicense, wallpaperAttribution] = await Promise.all([

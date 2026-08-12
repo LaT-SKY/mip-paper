@@ -61,7 +61,7 @@ package() {
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/mip-paper/LICENSE"
   install -Dm644 assets/ATTRIBUTION.md \
     "$pkgdir/usr/share/licenses/mip-paper/default-wallpaper-ATTRIBUTION"
-  install -Dm644 node_modules/dbus-next/LICENSE \
+  install -Dm644 node_modules/@particle/dbus-next/LICENSE \
     "$pkgdir/usr/share/licenses/mip-paper/dbus-next-LICENSE"
   install -Dm644 node_modules/fft.js/README.md \
     "$pkgdir/usr/share/licenses/mip-paper/fft.js-LICENSE"
