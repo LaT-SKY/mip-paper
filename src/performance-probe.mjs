@@ -3,6 +3,7 @@ const DEFAULT_INTERVAL_SECONDS = 5;
 const SUMMARY_FIELDS = new Set([
   'strategy', 'displayId', 'mode', 'scenario', 'targetFrameRate', 'elapsedSeconds',
   'callback', 'draw', 'work', 'drawCount', 'missedDeadlineCount', 'longFrameCount',
+  'observedModes',
 ]);
 
 function finiteNonNegative(value, name) {
@@ -35,6 +36,10 @@ export function validateProbeSummary(summary) {
   for (const key of ['drawCount', 'missedDeadlineCount', 'longFrameCount']) {
     if (!Number.isInteger(summary[key]) || summary[key] < 0) throw new RangeError(`${key} must be a non-negative integer`);
   }
+  if (!Array.isArray(summary.observedModes)
+      || !summary.observedModes.every((value) => typeof value === 'string' && value.length > 0)) {
+    throw new TypeError('observedModes must be an array of non-empty strings');
+  }
   return summary;
 }
 
@@ -59,6 +64,7 @@ export function createProbeCollector({ clock = () => performance.now() / 1000, i
   const callbacks = [];
   const draws = [];
   const work = [];
+  const observedModes = new Set();
 
   function addSample(bucket, value, name) {
     finiteNonNegative(value, name);
@@ -70,6 +76,8 @@ export function createProbeCollector({ clock = () => performance.now() / 1000, i
     ({ strategy, displayId, mode, scenario, targetFrameRate } = value);
     if (typeof strategy !== 'string' || !strategy) throw new TypeError('strategy must be a non-empty string');
     finiteNonNegative(targetFrameRate, 'targetFrameRate');
+    observedModes.clear();
+    if (typeof mode === 'string' && mode) observedModes.add(mode);
     startedAt = clock();
     lastFlush = startedAt;
   }
@@ -83,7 +91,10 @@ export function createProbeCollector({ clock = () => performance.now() / 1000, i
   function recordScenario(name) { scenario = name; }
   function recordMissedDeadline() { missedDeadlineCount += 1; }
   function updateContext(value = {}) {
-    if (value.mode !== undefined) mode = value.mode;
+    if (value.mode !== undefined) {
+      mode = value.mode;
+      if (typeof mode === 'string' && mode) observedModes.add(mode);
+    }
     if (value.targetFrameRate !== undefined) {
       finiteNonNegative(value.targetFrameRate, 'targetFrameRate');
       targetFrameRate = value.targetFrameRate;
@@ -100,6 +111,7 @@ export function createProbeCollector({ clock = () => performance.now() / 1000, i
       strategy, displayId, mode, scenario, targetFrameRate, elapsedSeconds,
       callback: distribution(callbacks), draw: distribution(draws), work: distribution(work),
       drawCount, missedDeadlineCount, longFrameCount,
+      observedModes: [...observedModes].sort(),
     });
     lastFlush = now;
     return structuredClone(summary);

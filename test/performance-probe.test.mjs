@@ -24,6 +24,7 @@ test('aggregates bounded timing samples and percentiles', () => {
     elapsedSeconds: 5, callback: { p50: 2, p95: 4, p99: 4 },
     draw: { p50: 3, p95: 3, p99: 3 }, work: { p50: 5, p95: 5, p99: 5 },
     drawCount: 1, missedDeadlineCount: 1, longFrameCount: 1,
+    observedModes: ['interactive'],
   });
 });
 
@@ -53,4 +54,16 @@ test('updates mode and target frame rate for each summary', () => {
   const summary = collector.flush();
   assert.equal(summary.mode, 'interactive');
   assert.equal(summary.targetFrameRate, 60);
+  assert.deepEqual(summary.observedModes, ['drift', 'interactive']);
+});
+
+test('records a complete interactive returning drift probe transition', () => {
+  const clock = clockFixture();
+  const collector = createProbeCollector({ clock: clock.now });
+  collector.configure({ strategy: 'adaptive', displayId: 1, mode: 'drift', scenario: 'return', targetFrameRate: 30 });
+  collector.updateContext({ mode: 'interactive', targetFrameRate: 60 });
+  collector.updateContext({ mode: 'returning', targetFrameRate: 60 });
+  collector.updateContext({ mode: 'drift', targetFrameRate: 30 });
+  clock.set(5);
+  assert.deepEqual(collector.flush().observedModes, ['drift', 'interactive', 'returning']);
 });

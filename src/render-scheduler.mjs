@@ -61,6 +61,8 @@ export function createScheduler(name, dependencies = {}) {
     const elapsedMs = previousTime === null ? 0 : Math.max(0, frameTime - previousTime);
     previousTime = frameTime;
 
+    options.advance(options.state, elapsedMs / 1000, frameTime / 1000, options.config, options.viewport);
+
     const rate = requestedFrameRate(options.state, options.config);
     const intervalMs = 1000 / rate;
     if (previousIntervalMs !== intervalMs) {
@@ -69,8 +71,6 @@ export function createScheduler(name, dependencies = {}) {
       nextDeadlineMs = null;
       previousIntervalMs = intervalMs;
     }
-
-    options.advance(options.state, elapsedMs / 1000, frameTime / 1000, options.config, options.viewport);
 
     if (hadPreviousTime) {
       options.report?.({
