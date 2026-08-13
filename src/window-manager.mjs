@@ -30,12 +30,14 @@ export function createWindowManager({
   audioSpectrumService = null,
   colorService = null,
   onDisplaysChanged = () => {},
+  appearance = null,
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
   const informationUnsubscribers = new Map();
   const audioUnsubscribers = new Map();
   let currentConfig = config;
+  let currentAppearance = appearance;
   let queue = Promise.resolve();
   let started = false;
 
@@ -88,6 +90,7 @@ export function createWindowManager({
     windows.set(display.id, window);
     bootstrapByWebContents.set(webContentsId, {
       config: currentConfig,
+      ...(currentAppearance ? { appearance: currentAppearance } : {}),
       display,
       wallpaper: getWallpaperTransaction(display),
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
@@ -137,6 +140,7 @@ export function createWindowManager({
       window.setBounds(display.bounds);
       bootstrapByWebContents.set(window.webContents.id, {
         config: currentConfig,
+        ...(currentAppearance ? { appearance: currentAppearance } : {}),
         display,
         wallpaper: getWallpaperTransaction(display),
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
@@ -215,19 +219,39 @@ export function createWindowManager({
     audioUnsubscribers.clear();
   }
 
-  function updateConfig(nextConfig) {
-    currentConfig = nextConfig;
+  function runtimePayload() {
+    return structuredClone({ config: currentConfig, ...(currentAppearance ? { appearance: currentAppearance } : {}) });
+  }
+
+  function broadcastRuntime() {
     for (const window of windows.values()) {
       const bootstrap = bootstrapByWebContents.get(window.webContents.id);
       if (bootstrap) {
         bootstrapByWebContents.set(window.webContents.id, {
           ...bootstrap,
           config: currentConfig,
+          ...(currentAppearance ? { appearance: currentAppearance } : {}),
         });
       }
       window.setIgnoreMouseEvents(!currentConfig.interactionEnabled);
-      window.webContents.send(CONFIG_UPDATED_CHANNEL, currentConfig);
+      window.webContents.send(CONFIG_UPDATED_CHANNEL, runtimePayload());
     }
+  }
+
+  function updateRuntime({ config: nextConfig, appearance: nextAppearance } = {}) {
+    currentConfig = nextConfig;
+    currentAppearance = nextAppearance;
+    broadcastRuntime();
+  }
+
+  function updateAppearance(nextAppearance) {
+    currentAppearance = nextAppearance;
+    broadcastRuntime();
+  }
+
+  function updateConfig(nextConfig) {
+    currentConfig = nextConfig;
+    broadcastRuntime();
   }
 
   function updateWallpaper(displayId, wallpaper) {
@@ -258,6 +282,8 @@ export function createWindowManager({
     start,
     stop,
     updateConfig,
+    updateRuntime,
+    updateAppearance,
     updateWallpaper,
     updateColor,
     whenIdle: () => queue,

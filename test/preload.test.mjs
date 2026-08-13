@@ -20,6 +20,18 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.doesNotMatch(preload, /getAudioSpectrum|pw-cat|pw-metadata|spawn|rawPcm|selectAudioDevice/i);
 });
 
+test('both preload variants expose removable complete runtime updates', async () => {
+  const [commonJs, module] = await Promise.all([
+    readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/preload.mjs', import.meta.url), 'utf8'),
+  ]);
+  for (const preload of [commonJs, module]) {
+    assert.match(preload, /onConfigUpdated\s*:\s*\(listener\)/);
+    assert.match(preload, /CONFIG_UPDATED_CHANNEL/);
+    assert.match(preload, /removeListener\(CONFIG_UPDATED_CHANNEL,\s*wrapper\)/);
+  }
+});
+
 test('main owns both configuration watchers and the runtime coordinator', async () => {
   const main = await readFile(new URL('../src/main.mjs', import.meta.url), 'utf8');
   const lifecycle = await readFile(new URL('../src/app-lifecycle.mjs', import.meta.url), 'utf8');
