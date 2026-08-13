@@ -1,6 +1,10 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   background: #152229;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 html,

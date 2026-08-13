@@ -54,7 +54,7 @@ test('separates frosted card surfaces from their animated 3D shells', async () =
   assert.match(shellRule, /box-shadow:/);
   assert.doesNotMatch(shellRule, /backdrop-filter|background:|border:|overflow:\s*hidden|padding:/);
   assert.match(surfaceRule, /backdrop-filter:\s*blur\(9px\)\s*saturate\(1\.08\)/);
-  assert.match(surfaceRule, /background:\s*rgba\(243,\s*255,\s*255,\s*0\.77\)/);
+  assert.match(surfaceRule, /background:\s*var\(--surface\)/);
   assert.match(surfaceRule, /border:\s*1px\s+solid/);
   assert.match(surfaceRule, /overflow:\s*hidden/);
   assert.match(surfaceRule, /padding:\s*var\(--card-padding\)/);
@@ -122,7 +122,7 @@ test('information cards use official weather icons and a complete month grid', a
   assert.doesNotMatch(panelCss, /\.weather-mark/);
 });
 
-test('renderer uses a non-alpha high-DPI Canvas without blur effects', async () => {
+test('renderer uses a non-alpha high-DPI Canvas with only brightness filtering', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
 
   assert.match(script, /getContext\('2d',\s*\{\s*alpha:\s*false\s*\}\)/);
@@ -130,7 +130,32 @@ test('renderer uses a non-alpha high-DPI Canvas without blur effects', async () 
   assert.match(script, /Math\.min\([^\n]*devicePixelRatio[^\n]*2\)/);
   assert.match(script, /imageSmoothingEnabled\s*=\s*true/);
   assert.match(script, /imageSmoothingQuality\s*=\s*'high'/);
-  assert.doesNotMatch(script, /motionBlur|filter\s*=|shadowBlur/);
+  assert.match(script, /context\.filter\s*=\s*`brightness\(\$\{brightness\}\)`/);
+  assert.doesNotMatch(script, /motionBlur|blur\(|shadowBlur/);
+});
+
+test('renderer hot applies semantic appearance and reduced-motion changes', async () => {
+  const [script, panelCss, styles] = await Promise.all([
+    readFile('src/renderer/renderer.mjs', 'utf8'),
+    readFile('src/renderer/panel.css', 'utf8'),
+    readFile('src/renderer/styles.css', 'utf8'),
+  ]);
+  assert.match(script, /applyAppearanceState/);
+  assert.match(script, /bootstrap\.appearance/);
+  assert.match(script, /candidate\.config/);
+  assert.match(script, /candidate\.appearance/);
+  assert.match(script, /sampleBrightness/);
+  assert.match(script, /reducedMotion\.addEventListener\(['"]change['"]/);
+  assert.match(script, /reducedMotion\.removeEventListener\(['"]change['"]/);
+  for (const variable of ['surface', 'surface-border', 'text-primary', 'text-secondary', 'icon', 'chip-surface', 'ambient-shadow']) {
+    assert.match(panelCss, new RegExp(`--${variable}:`));
+    assert.match(panelCss, new RegExp(`var\\(--${variable}\\)`));
+  }
+  assert.match(panelCss, /\[data-theme="light"\]/);
+  assert.match(panelCss, /\[data-theme="dark"\]/);
+  assert.match(styles, /color-scheme:\s*light/);
+  assert.match(styles, /color-scheme:\s*dark/);
+  assert.doesNotMatch(`${panelCss}\n${styles}`, /transition:\s*all/);
 });
 
 test('renderer loads only atomic user-managed wallpaper transactions', async () => {
