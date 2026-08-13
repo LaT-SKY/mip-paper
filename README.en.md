@@ -179,13 +179,17 @@ Current weather refreshes every 30 minutes; forecasts and tides refresh every 6 
 
 ## Configuration
 
-The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Choose `color.mode` as `default` to keep the approved palette, `kde` to follow KDE's accent, `wallpaper` to analyze each display's wallpaper, or `hybrid` (default) to prefer wallpaper and fall back to KDE. `color.transitionDurationMs` defaults to `900` ms and accepts `0–5000`; `0` switches immediately. Reduced motion preferences disable transitions automatically. Every setting supports live reload. Complete defaults:
+The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode` to `kde` (default, follow each display's Plasma static wallpaper) or `manual` (use the manually imported image on every display). Choose `color.mode` as `default` to keep the approved palette, `kde` to follow KDE's accent, `wallpaper` to analyze each display's wallpaper, or `hybrid` (default) to prefer wallpaper and fall back to KDE. Choose `appearance.mode` as `light`, `dark`, or `system` (default); `system` follows the actual luminance of KDE's window background. `color.transitionDurationMs` defaults to `900` ms and accepts `0–5000`; it controls both accent and appearance transitions, and `0` switches immediately. Reduced motion preferences disable transitions automatically. Every setting supports live reload. Complete defaults:
 
 ```json
 {
   "interactionEnabled": true,
   "wallpaper": { "mode": "kde" },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
+  "appearance": {
+    "mode": "system",
+    "dark": { "wallpaperBrightness": 0.72 }
+  },
   "audio": {
     "enabled": true,
     "gain": 1,
@@ -232,6 +236,17 @@ Unknown fields are rejected. Every valid saved field takes effect without restar
 | `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Live reload |
 | `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction and return | Live reload |
 | `frameRate.drift` | integer, `1–180` FPS | `30` | Target rate during idle drift | Live reload |
+
+### Light and Dark Appearance
+
+`system` reads KDE's actual window background color and classifies its relative luminance instead of relying on the color-scheme name. `dark` switches the information cards to deep graphite surfaces and dims the wallpaper only during final Canvas composition; `light` preserves original wallpaper brightness. Dynamic accents are always analyzed from the original wallpaper pixels, so appearance changes preserve each display's own accent and color cache.
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `appearance.mode` | `light`, `dark`, or `system` | `system` | Force light, force dark, or follow KDE window background luminance | Live reload |
+| `appearance.dark.wallpaperBrightness` | finite number, `0.2–1` | `0.72` | Final wallpaper brightness multiplier in dark mode; `1` does not dim | Live reload |
+
+Appearance and accent transitions share `color.transitionDurationMs`. Saving a mode, brightness, or duration change does not restart Electron, windows, wallpaper images, or accent analysis. Invalid or incomplete candidates retain the last valid configuration and live reload resumes automatically after the file is fixed.
 
 ### Dynamic Accent Color
 

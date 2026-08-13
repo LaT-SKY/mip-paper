@@ -185,13 +185,17 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 
 ## 配置文件
 
-配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。强调色通过 `color.mode` 选择：`default` 保留当前粉色默认配色，`kde` 跟随 KDE 强调色，`wallpaper` 从每台显示器壁纸取色，`hybrid`（默认）优先壁纸再回退 KDE。`color.transitionDurationMs` 默认 `900` ms，范围 `0–5000`；`0` 立即切换。系统启用“减少动态效果”时过渡自动关闭。所有配置均支持实时热加载。完整默认值：
+配置位于 `~/.config/mip-paper/config.json`。`wallpaper.mode` 可设为 `kde`（默认，按显示器跟随 Plasma 静态壁纸）或 `manual`（所有显示器使用手动导入的图片）。强调色通过 `color.mode` 选择：`default` 保留当前粉色默认配色，`kde` 跟随 KDE 强调色，`wallpaper` 从每台显示器壁纸取色，`hybrid`（默认）优先壁纸再回退 KDE。外观通过 `appearance.mode` 选择 `light`、`dark` 或 `system`（默认）；`system` 根据 KDE 窗口背景的实际亮度实时切换。`color.transitionDurationMs` 默认 `900` ms，范围 `0–5000`；它同时控制强调色和明暗过渡，`0` 立即切换。系统启用“减少动态效果”时过渡自动关闭。所有配置均支持实时热加载。完整默认值：
 
 ```json
 {
   "interactionEnabled": true,
   "wallpaper": { "mode": "kde" },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
+  "appearance": {
+    "mode": "system",
+    "dark": { "wallpaperBrightness": 0.72 }
+  },
   "audio": {
     "enabled": true,
     "gain": 1,
@@ -244,6 +248,17 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 实时热加载 |
 | `frameRate.interactive` | 整数，`1–180` FPS | `60` | 交互与回归阶段目标帧率 | 实时热加载 |
 | `frameRate.drift` | 整数，`1–180` FPS | `30` | 待机漂移阶段目标帧率 | 实时热加载 |
+
+### 明暗外观
+
+`system` 读取 KDE 实际窗口背景色并按相对亮度判定明暗，不依赖配色方案名称。`dark` 将信息卡切换为深石墨表面，并只在最终 Canvas 合成时压暗壁纸；`light` 保持原始壁纸亮度。动态强调色始终从原始壁纸像素计算，因此明暗切换不会改变每块屏幕自己的强调色或颜色缓存。
+
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `appearance.mode` | `light`、`dark` 或 `system` | `system` | 强制亮色、强制暗色，或跟随 KDE 窗口背景亮度 | 实时热加载 |
+| `appearance.dark.wallpaperBrightness` | 有限数值，`0.2–1` | `0.72` | 暗色模式的壁纸最终显示亮度倍率；`1` 不压暗 | 实时热加载 |
+
+明暗过渡与强调色共用 `color.transitionDurationMs`。保存模式、亮度倍率或过渡时长后，现有 Electron 进程、窗口、壁纸和强调色分析均不重启；无效或未写完整的候选继续使用最后一份有效配置，修正后自动恢复实时热加载。
 
 ### 动态强调色
 
