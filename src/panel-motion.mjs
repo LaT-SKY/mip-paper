@@ -10,10 +10,11 @@ const COLLAPSE_VECTORS = Object.freeze([
 ]);
 
 export function createPanelState(config, cardCenters) {
-  const progress = config.expanded ? 1 : 0;
+  const expanded = !config.autoExpandHide && config.expanded;
+  const progress = expanded ? 1 : 0;
   return {
     config,
-    expanded: config.expanded,
+    expanded,
     timeMs: 0,
     pointerOrigin: null,
     lastPointer: null,

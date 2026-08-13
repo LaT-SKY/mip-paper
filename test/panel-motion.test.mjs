@@ -31,6 +31,12 @@ test('requires 48px pointer travel and expands nearest card first', () => {
   assert.deepEqual(state.cards.map((card) => card.activateAt), [220, 160, 40, 100]);
 });
 
+test('automatic mode starts collapsed even when the fixed state is expanded', () => {
+  const state = createPanelState({ ...config, expanded: true }, centers);
+  assert.equal(state.expanded, false);
+  assert.deepEqual(state.cards.map((card) => card.progress), [0, 0, 0, 0]);
+});
+
 test('collapse reverses the last expansion order', () => {
   const state = createPanelState(config, centers);
   requestExpanded(state, { x: 205, y: 0 }, 100);
