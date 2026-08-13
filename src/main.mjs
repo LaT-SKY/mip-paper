@@ -29,6 +29,8 @@ import { wallpaperPath } from './wallpaper-image.mjs';
 import { createKdeWallpaperSync } from './kde-wallpaper-sync.mjs';
 import { createKdeAccentWatcher } from './kde-accent.mjs';
 import { createColorService, colorCacheDirectory } from './color-service.mjs';
+import { createKdeAppearanceWatcher } from './kde-appearance.mjs';
+import { createAppearanceCoordinator } from './appearance.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
@@ -40,6 +42,7 @@ let runtimeCoordinator;
 let wallpaperSync;
 let colorService;
 let kdeAccentWatcher;
+let appearanceCoordinator;
 const wallpaperTransactions = new Map();
 
 const shutdownCoordinator = createShutdownCoordinator({
@@ -47,6 +50,7 @@ const shutdownCoordinator = createShutdownCoordinator({
   stopConfigWatcher: () => configWatcher?.stop(),
   stopCredentialsWatcher: () => credentialsWatcher?.stop(),
   stopRuntimeCoordinator: () => runtimeCoordinator?.stop(),
+  stopAppearance: () => appearanceCoordinator?.stop(),
   stopAudioSpectrum: () => audioSpectrumService?.stop(),
   stopInformation: () => informationService?.stop(),
   stopWindowManager: () => manager?.stop(),
@@ -129,9 +133,26 @@ async function run() {
   const probe = parseProbeOptions(process.env);
   informationService = await buildInformationService(config);
   audioSpectrumService = createAudioSpectrumService({ config: config.audio });
+  const kdeGlobalsPath = path.join(
+    process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
+    'kdeglobals',
+  );
+
+  appearanceCoordinator = createAppearanceCoordinator({
+    config,
+    kdeWatcherFactory: ({ onTheme, onError }) => createKdeAppearanceWatcher({
+      pathname: kdeGlobalsPath,
+      onTheme,
+      onError,
+    }),
+    onUpdate: (appearance) => manager?.updateAppearance(appearance),
+    onError: (error) => console.error(`KDE appearance watcher: ${error?.message || error}`),
+  });
+  appearanceCoordinator.start();
+  await appearanceCoordinator.whenIdle();
 
   kdeAccentWatcher = createKdeAccentWatcher({
-    pathname: path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'kdeglobals'),
+    pathname: kdeGlobalsPath,
     onAccent: (rgb) => colorService?.setKdeAccent(rgb),
     onError: (error) => console.error(`KDE accent watcher: ${error?.message || error}`),
   });
@@ -177,6 +198,7 @@ async function run() {
     ipcMain,
     defaultSession: session.defaultSession,
     config,
+    appearance: appearanceCoordinator.getState(),
     informationService,
     audioSpectrumService,
     colorService,
@@ -237,7 +259,10 @@ async function run() {
           await wallpaperSync.whenIdle();
           assertCurrent();
         }
-        manager.updateConfig(nextConfig);
+        await appearanceCoordinator.updateConfig(nextConfig, { publish: false });
+        const nextAppearance = appearanceCoordinator.getState();
+        assertCurrent();
+        manager.updateRuntime({ config: nextConfig, appearance: nextAppearance });
         currentConfig = nextConfig;
       } catch (error) {
         await audioSpectrumService.updateConfig(previousConfig.audio).catch(() => {});
@@ -247,6 +272,7 @@ async function run() {
         if (nextConfig.wallpaper.mode !== previousConfig.wallpaper.mode) {
           try { wallpaperSync.setMode(previousConfig.wallpaper.mode); await wallpaperSync.whenIdle(); } catch {}
         }
+        await appearanceCoordinator.updateConfig(previousConfig, { publish: false }).catch(() => {});
         throw error;
       }
     },

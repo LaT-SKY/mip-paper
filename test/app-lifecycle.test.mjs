@@ -72,6 +72,22 @@ test('cleanup failures are logged without skipping later steps', async () => {
   assert.match(errors[1], /audio spectrum.*audio failed/);
 });
 
+test('shutdown invalidates runtime updates before stopping appearance and windows', async () => {
+  const calls = [];
+  const coordinator = createShutdownCoordinator({
+    quit: () => calls.push('quit'),
+    stopRuntimeCoordinator: () => calls.push('runtime'),
+    stopConfigWatcher: () => calls.push('config'),
+    stopCredentialsWatcher: () => calls.push('credentials'),
+    stopAppearance: () => calls.push('appearance'),
+    stopWindowManager: () => calls.push('windows'),
+  });
+  await coordinator.requestShutdown();
+  assert.ok(calls.indexOf('runtime') < calls.indexOf('appearance'));
+  assert.ok(calls.indexOf('config') < calls.indexOf('appearance'));
+  assert.ok(calls.indexOf('appearance') < calls.indexOf('windows'));
+});
+
 test('Electron before-quit and SIGTERM share the coordinator', () => {
   const app = new EventEmitter();
   const processTarget = new EventEmitter();

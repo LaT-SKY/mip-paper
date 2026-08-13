@@ -40,7 +40,7 @@ test('main owns both configuration watchers and the runtime coordinator', async 
   assert.match(main, /createRuntimeConfigCoordinator/);
   assert.match(main, /credentialsWatcher\s*=\s*createConfigWatcher/);
   assert.match(main, /audioSpectrumService\.updateConfig/);
-  assert.match(main, /manager\.updateConfig/);
+  assert.match(main, /manager\.updateRuntime/);
   assert.match(main, /createKdeWallpaperSync/);
   assert.match(main, /manager\?\.updateWallpaper/);
   assert.match(main, /stopWallpaperSync:\s*\(\)\s*=>\s*wallpaperSync\?\.stop\(\)/);
