@@ -7,6 +7,12 @@
     "mode": "hybrid",
     "transitionDurationMs": 900
   },
+  "appearance": {
+    "mode": "system",
+    "dark": {
+      "wallpaperBrightness": 0.72
+    }
+  },
   "audio": {
     "enabled": true,
     "gain": 1,

@@ -10,6 +10,10 @@ export function validateRuntimeConfig(value) {
     && object(value.wallpaper) && ['kde', 'manual'].includes(value.wallpaper.mode)
     && object(value.color) && ['default', 'kde', 'wallpaper', 'hybrid'].includes(value.color.mode)
     && Number.isInteger(value.color.transitionDurationMs)
+    && object(value.appearance) && ['light', 'dark', 'system'].includes(value.appearance.mode)
+    && object(value.appearance.dark) && finite(value.appearance.dark.wallpaperBrightness)
+    && value.appearance.dark.wallpaperBrightness >= 0.2
+    && value.appearance.dark.wallpaperBrightness <= 1
     && object(value.audio) && typeof value.audio.enabled === 'boolean'
     && finite(value.audio.gain) && finite(value.audio.silenceDelayMs)
     && finite(value.audio.fadeOutMs) && finite(value.audio.fadeInMs)

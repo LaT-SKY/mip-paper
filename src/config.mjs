@@ -5,6 +5,10 @@ export const DEFAULT_CONFIG = Object.freeze({
   interactionEnabled: true,
   wallpaper: Object.freeze({ mode: 'kde' }),
   color: Object.freeze({ mode: 'hybrid', transitionDurationMs: 900 }),
+  appearance: Object.freeze({
+    mode: 'system',
+    dark: Object.freeze({ wallpaperBrightness: 0.72 }),
+  }),
   audio: Object.freeze({
     enabled: true,
     gain: 1,
@@ -48,6 +52,10 @@ const SCHEMA = {
   interactionEnabled: 'boolean',
   wallpaper: { mode: 'wallpaperMode' },
   color: { mode: 'colorMode', transitionDurationMs: 'colorTransitionDuration' },
+  appearance: {
+    mode: 'themeMode',
+    dark: { wallpaperBrightness: 'wallpaperBrightness' },
+  },
   audio: {
     enabled: 'boolean',
     gain: 'positive',
@@ -176,6 +184,13 @@ function validateShape(value, schema, prefix = '') {
       || fieldValue < 0 || fieldValue > 5000)) {
       throw new RangeError(`${fieldPath} must be an integer between 0 and 5000`);
     }
+    if (rule === 'themeMode' && !['light', 'dark', 'system'].includes(fieldValue)) {
+      throw new TypeError(`${fieldPath} must be light, dark, or system`);
+    }
+    if (rule === 'wallpaperBrightness' && (!Number.isFinite(fieldValue)
+      || fieldValue < 0.2 || fieldValue > 1)) {
+      throw new RangeError(`${fieldPath} must be a finite number between 0.2 and 1`);
+    }
     if (rule === 'nullableLatitude' && fieldValue !== null
       && (!Number.isFinite(fieldValue) || fieldValue < -90 || fieldValue > 90)) {
       throw new RangeError(`${fieldPath} must be null or between -90 and 90`);
@@ -200,6 +215,14 @@ function mergeConfig(value) {
     color: {
       ...DEFAULT_CONFIG.color,
       ...(value.color ?? {}),
+    },
+    appearance: {
+      ...DEFAULT_CONFIG.appearance,
+      ...(value.appearance ?? {}),
+      dark: {
+        ...DEFAULT_CONFIG.appearance.dark,
+        ...(value.appearance?.dark ?? {}),
+      },
     },
     audio: {
       ...DEFAULT_CONFIG.audio,
