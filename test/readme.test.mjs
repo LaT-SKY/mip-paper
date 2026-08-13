@@ -7,6 +7,8 @@ const configurationFields = [
   'wallpaper.mode',
   'color.mode',
   'color.transitionDurationMs',
+  'appearance.mode',
+  'appearance.dark.wallpaperBrightness',
   'audio.enabled',
   'audio.gain',
   'audio.silenceDelayMs',
@@ -167,6 +169,21 @@ test('documents live accent modes, transition timing, and reduced motion', async
     assert.match(readme, /900`?\s*ms/i);
     assert.match(readme, /(减少动态效果|reduced motion)/i);
     assert.match(readme, /(实时热加载|live reload)/i);
+  }
+});
+
+test('documents KDE-aware dark appearance and complete hot reload', async () => {
+  const [chinese, english] = await Promise.all([readFile('README.md', 'utf8'), readFile('README.en.md', 'utf8')]);
+  for (const readme of [chinese, english]) {
+    assert.match(readme, /"appearance":\s*\{[\s\S]*"mode":\s*"system"[\s\S]*"wallpaperBrightness":\s*0\.72/);
+    for (const mode of ['light', 'dark', 'system']) assert.ok(readme.includes(`\`${mode}\``));
+    assert.match(readme, /0\.2[–-]1/);
+    assert.match(readme, /(KDE.{0,80}(窗口背景|window background).{0,80}(亮度|luminance))/is);
+    assert.match(readme, /(原始壁纸|original wallpaper).{0,80}(强调色|accent)/is);
+    assert.match(readme, /appearance\.dark\.wallpaperBrightness/);
+    assert.match(readme, /color\.transitionDurationMs/);
+    assert.match(readme, /(实时热加载|live reload)/i);
+    assert.match(readme, /(最后一份有效配置|last valid configuration)/i);
   }
 });
 
