@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
     return () => ipcRenderer.removeListener(AUDIO_SPECTRUM_UPDATED_CHANNEL, wrapper);
   },
   onConfigUpdated: (listener) => {
-    const wrapper = (_event, config) => listener(config);
+    const wrapper = (_event, payload) => listener(payload);
     ipcRenderer.on(CONFIG_UPDATED_CHANNEL, wrapper);
     return () => ipcRenderer.removeListener(CONFIG_UPDATED_CHANNEL, wrapper);
   },

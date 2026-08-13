@@ -16,6 +16,13 @@ import {
   formatDisplayTargetTitle,
 } from '../src/window-manager.mjs';
 
+const DEFAULT_APPEARANCE = Object.freeze({
+  mode: 'system',
+  resolvedTheme: 'light',
+  wallpaperBrightness: 1,
+  transitionDurationMs: 900,
+});
+
 class FakeWebContents extends EventEmitter {
   static nextId = 1;
 
@@ -193,6 +200,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     ipcMain,
     defaultSession,
     config,
+    appearance: DEFAULT_APPEARANCE,
     informationService,
     audioSpectrumService,
     colorService,
@@ -248,6 +256,7 @@ test('provides bootstrap data only to a managed renderer', async () => {
 
   assert.deepEqual(await handler({ sender: first.webContents }), {
     config: DEFAULT_CONFIG,
+    appearance: DEFAULT_APPEARANCE,
     display: displays[0],
     wallpaper: wallpaperTransactions.get(11),
     information: { weather: { status: 'fresh' } },
@@ -333,20 +342,39 @@ test('streams one spectrum service to every window and unsubscribes closed windo
   assert.equal(audioListeners.size, before - 1);
 });
 
-test('broadcasts the complete runtime config and updates mouse passthrough', async () => {
-  const { manager, ipcMain } = createFixture();
+test('broadcasts complete runtime and KDE-only appearance updates', async () => {
+  const { manager, ipcMain, displays, screen } = createFixture();
   await manager.start();
   const config = { ...DEFAULT_CONFIG, interactionEnabled: false, audio: { ...DEFAULT_CONFIG.audio, fadeInMs: 0 } };
-  manager.updateConfig(config);
+  const darkAppearance = { ...DEFAULT_APPEARANCE, resolvedTheme: 'dark', wallpaperBrightness: 0.72 };
+  manager.updateRuntime({ config, appearance: darkAppearance });
   assert.deepEqual(FakeWindow.instances.map((window) => window.webContents.sent.at(-1)), [
-    { channel: CONFIG_UPDATED_CHANNEL, value: config },
-    { channel: CONFIG_UPDATED_CHANNEL, value: config },
+    { channel: CONFIG_UPDATED_CHANNEL, value: { config, appearance: darkAppearance } },
+    { channel: CONFIG_UPDATED_CHANNEL, value: { config, appearance: darkAppearance } },
   ]);
   assert.deepEqual(FakeWindow.instances.map((window) => window.ignoreMouse), [true, true]);
-  const bootstrap = await ipcMain.handlers.get(BOOTSTRAP_CHANNEL)({
+  let bootstrap = await ipcMain.handlers.get(BOOTSTRAP_CHANNEL)({
     sender: FakeWindow.instances[0].webContents,
   });
   assert.deepEqual(bootstrap.config, config);
+  assert.deepEqual(bootstrap.appearance, darkAppearance);
+
+  const lightAppearance = { ...darkAppearance, resolvedTheme: 'light', wallpaperBrightness: 1 };
+  manager.updateAppearance(lightAppearance);
+  assert.deepEqual(FakeWindow.instances.map((window) => window.webContents.sent.at(-1)), [
+    { channel: CONFIG_UPDATED_CHANNEL, value: { config, appearance: lightAppearance } },
+    { channel: CONFIG_UPDATED_CHANNEL, value: { config, appearance: lightAppearance } },
+  ]);
+
+  const added = { id: 33, bounds: { x: -1280, y: 0, width: 1280, height: 1024 }, scaleFactor: 1 };
+  displays.push(added);
+  screen.emit('display-added', {}, added);
+  await manager.whenIdle();
+  bootstrap = await ipcMain.handlers.get(BOOTSTRAP_CHANNEL)({
+    sender: FakeWindow.instances[2].webContents,
+  });
+  assert.deepEqual(bootstrap.config, config);
+  assert.deepEqual(bootstrap.appearance, lightAppearance);
 });
 
 test('streams information only to managed renderers and unsubscribes closed windows', async () => {
