@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -16,6 +16,7 @@ test('defaults match the approved v1 design', () => {
     interactionEnabled: true,
     wallpaper: { mode: 'kde' },
     color: { mode: 'hybrid', transitionDurationMs: 900 },
+    appearance: { mode: 'system', dark: { wallpaperBrightness: 0.72 } },
     audio: {
       enabled: true,
       gain: 1,
@@ -49,6 +50,32 @@ test('defaults match the approved v1 design', () => {
       tideStationId: 'P2352',
     },
   });
+});
+
+test('validates appearance modes and wallpaper brightness boundaries', () => {
+  for (const mode of ['light', 'dark', 'system']) {
+    assert.equal(validateConfig({ appearance: { mode } }).appearance.mode, mode);
+  }
+  for (const wallpaperBrightness of [0.2, 1]) {
+    assert.equal(
+      validateConfig({ appearance: { dark: { wallpaperBrightness } } }).appearance.dark.wallpaperBrightness,
+      wallpaperBrightness,
+    );
+  }
+  for (const wallpaperBrightness of [0.199, 1.001, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(
+      () => validateConfig({ appearance: { dark: { wallpaperBrightness } } }),
+      /appearance\.dark\.wallpaperBrightness must be a finite number between 0\.2 and 1/,
+    );
+  }
+  assert.throws(() => validateConfig({ appearance: { mode: 'auto' } }), /appearance\.mode must be light, dark, or system/);
+  assert.throws(() => validateConfig({ appearance: { dark: { brightness: 0.5 } } }), /Unknown configuration field: appearance\.dark\.brightness/);
+});
+
+test('ships the explicit appearance defaults in the packaged config', async () => {
+  const packaged = JSON.parse(await readFile('config/default.json', 'utf8'));
+  assert.deepEqual(packaged.appearance, DEFAULT_CONFIG.appearance);
+  assert.deepEqual(validateConfig(packaged).appearance, DEFAULT_CONFIG.appearance);
 });
 
 test('normalizes invalid audio values without weakening other config validation', () => {
