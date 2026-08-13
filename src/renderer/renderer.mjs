@@ -9,6 +9,12 @@ import { createPanelController } from './panel.mjs';
 import { createAudioRibbonController } from './audio-ribbon.mjs';
 import { analyzeWallpaperImage, applyAccentState } from './accent.mjs';
 import { createWallpaperTransactionCoordinator } from './wallpaper-transaction.mjs';
+import {
+  applyAppearanceState,
+  createBrightnessTransition,
+  normalizeAppearanceState,
+  sampleBrightness,
+} from './appearance.mjs';
 import { validateRuntimeConfig } from '../runtime-config.mjs';
 
 const canvas = document.getElementById('wallpaper');
@@ -52,7 +58,7 @@ function resizeCanvas(viewport) {
   return dpr;
 }
 
-function draw(image, state, viewport) {
+function draw(image, state, viewport, brightness) {
   const dpr = resizeCanvas(viewport);
   const cover = Math.max(viewport.width / image.naturalWidth, viewport.height / image.naturalHeight);
   const drawWidth = image.naturalWidth * cover;
@@ -68,6 +74,7 @@ function draw(image, state, viewport) {
   context.translate(viewport.width / 2 + camera.x, viewport.height / 2 + camera.y);
   context.rotate(camera.angle);
   context.scale(camera.scale, camera.scale);
+  context.filter = `brightness(${brightness})`;
   context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
   context.restore();
 }
@@ -83,7 +90,17 @@ async function start() {
   const bootstrap = await window.wallpaper.getBootstrap();
   let image;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const currentConfig = validateRuntimeConfig(bootstrap.config);
+  let currentAppearance = normalizeAppearanceState(bootstrap.appearance);
+  let currentColor = bootstrap.color ?? bootstrap.wallpaper?.color ?? null;
+  const brightnessTransition = createBrightnessTransition(currentAppearance.wallpaperBrightness);
+  applyAppearanceState(document.documentElement, currentAppearance, {
+    reducedMotion: reducedMotion.matches,
+    now: performance.now(),
+    transition: brightnessTransition,
+  });
   const applyColor = (nextColor) => {
+    currentColor = nextColor;
     applyAccentState(document.documentElement, nextColor, { reducedMotion: reducedMotion.matches });
   };
   const wallpaperCoordinator = createWallpaperTransactionCoordinator({
@@ -103,7 +120,6 @@ async function start() {
     wallpaperCoordinator.apply(bootstrap.wallpaper),
     window.wallpaper.getInformationSnapshot(),
   ]);
-  const currentConfig = validateRuntimeConfig(bootstrap.config);
   const { display } = bootstrap;
   const viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
   const state = createMotionState(currentConfig, viewport, displayPhase(display.id));
@@ -125,8 +141,15 @@ async function start() {
   });
   const unsubscribeConfig = window.wallpaper.onConfigUpdated((candidate) => {
     try {
-      const nextConfig = validateRuntimeConfig(candidate);
+      const nextConfig = validateRuntimeConfig(candidate.config);
+      const nextAppearance = normalizeAppearanceState(candidate.appearance);
       Object.assign(currentConfig, nextConfig);
+      currentAppearance = nextAppearance;
+      applyAppearanceState(document.documentElement, currentAppearance, {
+        reducedMotion: reducedMotion.matches,
+        now: performance.now(),
+        transition: brightnessTransition,
+      });
       panel.setConfig(currentConfig.panel);
       audioRibbon.setConfig(currentConfig.audio);
       if (!currentConfig.interactionEnabled) {
@@ -137,12 +160,22 @@ async function start() {
       console.error(`Runtime configuration ignored: ${error?.message || error}`);
     }
   });
+  const onReducedMotionChanged = () => {
+    applyAppearanceState(document.documentElement, currentAppearance, {
+      reducedMotion: reducedMotion.matches,
+      now: performance.now(),
+      transition: brightnessTransition,
+    });
+    if (currentColor) applyColor(currentColor);
+  };
+  reducedMotion.addEventListener('change', onReducedMotionChanged);
   window.addEventListener('pagehide', () => {
     unsubscribeInformation();
     unsubscribeAudio();
     unsubscribeConfig();
     unsubscribeColor();
     unsubscribeWallpaper();
+    reducedMotion.removeEventListener('change', onReducedMotionChanged);
     audioRibbon.destroy();
   }, { once: true });
   const advanceScene = (...args) => {
@@ -172,7 +205,7 @@ async function start() {
       },
       draw: (...args) => {
         const started = performance.now();
-        draw(image, ...args);
+        draw(image, args[0], args[1], sampleBrightness(brightnessTransition, performance.now()));
         collector.recordDraw(performance.now() - started);
       },
       report: (event) => {
@@ -225,7 +258,12 @@ async function start() {
     config: currentConfig,
     viewport,
     advance: advanceScene,
-    draw: (nextState, nextViewport) => draw(image, nextState, nextViewport),
+    draw: (nextState, nextViewport) => draw(
+      image,
+      nextState,
+      nextViewport,
+      sampleBrightness(brightnessTransition, performance.now()),
+    ),
   });
 
   canvas.addEventListener('pointermove', (event) => {
