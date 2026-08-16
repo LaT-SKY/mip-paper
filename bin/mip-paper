@@ -400,13 +400,14 @@ setup_app() {
   fi
 
   "$SOURCE_ROOT/scripts/kwin-rules.sh" install
+  KWIN_SCRIPT_SOURCE="$KWIN_PACKAGE_SOURCE" \
+    "$SOURCE_ROOT/scripts/kwin-script.sh" enable
   systemctl --user daemon-reload
   systemctl --user enable --now "$SERVICE_NAME"
   printf 'Setup complete for %s.\n' "$APP_ID"
   printf 'Wallpaper: %s\n' "$wallpaper_message"
   printf 'Wallpaper file: %s\n' "$WALLPAPER_PATH"
   printf 'Change it with: mip-paper wallpaper set /path/to/image.jpg\n'
-  printf 'Enable the KWin script manually in System Settings > Window Management > KWin Scripts: Mip-Paper Display Coordinator.\n'
   if ! weather_credentials_valid; then
     print_weather_setup_guidance
   fi
