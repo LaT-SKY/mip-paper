@@ -4,7 +4,6 @@ const TARGET_PATTERN = /^mip-paper\|display=(-?\d+)\|bounds=(-?\d+),(-?\d+),(\d+
 const FULLSCREEN_SERVICE = 'org.mip.Paper';
 const FULLSCREEN_PATH = '/Fullscreen';
 const FULLSCREEN_INTERFACE = 'org.mip.Paper.Fullscreen';
-const FULLSCREEN_HEARTBEAT_MS = 5000;
 const tracked = new Map();
 const fullscreenByOutput = new Map();
 let reconciling = false;
@@ -166,6 +165,7 @@ workspace.windowAdded.connect((window) => {
   pushFullscreenState();
 });
 workspace.windowRemoved.connect(() => pushFullscreenState());
+workspace.windowActivated.connect(() => pushFullscreenState());
 workspace.screensChanged.connect(() => {
   reconcile('screens-changed');
   pushFullscreenState();
@@ -176,6 +176,7 @@ workspace.screenOrderChanged.connect(() => {
 });
 reconcile('startup');
 pushFullscreenState();
-// Heartbeat: re-push current state so a service restarted while a fullscreen
-// window is already open converges within a few seconds.
-setInterval(() => pushFullscreenState({ force: true, silent: true }), FULLSCREEN_HEARTBEAT_MS);
+// KWin scripting provides no timers, so there is no script-side heartbeat.
+// The wallpaper service restarts this script on startup (unload + load +
+// start) and the startup push above re-syncs fullscreen state within a few
+// seconds of the service coming up; live changes arrive through the signals.

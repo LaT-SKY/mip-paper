@@ -57,6 +57,7 @@ async function runCoordinator({ outputs, windows }) {
     windowList: () => windows,
     windowAdded: new Signal(),
     windowRemoved: new Signal(),
+    windowActivated: new Signal(),
     screensChanged: new Signal(),
     screenOrderChanged: new Signal(),
     sendClientToScreen(window, target) {
@@ -351,19 +352,18 @@ test('pushes per-output state when a fullscreen window changes outputs', async (
   assert.equal(pushes.find((p) => p.output === 'HDMI-A-1').fullscreen, true);
 });
 
-test('registers a heartbeat that force re-pushes unchanged state', async () => {
+test('pushes on window activation changes without using timers', async () => {
   const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
-  const video = appWindow('video', primary, true);
+  const video = appWindow('video', primary, false);
   const result = await runCoordinator({ outputs: [primary], windows: [video] });
+  result.dbusCalls.length = 0;
 
-  assert.equal(result.intervals.length, 1);
-  assert.equal(result.intervals[0].ms, 5000);
+  video.fullScreen = true;
+  result.workspace.windowActivated.emit(video);
+
   assert.equal(result.dbusCalls.length, 1);
-
-  result.intervals[0].fn();
-
-  assert.equal(result.dbusCalls.length, 2);
-  assert.equal(pushArgs(result.dbusCalls[1]).fullscreen, true);
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, true);
+  assert.equal(result.intervals.length, 0);
 });
 
 test('logs callDBus failures only for change-driven pushes', async () => {

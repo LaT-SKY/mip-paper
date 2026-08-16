@@ -1,9 +1,45 @@
+import os from 'node:os';
+import path from 'node:path';
 import dbus from '@particle/dbus-next';
 
 export const FULLSCREEN_SERVICE = 'org.mip.Paper';
 export const FULLSCREEN_PATH = '/Fullscreen';
 export const FULLSCREEN_INTERFACE = 'org.mip.Paper.Fullscreen';
 export const FULLSCREEN_METHOD = 'SetOutputFullscreen';
+
+const SCRIPTING_XML = [
+  '<node>',
+  '  <interface name="org.kde.kwin.Scripting">',
+  '    <method name="isScriptLoaded"><arg type="s" name="pluginName" direction="in"/><arg type="b" direction="out"/></method>',
+  '    <method name="unloadScript"><arg type="s" name="pluginName" direction="in"/><arg type="b" direction="out"/></method>',
+  '    <method name="loadScript"><arg type="s" name="filePath" direction="in"/><arg type="s" name="pluginName" direction="in"/><arg type="i" direction="out"/></method>',
+  '    <method name="start"/>',
+  '  </interface>',
+  '</node>',
+].join('\n');
+
+export function coordinatorScriptPath(env = process.env, home = os.homedir()) {
+  const dataHome = env.XDG_DATA_HOME || path.join(home, '.local', 'share');
+  return path.join(dataHome, 'kwin', 'scripts', 'mip-paper', 'contents', 'code', 'main.js');
+}
+
+// KWin scripting provides no timers, so the coordinator script cannot push a
+// heartbeat on its own. Restarting it triggers its startup fullscreen push,
+// which re-syncs state after this service (re)starts while a fullscreen
+// window is already open.
+export async function resyncCoordinatorScript(bus, scriptPathname, log = () => {}) {
+  try {
+    const object = await bus.getProxyObject('org.kde.KWin', '/Scripting', SCRIPTING_XML);
+    const scripting = object.getInterface('org.kde.kwin.Scripting');
+    try { await scripting.unloadScript('mip-paper'); } catch {}
+    await scripting.loadScript(scriptPathname, 'mip-paper');
+    await scripting.start();
+    return true;
+  } catch (error) {
+    log(`Coordinator resync unavailable: ${error?.message || error}`);
+    return false;
+  }
+}
 
 // Pure per-output fullscreen state tracker. Emits a change record only when a
 // key actually toggles, so heartbeat re-pushes from the KWin script are deduped.
@@ -44,6 +80,7 @@ export function createFullscreenWatcher({
   onStateChange = () => {},
   enabled = () => true,
   log = () => {},
+  scriptPath = null,
 } = {}) {
   let bus = null;
   let started = false;
@@ -94,6 +131,9 @@ export function createFullscreenWatcher({
         await bus.requestName(FULLSCREEN_SERVICE);
         bus.addMethodHandler(handleMethod);
         started = true;
+        if (scriptPath) {
+          void resyncCoordinatorScript(bus, scriptPath, log).catch(() => {});
+        }
       } catch (error) {
         log(`Fullscreen D-Bus service unavailable: ${error?.message || error}`);
         try { bus?.disconnect(); } catch {}

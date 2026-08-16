@@ -6,8 +6,10 @@ import {
   FULLSCREEN_METHOD,
   FULLSCREEN_PATH,
   FULLSCREEN_SERVICE,
+  coordinatorScriptPath,
   createFullscreenTracker,
   createFullscreenWatcher,
+  resyncCoordinatorScript,
 } from '../src/fullscreen-watcher.mjs';
 
 function fakeMessage({ path, interface: iface, member, body }) {
@@ -197,6 +199,52 @@ test('acknowledges pushes while disabled but ignores them and unpauses on disabl
   assert.equal(handle(pushMessage({ fullscreen: true })), true);
   assert.deepEqual(changes, [[11, true], [11, false], [11, true]]);
   await watcher.stop();
+});
+
+test('coordinator script path resolves under the data home', () => {
+  assert.equal(
+    coordinatorScriptPath({ XDG_DATA_HOME: '/custom/data' }, '/home/tester'),
+    '/custom/data/kwin/scripts/mip-paper/contents/code/main.js',
+  );
+  assert.equal(
+    coordinatorScriptPath({}, '/home/tester'),
+    '/home/tester/.local/share/kwin/scripts/mip-paper/contents/code/main.js',
+  );
+});
+
+test('resync restarts the coordinator script through the scripting interface', async () => {
+  const calls = [];
+  const bus = {
+    async getProxyObject(service, pathname, xml) {
+      calls.push(['proxy', service, pathname]);
+      assert.match(xml, /org\.kde\.kwin\.Scripting/);
+      return {
+        getInterface: () => ({
+          unloadScript: async (name) => { calls.push(['unload', name]); return true; },
+          loadScript: async (file, name) => { calls.push(['load', file, name]); return 0; },
+          start: async () => { calls.push(['start']); },
+        }),
+      };
+    },
+  };
+
+  assert.equal(await resyncCoordinatorScript(bus, '/scripts/main.js'), true);
+  assert.deepEqual(calls, [
+    ['proxy', 'org.kde.KWin', '/Scripting'],
+    ['unload', 'mip-paper'],
+    ['load', '/scripts/main.js', 'mip-paper'],
+    ['start'],
+  ]);
+});
+
+test('resync logs and reports failure when the scripting interface is unavailable', async () => {
+  const errors = [];
+  const bus = {
+    async getProxyObject() { throw new Error('bus gone'); },
+  };
+  assert.equal(await resyncCoordinatorScript(bus, '/scripts/main.js', (message) => errors.push(message)), false);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /Coordinator resync unavailable/);
 });
 
 test('start failure logs and leaves the watcher stopped', async () => {

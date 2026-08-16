@@ -13,7 +13,14 @@ reload_kwin() {
     return 0
   fi
   qdbus6 org.kde.KWin /KWin reconfigure
-  qdbus6 org.kde.KWin /Scripting start
+  # KWin keeps running an already-loaded script instance, so an upgrade only
+  # takes effect after the script is unloaded and loaded again. These reload
+  # steps are best-effort; the reconfigure above is the failure checkpoint.
+  qdbus6 org.kde.KWin /Scripting \
+    org.kde.kwin.Scripting.unloadScript "$APP_ID" >/dev/null 2>&1 || true
+  qdbus6 org.kde.KWin /Scripting \
+    org.kde.kwin.Scripting.loadScript "$DESTINATION/contents/code/main.js" "$APP_ID" >/dev/null 2>&1 || true
+  qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1 || true
 }
 
 install_script() {
