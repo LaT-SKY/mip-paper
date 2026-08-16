@@ -31,7 +31,7 @@ import { createKdeAccentWatcher } from './kde-accent.mjs';
 import { createColorService, colorCacheDirectory } from './color-service.mjs';
 import { createKdeAppearanceWatcher } from './kde-appearance.mjs';
 import { createAppearanceCoordinator } from './appearance.mjs';
-import { createFullscreenWatcher } from './fullscreen-watcher.mjs';
+import { coordinatorScriptPath, createFullscreenWatcher } from './fullscreen-watcher.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
@@ -238,6 +238,7 @@ async function run() {
     onStateChange: (displayId, paused) => manager?.updateFullscreen(displayId, paused),
     enabled: () => currentConfig.motion.pauseWhenFullscreen,
     log: (message) => console.error(message),
+    scriptPath: coordinatorScriptPath(),
   });
   await fullscreenWatcher.start();
   informationService.start();
