@@ -146,7 +146,7 @@ Removal (`teardown` / `uninstall`) removes both integrations.
 
 Right-click the wallpaper and choose **Settings** to open the visual settings window (same design language as the context menu: white surface in light mode, large rounded corners, SVG icons, spring motion). The window edits every configuration field with live hot reload, manages weather credentials (masked), edits custom context-menu commands, and imports wallpaper images. It is a normal application window above the wallpaper, visible in the taskbar; focusing it or moving the pointer onto it never dismisses wallpaper context menus.
 
-With `interactionEnabled: false` the wallpaper windows pass the mouse through entirely, so the context menu and the settings entry are unavailable; restore it by editing `~/.config/mip-paper/config.json`.
+With `mouse.buttonsEnabled: false` the wallpaper windows pass the mouse through entirely, so the context menu and the settings entry are unavailable; `mouse.interactionEnabled: false` only stops pointer-driven parallax while the context menu still works. Both are adjustable in the **Interaction** section of the settings window, or by editing `~/.config/mip-paper/config.json`.
 
 ## Weather Service
 
@@ -187,7 +187,7 @@ Right-click on the wallpaper to open the menu: four built-in actions are provide
 
 `menu.avoidObstacles` (default `true`) enables obstacle avoidance: the KWin coordinator continuously reports each output's work area (output geometry minus the space occupied by Plasma panels/app bars), and the menu clamps inside it near docks so it is never occluded.
 
-**Focus dismissal**: with `menu.closeOnFocusChange` (default `true`), the KWin coordinator notifies the service whenever a non-wallpaper window is activated, and every open menu dismisses itself. Moving the pointer off the wallpaper also dismisses the menu immediately — this covers clicking a window that is **already focused**. The wallpaper windows themselves ignore focus, so right-clicking to open the menu never triggers a spurious close. The menu itself and the app's GUI windows (the settings window) are never dismissed by these mechanisms.
+**Dismiss on leaving the wallpaper**: with `menu.closeOnFocusChange` (default `true`), the menu dismisses itself as soon as the pointer leaves the wallpaper (the KWin coordinator also reports switching to another app). Moving the pointer off the wallpaper also dismisses the menu immediately — this covers clicking a window that is **already focused**. The wallpaper windows themselves ignore focus, so right-clicking to open the menu never triggers a spurious close. The menu itself and the app's GUI windows (the settings window) are never dismissed by these mechanisms.
 
 As a fallback, `menu.autoCloseMs` auto-closes the menu after the given number of idle milliseconds (`0` disables it).
 

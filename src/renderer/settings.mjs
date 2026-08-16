@@ -6,7 +6,7 @@
 // 2*PI*6.5, damping 0.6) so the settings UI shares the wallpaper menu's motion
 // language; CSS holds state classes and hover, JS drives container motion.
 
-import { SETTINGS_GROUPS, getPath, setPath } from '../settings-fields.mjs';
+import { SETTINGS_GROUPS, SETTINGS_ICONS, getPath, setPath } from '../settings-fields.mjs';
 import { ICONS } from './context-menu.mjs';
 
 // Mirrors context-menu.mjs SPRING (small control surface, one subtle bounce).
@@ -21,6 +21,10 @@ const SPRING = Object.freeze({
 const SECTION_TRANSITION_MS = 180;
 const ROW_STAGGER_MS = 24;
 
+// Built-in context-menu command ids a custom command must not shadow; the
+// auto-generated ids (cmd-1, cmd-2, …) never collide with them.
+const RESERVED_COMMAND_IDS = new Set(['refresh', 'toggle-panel', 'toggle-pause', 'settings']);
+
 const navRoot = document.getElementById('settings-nav');
 const contentRoot = document.getElementById('settings-content');
 const versionEl = document.getElementById('app-version');
@@ -34,14 +38,61 @@ const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let state = null;
 let draft = null;
 let dirty = false;
-let currentSection = 'basic';
+let currentSection = 'interaction';
 let animToken = 0;
 let statusTimer = null;
+// Shared visual icon picker for the custom-command rows.
+let iconPicker = null;
+// Shared per-command "more" action menu.
+let commandMenu = null;
 
 function iconMarkup(name) {
+  const paths = SETTINGS_ICONS[name];
+  if (!paths) return '';
+  return '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>';
+}
+
+function commandIconMarkup(name) {
   const paths = ICONS[name];
   if (!paths) return '';
   return '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>';
+}
+
+// Small stroke icons for the per-command "more" menu (move, delete, auto-exit).
+const MENU_ACTION_ICONS = Object.freeze({
+  more: '<path d="M5 12h.01"/><path d="M12 12h.01"/><path d="M19 12h.01"/>',
+  'chevron-up': '<path d="M6 15l6-6 6 6"/>',
+  'chevron-down': '<path d="M6 9l6 6 6-6"/>',
+  trash: '<path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12"/><path d="M9 7V4h6v3"/>',
+  check: '<path d="M5 12l4 4L19 6"/>',
+});
+
+function menuActionIcon(name) {
+  const paths = MENU_ACTION_ICONS[name];
+  if (!paths) return '';
+  return '<svg viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>';
+}
+
+// Build a file:// URL from an absolute path (Linux paths only). Used for the
+// wallpaper preview and the About logo; returns null for missing input.
+function fileUrlFor(pathname) {
+  if (!pathname || typeof pathname !== 'string') return null;
+  return 'file://' + encodeURI(pathname.replace(/\\/g, '/'));
+}
+
+// Next auto-managed command id: cmd-1, cmd-2, … skipping ids already in use
+// (including arbitrary ids a user config carried over) and reserved ids.
+function nextCommandId(commands) {
+  const ids = new Set((commands ?? []).map((command) => command && command.id));
+  let index = 1;
+  while (ids.has('cmd-' + index) || RESERVED_COMMAND_IDS.has('cmd-' + index)) index += 1;
+  return 'cmd-' + index;
+}
+
+function commandSubfields() {
+  return SETTINGS_GROUPS
+    .find((group) => group.id === 'menu').fields
+    .find((field) => field.type === 'commands').fields;
 }
 
 function findField(key) {
@@ -82,16 +133,9 @@ function applyAccent() {
   );
 }
 
-function ensureIconDatalist() {
-  if (document.getElementById('command-icon-options')) return;
-  const datalist = document.createElement('datalist');
-  datalist.id = 'command-icon-options';
-  for (const name of Object.keys(ICONS)) {
-    const option = document.createElement('option');
-    option.value = name;
-    datalist.appendChild(option);
-  }
-  document.body.appendChild(datalist);
+function renderBrand() {
+  const mark = document.getElementById('app-mark');
+  if (mark) mark.innerHTML = iconMarkup('settings');
 }
 
 function renderNav() {
@@ -166,18 +210,6 @@ function createControl(field) {
     return wrap;
   }
 
-  if (field.type === 'icon') {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.dataset.field = field.key;
-    input.placeholder = '无';
-    input.setAttribute('list', 'command-icon-options');
-    const value = getPath(draft, field.key);
-    input.value = value == null ? '' : String(value);
-    wrap.appendChild(input);
-    return wrap;
-  }
-
   const input = document.createElement('input');
   input.type = field.type === 'password' ? 'password' : 'text';
   input.dataset.field = field.key;
@@ -222,15 +254,178 @@ function createFieldRow(field) {
   return row;
 }
 
+// --- Custom command list editor ---------------------------------------------
+
+function ensureIconPicker() {
+  if (iconPicker) return iconPicker;
+  const popover = document.createElement('div');
+  popover.className = 'command-icon-popover';
+  popover.hidden = true;
+  const none = document.createElement('button');
+  none.type = 'button';
+  none.className = 'command-icon-tile command-icon-tile--none';
+  none.textContent = '无图标';
+  none.addEventListener('click', () => pickIcon(null));
+  popover.appendChild(none);
+  for (const name of Object.keys(ICONS)) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'command-icon-tile';
+    tile.dataset.iconName = name;
+    tile.title = name;
+    tile.innerHTML = commandIconMarkup(name);
+    tile.addEventListener('click', () => pickIcon(name));
+    popover.appendChild(tile);
+  }
+  document.body.appendChild(popover);
+  iconPicker = { popover, index: -1 };
+  return iconPicker;
+}
+
+function openIconPicker(anchor, index) {
+  const picker = ensureIconPicker();
+  picker.index = index;
+  const rect = anchor.getBoundingClientRect();
+  picker.popover.style.left = rect.left + 'px';
+  picker.popover.style.top = rect.bottom + 6 + 'px';
+  picker.popover.hidden = false;
+  const commands = getPath(draft, 'menu.customCommands') ?? [];
+  const current = commands[index] && commands[index].icon;
+  for (const tile of picker.popover.querySelectorAll('[data-icon-name]')) {
+    tile.classList.toggle('selected', tile.dataset.iconName === current);
+  }
+}
+
+function closeIconPicker() {
+  if (iconPicker) {
+    iconPicker.popover.hidden = true;
+    iconPicker.index = -1;
+  }
+}
+
+// --- Per-command "more" action menu ----------------------------------------
+
+function ensureCommandMenu() {
+  if (commandMenu) return commandMenu;
+  const popover = document.createElement('div');
+  popover.className = 'command-more-popover';
+  popover.hidden = true;
+  document.body.appendChild(popover);
+  commandMenu = { popover, index: -1 };
+  return commandMenu;
+}
+
+function closeCommandMenu() {
+  if (commandMenu) {
+    commandMenu.popover.hidden = true;
+    commandMenu.index = -1;
+  }
+}
+
+function openCommandMenu(anchor, index) {
+  const menu = ensureCommandMenu();
+  const commands = getPath(draft, 'menu.customCommands') ?? [];
+  const entry = commands[index] ?? {};
+  const lastIndex = commands.length - 1;
+
+  menu.index = index;
+  menu.popover.replaceChildren();
+
+  const actions = [
+    { id: 'move-up', label: '上移', icon: 'chevron-up', disabled: index === 0 },
+    { id: 'move-down', label: '下移', icon: 'chevron-down', disabled: index === lastIndex },
+    { id: 'remove', label: '删除', icon: 'trash' },
+  ];
+  for (const action of actions) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'command-more-item';
+    item.disabled = Boolean(action.disabled);
+    item.dataset.commandMenuAction = action.id;
+    item.innerHTML = menuActionIcon(action.icon) + '<span class="command-more-label">' + action.label + '</span>';
+    item.addEventListener('click', () => runCommandMenuAction(action.id));
+    menu.popover.appendChild(item);
+  }
+
+  // autoExit only matters for terminal-mode commands; default is auto-exit.
+  if (entry.mode === 'terminal') {
+    const separator = document.createElement('div');
+    separator.className = 'command-more-separator';
+    menu.popover.appendChild(separator);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'command-more-item';
+    toggle.dataset.commandMenuAction = 'auto-exit';
+    toggle.innerHTML = '<span class="command-more-label">自动退出</span>'
+      + (entry.autoExit !== false ? '<span class="command-more-check">' + menuActionIcon('check') + '</span>' : '');
+    toggle.addEventListener('click', () => runCommandMenuAction('auto-exit'));
+    menu.popover.appendChild(toggle);
+  }
+
+  const rect = anchor.getBoundingClientRect();
+  menu.popover.style.left = rect.right - 168 + 'px';
+  menu.popover.style.top = rect.bottom + 6 + 'px';
+  menu.popover.hidden = false;
+}
+
+function runCommandMenuAction(action) {
+  if (!commandMenu || commandMenu.index < 0) return;
+  const index = commandMenu.index;
+  const commands = [...(getPath(draft, 'menu.customCommands') ?? [])];
+  if (action === 'auto-exit') {
+    if (!commands[index]) commands[index] = { mode: 'background' };
+    commands[index].autoExit = !commands[index].autoExit;
+  } else if (action === 'move-up' || action === 'move-down') {
+    const direction = action === 'move-up' ? -1 : 1;
+    const target = index + direction;
+    if (target < 0 || target >= commands.length) return;
+    const [entry] = commands.splice(index, 1);
+    commands.splice(target, 0, entry);
+  } else if (action === 'remove') {
+    commands.splice(index, 1);
+  }
+  setPath(draft, 'menu.customCommands', commands);
+  markDirty();
+  closeCommandMenu();
+  renderSection(currentSection);
+}
+
+function pickIcon(name) {
+  if (!iconPicker || iconPicker.index < 0) return;
+  const index = iconPicker.index;
+  const commands = [...(getPath(draft, 'menu.customCommands') ?? [])];
+  if (!commands[index]) commands[index] = { mode: 'background' };
+  if (name === null || name === undefined) delete commands[index].icon;
+  else commands[index].icon = name;
+  setPath(draft, 'menu.customCommands', commands);
+  markDirty();
+  closeIconPicker();
+  renderSection(currentSection);
+}
+
 function createCommandRow(index) {
   const row = document.createElement('div');
   row.className = 'command-row';
   row.dataset.commandIndex = String(index);
   const commands = getPath(draft, 'menu.customCommands') ?? [];
   const entry = commands[index] ?? {};
-  const subfields = SETTINGS_GROUPS
-    .find((group) => group.id === 'menu').fields
-    .find((field) => field.type === 'commands').fields;
+  const subfields = commandSubfields();
+
+  // Icon picker: visual glyph in the first column (the menu shows the same
+  // glyph, not a name).
+  const picker = document.createElement('button');
+  picker.type = 'button';
+  picker.className = 'command-icon-picker';
+  picker.dataset.commandIconPicker = String(index);
+  picker.title = entry.icon ? '图标：' + entry.icon : '选择图标';
+  if (entry.icon && ICONS[entry.icon]) {
+    picker.innerHTML = commandIconMarkup(entry.icon);
+  } else {
+    picker.textContent = '＋';
+    picker.classList.add('command-icon-picker--empty');
+  }
+  picker.addEventListener('click', () => openIconPicker(picker, index));
+  row.appendChild(picker);
 
   for (const subfield of subfields) {
     let input;
@@ -246,7 +441,6 @@ function createCommandRow(index) {
       input = document.createElement('input');
       input.type = 'text';
       if (subfield.placeholder) input.placeholder = subfield.placeholder;
-      if (subfield.type === 'icon') input.setAttribute('list', 'command-icon-options');
     }
     input.dataset.commandField = subfield.key;
     input.dataset.commandIndex = String(index);
@@ -255,12 +449,14 @@ function createCommandRow(index) {
     row.appendChild(input);
   }
 
-  const remove = document.createElement('button');
-  remove.type = 'button';
-  remove.className = 'command-remove';
-  remove.textContent = '×';
-  remove.dataset.commandRemove = String(index);
-  row.appendChild(remove);
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'command-more';
+  more.dataset.commandMore = String(index);
+  more.title = '更多操作';
+  more.innerHTML = menuActionIcon('more');
+  more.addEventListener('click', () => openCommandMenu(more, index));
+  row.appendChild(more);
   return row;
 }
 
@@ -275,7 +471,7 @@ function createCommandsEditor() {
   add.textContent = '添加命令';
   add.addEventListener('click', () => {
     const next = [...(getPath(draft, 'menu.customCommands') ?? [])];
-    next.push({ id: '', label: '', command: '', mode: 'background' });
+    next.push({ id: nextCommandId(next), label: '', command: '', mode: 'background', autoExit: true });
     setPath(draft, 'menu.customCommands', next);
     markDirty();
     renderSection(currentSection);
@@ -283,6 +479,8 @@ function createCommandsEditor() {
   editor.appendChild(add);
   return editor;
 }
+
+// --- Shared copy row + credentials / about ----------------------------------
 
 function createCopy(labelText, description) {
   const copy = document.createElement('div');
@@ -351,6 +549,14 @@ function appendCredentialsSection(card) {
 }
 
 function appendAboutSection(card) {
+  if (state.logoPath) {
+    const logo = document.createElement('img');
+    logo.className = 'about-logo';
+    logo.alt = 'Mip-Paper Logo';
+    logo.src = fileUrlFor(state.logoPath);
+    logo.addEventListener('error', () => { logo.hidden = true; });
+    card.appendChild(logo);
+  }
   const list = document.createElement('dl');
   list.className = 'about-list';
   const items = [
@@ -372,6 +578,71 @@ function appendAboutSection(card) {
   card.appendChild(list);
 }
 
+// --- Section rendering ------------------------------------------------------
+
+function appendWallpaperSection(card) {
+  const preview = document.createElement('div');
+  preview.className = 'wallpaper-preview';
+  const frame = document.createElement('div');
+  frame.className = 'wallpaper-preview-frame';
+  const image = document.createElement('img');
+  image.className = 'wallpaper-preview-image';
+  image.alt = '壁纸预览';
+  const placeholder = document.createElement('span');
+  placeholder.className = 'wallpaper-preview-placeholder';
+  placeholder.textContent = '尚未导入图片';
+  const manualUrl = fileUrlFor(state.wallpaper && state.wallpaper.path);
+  if (manualUrl) {
+    // The manual wallpaper file is replaced in place, so bust the URL to
+    // always show the latest bytes.
+    image.src = manualUrl + '?v=' + Date.now();
+    image.addEventListener('error', () => {
+      image.hidden = true;
+      placeholder.hidden = false;
+    });
+    image.addEventListener('load', () => {
+      image.hidden = false;
+      placeholder.hidden = true;
+    });
+  } else {
+    image.hidden = true;
+  }
+  frame.append(image, placeholder);
+  preview.appendChild(frame);
+  const hint = document.createElement('span');
+  hint.className = 'wallpaper-preview-hint';
+  hint.textContent = '跟随 KDE 模式下不可用';
+  preview.appendChild(hint);
+  card.appendChild(preview);
+
+  const actions = document.createElement('div');
+  actions.className = 'wallpaper-actions';
+  const pick = document.createElement('button');
+  pick.type = 'button';
+  pick.className = 'button';
+  pick.id = 'wallpaper-pick';
+  pick.textContent = '选择图片…';
+  pick.addEventListener('click', importWallpaper);
+  actions.appendChild(pick);
+  const hintText = document.createElement('span');
+  hintText.className = 'hint';
+  hintText.textContent = '导入 JPEG / PNG / WebP 并切换到手动模式（所有显示器）';
+  actions.appendChild(hintText);
+  card.appendChild(actions);
+}
+
+// Keep the wallpaper section's interactive state in sync with the draft mode
+// without re-rendering the whole section (the mode select would lose focus).
+function updateWallpaperSectionControls() {
+  const card = contentRoot.querySelector('.settings-card');
+  if (!card) return;
+  const kde = getPath(draft, 'wallpaper.mode') === 'kde';
+  const pick = card.querySelector('#wallpaper-pick');
+  if (pick) pick.disabled = kde;
+  const preview = card.querySelector('.wallpaper-preview');
+  if (preview) preview.classList.toggle('is-dimmed', kde);
+}
+
 function renderSection(groupId) {
   const group = SETTINGS_GROUPS.find((candidate) => candidate.id === groupId);
   if (!group) return;
@@ -385,15 +656,14 @@ function renderSection(groupId) {
   heading.textContent = group.title;
   card.appendChild(heading);
 
-  if (group.id === 'credentials') {
-    appendCredentialsSection(card);
-  } else if (group.id === 'about') {
+  if (group.id === 'about') {
     appendAboutSection(card);
   } else {
     for (const field of group.fields) {
+      if (field.external) continue;
       if (field.type === 'commands') {
         const row = document.createElement('div');
-        row.className = 'field-row';
+        row.className = 'field-row field-row--stacked';
         row.dataset.field = field.key;
         row.appendChild(createCopy(field.label, field.description));
         row.appendChild(createCommandsEditor());
@@ -403,23 +673,17 @@ function renderSection(groupId) {
       }
     }
     if (group.id === 'wallpaper') {
-      const actions = document.createElement('div');
-      actions.className = 'wallpaper-actions';
-      const pick = document.createElement('button');
-      pick.type = 'button';
-      pick.className = 'button';
-      pick.textContent = '选择图片…';
-      pick.addEventListener('click', importWallpaper);
-      actions.appendChild(pick);
-      const hint = document.createElement('span');
-      hint.className = 'hint';
-      hint.textContent = '导入 JPEG / PNG / WebP 并切换到手动模式（所有显示器）';
-      actions.appendChild(hint);
-      card.appendChild(actions);
+      appendWallpaperSection(card);
+    }
+    if (group.id === 'weather') {
+      appendCredentialsSection(card);
     }
   }
 
   contentRoot.replaceChildren(card);
+  // The card must be attached before the control state is synced; otherwise
+  // the initial KDE/manual mode would never grey out the pick button.
+  if (group.id === 'wallpaper') updateWallpaperSectionControls();
   animateSection(card);
   syncFooterState();
 }
@@ -433,7 +697,7 @@ function animateSection(card) {
   let last = start;
   const omega = SPRING.omega;
   const damping = SPRING.damping;
-  const rows = [...card.querySelectorAll('.field-row, .command-row, .wallpaper-actions, .credentials-actions, .about-list')];
+  const rows = [...card.querySelectorAll('.field-row, .command-row, .wallpaper-actions, .wallpaper-preview, .credentials-actions, .about-list')];
   card.style.opacity = '0';
   for (const row of rows) {
     row.style.opacity = '0';
@@ -480,7 +744,6 @@ function parseControlValue(input, field) {
     const parsed = Number.parseFloat(input.value);
     return Number.isFinite(parsed) ? parsed : undefined;
   }
-  if (field.type === 'icon') return input.value.trim() === '' ? undefined : input.value;
   return input.value;
 }
 
@@ -546,7 +809,7 @@ async function saveConfig() {
     dirty = false;
     syncFooterState();
     applyTheme();
-    showStatus('ok', '已保存，实时生效');
+    showStatus('ok', '修改成功');
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
     showStatus('error', '保存失败');
@@ -592,6 +855,8 @@ async function importWallpaper() {
 function selectSection(groupId) {
   if (groupId === currentSection) return;
   clearFieldErrors();
+  closeIconPicker();
+  closeCommandMenu();
   renderSection(groupId);
 }
 
@@ -604,6 +869,7 @@ contentRoot.addEventListener('input', (event) => {
     if (field) {
       setPath(draft, fieldKey, parseControlValue(input, field));
       markDirty();
+      if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
     }
     return;
   }
@@ -612,11 +878,7 @@ contentRoot.addEventListener('input', (event) => {
     const index = Number(input.dataset.commandIndex);
     const commands = [...(getPath(draft, 'menu.customCommands') ?? [])];
     if (!commands[index]) commands[index] = { mode: 'background' };
-    if (commandField === 'icon' && input.value.trim() === '') {
-      delete commands[index].icon;
-    } else {
-      commands[index][commandField] = input.value;
-    }
+    commands[index][commandField] = input.value;
     setPath(draft, 'menu.customCommands', commands);
     markDirty();
   }
@@ -631,20 +893,50 @@ contentRoot.addEventListener('click', (event) => {
     renderSection(currentSection);
     return;
   }
-  const removeTarget = event.target.closest && event.target.closest('[data-command-remove]');
-  if (removeTarget) {
-    const index = Number(removeTarget.dataset.commandRemove);
-    const commands = [...(getPath(draft, 'menu.customCommands') ?? [])];
-    commands.splice(index, 1);
-    setPath(draft, 'menu.customCommands', commands);
-    markDirty();
-    renderSection(currentSection);
+  const menuAction = event.target.closest && event.target.closest('[data-command-menu-action]');
+  if (menuAction) {
+    // Actions are handled by their own listeners (built per open), so the
+    // popover stays closed here — the delegation branch is a safety net.
+    return;
   }
 });
+
+// The icon picker and the command "more" menu are floating popovers: close
+// them on outside clicks, Escape, or when the section scrolls under them.
+document.addEventListener('pointerdown', (event) => {
+  if (iconPicker && !iconPicker.popover.hidden) {
+    if (iconPicker.popover.contains(event.target)) return;
+    const pickerButton = event.target.closest && event.target.closest('.command-icon-picker');
+    if (pickerButton) return;
+    closeIconPicker();
+  }
+  if (commandMenu && !commandMenu.popover.hidden) {
+    if (commandMenu.popover.contains(event.target)) return;
+    const moreButton = event.target.closest && event.target.closest('.command-more');
+    if (moreButton) return;
+    closeCommandMenu();
+  }
+});
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (iconPicker && !iconPicker.popover.hidden) {
+    event.preventDefault();
+    closeIconPicker();
+  } else if (commandMenu && !commandMenu.popover.hidden) {
+    event.preventDefault();
+    closeCommandMenu();
+  }
+});
+contentRoot.addEventListener('scroll', () => {
+  closeIconPicker();
+  closeCommandMenu();
+}, { passive: true });
 
 saveButton.addEventListener('click', saveConfig);
 reloadButton.addEventListener('click', async () => {
   clearFieldErrors();
+  closeIconPicker();
+  closeCommandMenu();
   await reloadState();
   showStatus('ok', '已重新加载配置');
 });
@@ -685,7 +977,7 @@ async function start() {
     return;
   }
   try {
-    ensureIconDatalist();
+    renderBrand();
     await reloadState();
   } catch (error) {
     errorOutput.value = 'Settings failed to start: ' + (error && error.message ? error.message : String(error));

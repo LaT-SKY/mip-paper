@@ -34,6 +34,9 @@
   max-width: min(320px, calc(100vw - 16px));
   max-height: min(520px, 80vh);
   overflow-y: auto;
+  /* No visible scrollbar: the menu still scrolls by wheel/touch, but the
+     control surface stays clean even with many custom commands. */
+  scrollbar-width: none;
   padding: 6px;
   border: 1px solid var(--menu-border);
   border-radius: var(--menu-radius);
@@ -41,6 +44,10 @@
   color: var(--menu-text);
   box-shadow: var(--menu-shadow);
   pointer-events: none;
+}
+
+#context-menu::-webkit-scrollbar {
+  display: none;
 }
 
 #context-menu[hidden] {

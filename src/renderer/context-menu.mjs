@@ -312,7 +312,11 @@ export function createContextMenu({
     setState(MENU_STATES.CLOSED);
   }
 
-  function open(x, y, bounds = null) {
+  // bounds is the safe rectangle the menu is clamped inside (the KDE work
+  // area excluding panels); avoidObstacles=false disables every clamp and
+  // flip so the menu appears exactly at the click point, even when that
+  // overflows the viewport or a panel.
+  function open(x, y, bounds = null, avoidObstacles = true) {
     token += 1;
     const myToken = token;
     cancelMotion();
@@ -323,19 +327,24 @@ export function createContextMenu({
     root.hidden = false;
     const width = root.offsetWidth;
     const height = root.offsetHeight;
-    const viewportWidth = viewport?.width ?? win.innerWidth;
-    const viewportHeight = viewport?.height ?? win.innerHeight;
-    const safeBottom = bounds ? bounds.y + bounds.height : viewportHeight - BOTTOM_SAFE_PX;
-    const flippedY = chooseMenuY({ y, height, margin: VIEWPORT_MARGIN, safeBottom });
-    const position = clampMenuPosition({
-      x,
-      y: flippedY,
-      width,
-      height,
-      viewportWidth,
-      viewportHeight,
-      bounds,
-    });
+    let position;
+    if (avoidObstacles === false) {
+      position = { x, y };
+    } else {
+      const viewportWidth = viewport?.width ?? win.innerWidth;
+      const viewportHeight = viewport?.height ?? win.innerHeight;
+      const safeBottom = bounds ? bounds.y + bounds.height : viewportHeight - BOTTOM_SAFE_PX;
+      const flippedY = chooseMenuY({ y, height, margin: VIEWPORT_MARGIN, safeBottom });
+      position = clampMenuPosition({
+        x,
+        y: flippedY,
+        width,
+        height,
+        viewportWidth,
+        viewportHeight,
+        bounds,
+      });
+    }
     root.style.left = position.x + 'px';
     root.style.top = position.y + 'px';
     root.dataset.origin = pickAnchorCorner({

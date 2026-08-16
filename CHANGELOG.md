@@ -39,11 +39,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Privacy and Licenses). Content assertions migrated from test/readme.test.mjs
   to the new test/docs-guides.test.mjs.
 
+### Changed
+
+- Settings window navigation is consolidated from twelve groups to nine
+  (交互 / 壁纸 / 外观 / 音频 / 运动与视差 / 信息面板 / 天气 / 右键菜单 / 关于):
+  颜色 and 外观 merge into 外观, 帧率 merges into 运动与视差, and 天气凭据
+  merges into 天气 as an inline credentials sub-section. Every navigation item
+  now carries an SVG icon (settings-fields.mjs owns a dedicated icon set), and
+  the Mip-Paper header mark shows a settings gear icon instead of the accent
+  dot.
+- Mouse input config is split: the single `interactionEnabled` boolean is
+  replaced by `mouse.buttonsEnabled` (accept mouse buttons; off makes the
+  wallpaper windows click-through, so the context menu and settings entry are
+  unavailable) and `mouse.interactionEnabled` (pointer-driven parallax and
+  information-panel tracking; off still allows the context menu). The legacy
+  top-level key is migrated automatically to both fields. The previously
+  misleading "mouse interaction off also disables right-click" hint is gone.
+- The settings footer buttons (重新加载 / 恢复默认 / 保存更改) stay pinned to
+  the right edge; a status message takes the left slot instead of pushing the
+  buttons.
+- Wallpaper section of the settings window: the mode dropdown labels drop
+  their parenthetical explanations, the current manual wallpaper is previewed
+  inline, the pick button and preview are greyed while following KDE, and
+  importing an image re-publishes the manual wallpaper immediately (manual
+  mode also cache-busts the wallpaper URL so the new file always reloads).
+- Status text after saving is simplified to "修改成功".
+- `menu.avoidObstacles` is now actually honored: when off the context menu
+  appears exactly at the right-click point with no viewport/bottom clamping or
+  flipping; when on it keeps the KWin work-area clamping (viewport fallback).
+- The custom-command editor is rebuilt: the icon is a visual glyph picker in
+  the first column (no more typing icon names), the unique id is auto-managed
+  (cmd-1, cmd-2, …) and hidden from the editor so the command input can be
+  wider, and the row layout is a stacked field that no longer squeezes the
+  inputs into a single column. Per-row operations collapse into one "更多"
+  (SVG) button that opens a small menu — move up, move down, delete — plus an
+  "自动退出" toggle for terminal-mode commands.
+- Terminal-mode menu commands exit the terminal automatically once the
+  command finishes (new per-command `menu.customCommands[].autoExit`,
+  default `true`); disabling it keeps the window open via `--hold` where
+  the emulator supports it or an interactive read suffix otherwise.
+- Terminal-mode menu commands actually open a terminal: the emulator lookup
+  used to invoke `command -v` as an executable, which always failed because
+  `command` is a shell builtin, so terminal mode silently fell back to
+  background execution. The lookup now runs through `sh -c`.
+- Terminal-mode menu commands honor a user-chosen terminal: `menu.terminal`
+  pins the emulator (empty auto-detects in preference order). Known emulators
+  (konsole, xfce4-terminal, kitty, gnome-terminal, alacritty, wezterm, foot,
+  …) use their native invocation; any other installed terminal is launched
+  generically with `-e sh -c`, and a missing configured terminal falls back
+  to auto-detection.
+- The context menu hides its scrollbar (still scrolls by wheel/touch) so a
+  long custom-command list keeps the clean control surface.
+- Number inputs render with `color-scheme` so the spinner buttons follow the
+  dark theme instead of staying white.
+- The About section shows the app logo (assets/logo.png) and the settings
+  window uses it as its window icon.
+
+### Docs
+
+- Configuration and quick-start guides describe `mouse.buttonsEnabled` /
+  `mouse.interactionEnabled` and the automatic migration of the legacy
+  `interactionEnabled` key.
+
 ### Docs
 
 - Add the user-guide index to docs/README.md and document the settings
   window, the scoped KWin rule, and the menu/settings unavailability while
-  interactionEnabled is false.
+  mouse.buttonsEnabled is false.
 
 ## [0.3.2] - 2026-08-16
 

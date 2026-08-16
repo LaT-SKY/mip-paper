@@ -115,7 +115,9 @@ export function createKdeWallpaperSync({
           mode: 'manual',
           status: 'manual',
           wallpaperPath: manualWallpaper,
-          wallpaperUrl: url,
+          // Cache-bust the file URL so a re-import (same path, new bytes)
+          // always reloads instead of hitting Chromium's file cache.
+          wallpaperUrl: url + '?v=' + inspected.size + '-' + (inspected.mtimeMs ?? 0),
           size: inspected.size,
           mtimeMs: inspected.mtimeMs ?? 0,
           contentKey: inspected.contentKey,

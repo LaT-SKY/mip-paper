@@ -37,6 +37,10 @@ import { coordinatorScriptPath, createFullscreenWatcher } from './fullscreen-wat
 import { createMenuCommandRunner } from './menu-command.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
+// App logo: rendered in the settings About section and used as the settings
+// window icon. assets/ is staged by the packaging script, so the sibling
+// path works in both the dev tree and the installed package.
+const logoPathname = path.join(sourceDirectory, '..', 'assets', 'logo.png');
 let manager;
 let informationService;
 let audioSpectrumService;
@@ -229,6 +233,15 @@ async function run() {
     settingsService: { saveConfigFile, saveWeatherCredentialsFile },
     importWallpaper,
     wallpaperPath: wallpaperPathname,
+    settingsIconPath: logoPathname,
+    onWallpaperImported: async () => {
+      // Re-publish the manual wallpaper so an import takes effect immediately
+      // even when the mode was already manual (no config change to hot-load).
+      // setMode always queues a reconcile; when it was kde and the config
+      // watcher already flipped the mode, this second run is idempotent.
+      wallpaperSync.setMode('manual');
+      await wallpaperSync.whenIdle();
+    },
     getSettingsState: () => {
       let accent = null;
       try {
@@ -243,6 +256,7 @@ async function run() {
           : { configured: false, apiHost: null },
         ...(accent ? { accent } : {}),
         wallpaper: { mode: currentConfig.wallpaper.mode, path: wallpaperPathname },
+        logoPath: logoPathname,
       };
     },
     wallpaperUrl,

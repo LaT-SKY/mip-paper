@@ -391,7 +391,7 @@ test('streams one spectrum service to every window and unsubscribes closed windo
 test('broadcasts complete runtime and KDE-only appearance updates', async () => {
   const { manager, ipcMain, displays, screen } = createFixture();
   await manager.start();
-  const config = { ...DEFAULT_CONFIG, interactionEnabled: false, audio: { ...DEFAULT_CONFIG.audio, fadeInMs: 0 } };
+  const config = { ...DEFAULT_CONFIG, mouse: { ...DEFAULT_CONFIG.mouse, buttonsEnabled: false }, audio: { ...DEFAULT_CONFIG.audio, fadeInMs: 0 } };
   const darkAppearance = { ...DEFAULT_APPEARANCE, resolvedTheme: 'dark', wallpaperBrightness: 0.72 };
   manager.updateRuntime({ config, appearance: darkAppearance });
   assert.deepEqual(FakeWindow.instances.map((window) => window.webContents.sent.at(-1)), [
@@ -507,10 +507,18 @@ test('prevents the renderer page title from replacing the display target', async
 
 test('uses configuration to control mouse passthrough', async () => {
   const passthrough = structuredClone(DEFAULT_CONFIG);
-  passthrough.interactionEnabled = false;
+  passthrough.mouse.buttonsEnabled = false;
   const { manager } = createFixture(passthrough);
   await manager.start();
   assert.equal(FakeWindow.instances[0].ignoreMouse, true);
+});
+
+test('interaction passthrough only follows mouse.buttonsEnabled', async () => {
+  const interactive = structuredClone(DEFAULT_CONFIG);
+  interactive.mouse.interactionEnabled = false;
+  const { manager } = createFixture(interactive);
+  await manager.start();
+  assert.equal(FakeWindow.instances[0].ignoreMouse, false);
 });
 
 test('bootstrap reflects the live fullscreen pause state', async () => {
@@ -660,6 +668,7 @@ function createSettingsFixture() {
   const saveConfigCalls = [];
   const credentialsCalls = [];
   const importResults = [];
+  const wallpaperImportedCalls = [];
   const settingsService = {
     saveConfigFile: async (pathname, candidate) => {
       saveConfigCalls.push([pathname, candidate]);
@@ -686,13 +695,16 @@ function createSettingsFixture() {
       return { pathname: destination, format: 'jpeg', size: 123, width: 10, height: 10 };
     },
     wallpaperPath: '/home/test/.local/share/mip-paper/wallpaper',
+    onWallpaperImported: async () => {
+      wallpaperImportedCalls.push(Date.now());
+    },
     getSettingsState: () => ({
       credentials: { configured: true, apiHost: 'console.example.com' },
       accent: [255, 52, 120],
       wallpaper: { mode: 'kde', path: '/home/test/.local/share/mip-paper/wallpaper' },
     }),
   };
-  return { settings, saveConfigCalls, credentialsCalls, dialogResults, importResults };
+  return { settings, saveConfigCalls, credentialsCalls, dialogResults, importResults, wallpaperImportedCalls };
 }
 
 async function openSettingsWindow(manager, ipcMain) {
@@ -780,7 +792,7 @@ test('settings save-config and save-credentials go through the injected service'
 });
 
 test('settings import-wallpaper cancels, imports, and switches to manual mode', async () => {
-  const { settings, saveConfigCalls, dialogResults, importResults } = createSettingsFixture();
+  const { settings, saveConfigCalls, dialogResults, importResults, wallpaperImportedCalls } = createSettingsFixture();
   const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, settings);
   await manager.start();
   await openSettingsWindow(manager, ipcMain);
@@ -791,6 +803,7 @@ test('settings import-wallpaper cancels, imports, and switches to manual mode', 
   dialogResults.filePaths = [];
   assert.deepEqual(await handler(sender), { ok: false, canceled: true });
   assert.deepEqual(importResults, []);
+  assert.equal(wallpaperImportedCalls.length, 0);
 
   dialogResults.canceled = false;
   dialogResults.filePaths = ['/tmp/pic.jpg'];
@@ -800,13 +813,16 @@ test('settings import-wallpaper cancels, imports, and switches to manual mode', 
   assert.deepEqual(importResults, [['/tmp/pic.jpg', '/home/test/.local/share/mip-paper/wallpaper']]);
   assert.equal(saveConfigCalls.length, 1);
   assert.equal(saveConfigCalls[0][1].wallpaper.mode, 'manual');
+  // The import must re-publish the manual wallpaper immediately, even though
+  // the config hot-reload already covers the mode switch.
+  assert.equal(wallpaperImportedCalls.length, 1);
 });
 
 test('runtime broadcasts reach the open settings window', async () => {
   const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, createSettingsFixture().settings);
   await manager.start();
   const settingsWindow = await openSettingsWindow(manager, ipcMain);
-  const config = { ...DEFAULT_CONFIG, interactionEnabled: false };
+  const config = { ...DEFAULT_CONFIG, mouse: { ...DEFAULT_CONFIG.mouse, buttonsEnabled: false } };
   const appearance = { ...DEFAULT_APPEARANCE, resolvedTheme: 'dark' };
   manager.updateRuntime({ config, appearance });
   assert.deepEqual(settingsWindow.webContents.sent.at(-1), {

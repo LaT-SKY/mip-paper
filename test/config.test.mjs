@@ -13,7 +13,7 @@ import {
 
 test('defaults match the approved v1 design', () => {
   assert.deepEqual(DEFAULT_CONFIG, {
-    interactionEnabled: true,
+    mouse: { buttonsEnabled: true, interactionEnabled: true },
     wallpaper: { mode: 'kde' },
     color: { mode: 'hybrid', transitionDurationMs: 900 },
     appearance: { mode: 'system', dark: { wallpaperBrightness: 0.72 } },
@@ -50,7 +50,7 @@ test('defaults match the approved v1 design', () => {
       location: { mode: 'auto', latitude: null, longitude: null, fallbackLocationId: '101281601' },
       tideStationId: 'P2352',
     },
-    menu: { customCommands: [], avoidObstacles: true, closeOnFocusChange: true, autoCloseMs: 0 },
+    menu: { customCommands: [], avoidObstacles: true, closeOnFocusChange: true, autoCloseMs: 0, terminal: '' },
   });
 });
 
@@ -149,15 +149,36 @@ test('falls back to the home config directory', () => {
 
 test('merges a partial configuration with defaults', () => {
   const value = validateConfig({
-    interactionEnabled: false,
+    mouse: { buttonsEnabled: false },
     motion: { deadZonePx: 5 },
   });
 
-  assert.equal(value.interactionEnabled, false);
+  assert.equal(value.mouse.buttonsEnabled, false);
+  assert.equal(value.mouse.interactionEnabled, true);
   assert.equal(value.motion.deadZonePx, 5);
   assert.equal(value.motion.interactionSpeed, 1.15);
   assert.deepEqual(value.frameRate, DEFAULT_CONFIG.frameRate);
   assert.equal(value.wallpaper.mode, 'kde');
+});
+
+test('migrates the legacy top-level interactionEnabled key to mouse.*', () => {
+  const value = validateConfig({ interactionEnabled: false });
+  assert.equal(value.mouse.buttonsEnabled, false);
+  assert.equal(value.mouse.interactionEnabled, false);
+  assert.equal('interactionEnabled' in value, false);
+
+  const on = validateConfig({ interactionEnabled: true, frameRate: { interactive: 75 } });
+  assert.equal(on.mouse.buttonsEnabled, true);
+  assert.equal(on.mouse.interactionEnabled, true);
+  assert.equal(on.frameRate.interactive, 75);
+});
+
+test('menu.terminal accepts an empty or named terminal and rejects others', () => {
+  assert.equal(validateConfig({}).menu.terminal, '');
+  assert.equal(validateConfig({ menu: { terminal: 'alacritty' } }).menu.terminal, 'alacritty');
+  assert.equal(validateConfig({ menu: { terminal: '  foot  ' } }).menu.terminal, 'foot');
+  assert.throws(() => validateConfig({ menu: { terminal: 42 } }), /menu\.terminal must be a string/);
+  assert.throws(() => validateConfig({ menu: { unknownTerminal: 'x' } }), /Unknown configuration field: menu\.unknownTerminal/);
 });
 
 test('accepts KDE and manual wallpaper modes and rejects other values', () => {
@@ -254,9 +275,15 @@ test('validates menu custom command entries', () => {
   ];
   const value = validateConfig({ menu: { customCommands } });
   assert.deepEqual(value.menu.customCommands, [
-    { id: 'downloads', label: 'Open Downloads', command: 'xdg-open ~/Downloads', mode: 'background' },
-    { id: 'update', label: 'System Update', command: 'pacman -Syu', mode: 'terminal', icon: 'update' },
+    { id: 'downloads', label: 'Open Downloads', command: 'xdg-open ~/Downloads', mode: 'background', autoExit: true },
+    { id: 'update', label: 'System Update', command: 'pacman -Syu', mode: 'terminal', icon: 'update', autoExit: true },
   ]);
+  // autoExit: false is preserved; the default is auto-exit.
+  assert.equal(
+    validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: 'echo a', autoExit: false }] } })
+      .menu.customCommands[0].autoExit,
+    false,
+  );
 });
 
 test('rejects malformed menu command entries', () => {
@@ -289,6 +316,10 @@ test('rejects malformed menu command entries', () => {
     /customCommands\[0\]\.icon must be a non-empty string/,
   );
   assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: 'echo a', autoExit: 'yes' }] } }),
+    /customCommands\[0\]\.autoExit must be a boolean/,
+  );
+  assert.throws(
     () => validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: 'echo a', script: 'x' }] } }),
     /Unknown configuration field: menu\.customCommands\[0\]\.script/,
   );
@@ -313,12 +344,14 @@ test('packaged config ships the menu defaults', async () => {
     avoidObstacles: true,
     closeOnFocusChange: true,
     autoCloseMs: 0,
+    terminal: '',
   });
   assert.deepEqual(validateConfig(packaged).menu, {
     customCommands: [],
     avoidObstacles: true,
     closeOnFocusChange: true,
     autoCloseMs: 0,
+    terminal: '',
   });
 });
 
