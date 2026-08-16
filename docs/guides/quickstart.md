@@ -34,7 +34,7 @@ paru -S mip-paper
 mip-paper setup
 ```
 
-`setup` 创建缺失的配置与天气凭据，默认按显示器读取 KDE 静态壁纸，安装当前用户的 KWin 规则、启用系统 KWin coordinator，并启动 `mip-paper.service`。无法读取 KDE 静态图片的屏幕使用随包默认照片。已有配置、凭据和受管理图片不会被覆盖。要在首次设置时直接切换到 manual 模式并使用自己的图片，可运行 `mip-paper setup --image /path/to/image.png`。
+`setup` 创建缺失的配置与天气凭据，默认按显示器读取 KDE 静态壁纸，安装当前用户的 KWin 规则和系统 KWin coordinator，并启动 `mip-paper.service`。由于 Plasma 的 KWin 脚本启用状态在不同环境中可能不会被可靠地自动应用，请在系统设置的“窗口管理 → KWin 脚本”中手动启用 `Mip-Paper Display Coordinator`。无法读取 KDE 静态图片的屏幕使用随包默认照片。已有配置、凭据和受管理图片不会被覆盖。要在首次设置时直接切换到 manual 模式并使用自己的图片，可运行 `mip-paper setup --image /path/to/image.png`。
 
 完成后，`setup` 会明确显示当前壁纸文件、替换壁纸的命令以及天气是否仍需配置。默认照片只是初始值，随时可以运行：
 

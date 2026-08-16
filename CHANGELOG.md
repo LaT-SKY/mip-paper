@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Packaged setup no longer changes the KWin coordinator's enabled state
+  automatically. It keeps installing the coordinator and user service, then
+  prints the System Settings path for manually enabling the script.
+
 ## [0.3.5] - 2026-08-16
 
 ### Fixed
