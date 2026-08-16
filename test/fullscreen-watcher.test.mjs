@@ -6,6 +6,8 @@ import {
   FULLSCREEN_METHOD,
   FULLSCREEN_PATH,
   FULLSCREEN_SERVICE,
+  WORK_AREA_INTERFACE,
+  WORK_AREA_METHOD,
   coordinatorScriptPath,
   createFullscreenTracker,
   createFullscreenWatcher,
@@ -57,6 +59,15 @@ function pushMessage({ x = 0, y = 0, width = 1920, height = 1080, fullscreen = t
     interface: FULLSCREEN_INTERFACE,
     member: FULLSCREEN_METHOD,
     body: [name, x, y, width, height, fullscreen],
+  });
+}
+
+function workAreaMessage({ x = 0, y = 0, width = 1920, height = 1040, name = 'DP-1' } = {}) {
+  return fakeMessage({
+    path: FULLSCREEN_PATH,
+    interface: WORK_AREA_INTERFACE,
+    member: WORK_AREA_METHOD,
+    body: [name, x, y, width, height],
   });
 }
 
@@ -143,6 +154,56 @@ test('matches display geometry within one pixel of rounding', async () => {
   // A geometry that matches no display is acknowledged but ignored.
   assert.equal(handle(pushMessage({ x: 9999, y: 9999, width: 640, height: 480, fullscreen: true })), true);
   assert.deepEqual(changes, [[11, true]]);
+  await watcher.stop();
+});
+
+test('forwards work areas matched by containment and acknowledges pushes', async () => {
+  const { bus, handlers, state } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const areas = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onWorkAreaChange: (displayId, rect) => areas.push([displayId, rect]),
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  // A panel-shrunk work area on the first display (bottom bar excluded).
+  assert.equal(handle(workAreaMessage({ x: 0, y: 0, width: 1920, height: 1040 })), true);
+  assert.deepEqual(areas, [[11, { x: 0, y: 0, width: 1920, height: 1040 }]]);
+  assert.equal(state.sent.length, 1);
+  assert.equal(state.sent[0].__reply, true);
+
+  // The second display matches by containment inside its bounds.
+  assert.equal(handle(workAreaMessage({ x: 1920, y: 40, width: 2560, height: 1400 })), true);
+  assert.deepEqual(areas[1], [22, { x: 1920, y: 40, width: 2560, height: 1400 }]);
+
+  // A rect that is inside no display is acknowledged but ignored.
+  assert.equal(handle(workAreaMessage({ x: 9999, y: 9999, width: 100, height: 100 })), true);
+  assert.equal(areas.length, 2);
+  await watcher.stop();
+});
+
+test('work area pushes are not gated by the fullscreen-pause feature', async () => {
+  const { bus, handlers } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const areas = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onWorkAreaChange: (displayId, rect) => areas.push([displayId, rect]),
+    enabled: () => false,
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  assert.equal(handle(workAreaMessage({ height: 1040 })), true);
+  assert.deepEqual(areas, [[11, { x: 0, y: 0, width: 1920, height: 1040 }]]);
+
+  // Fullscreen pushes remain gated.
+  assert.equal(handle(pushMessage({ fullscreen: true })), true);
+  assert.equal(watcher.isPaused(11), false);
   await watcher.stop();
 });
 

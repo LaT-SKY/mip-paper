@@ -47,6 +47,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     }),
     tideStationId: 'P2352',
   }),
+  menu: Object.freeze({ customCommands: Object.freeze([]), avoidObstacles: true }),
 });
 
 const SCHEMA = {
@@ -98,10 +99,82 @@ const SCHEMA = {
     },
     tideStationId: 'nonEmptyString',
   },
+  menu: { customCommands: 'menuCommandList', avoidObstacles: 'boolean' },
 };
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+const MENU_COMMAND_KEYS = new Set(['id', 'label', 'command', 'mode', 'icon']);
+const MENU_MODES = new Set(['background', 'terminal']);
+const RESERVED_MENU_COMMAND_IDS = new Set(['refresh', 'toggle-panel', 'toggle-pause']);
+
+function normalizeMenuCommands(value) {
+  if (value === undefined) return [...DEFAULT_CONFIG.menu.customCommands];
+  if (!Array.isArray(value)) {
+    throw new TypeError('menu.customCommands must be an array');
+  }
+  const ids = new Set();
+  return value.map((entry, index) => {
+    const path = 'menu.customCommands[' + index + ']';
+    if (!isObject(entry)) throw new TypeError(path + ' must be an object');
+    for (const key of Object.keys(entry)) {
+      if (!MENU_COMMAND_KEYS.has(key)) {
+        throw new TypeError('Unknown configuration field: ' + path + '.' + key);
+      }
+    }
+    const { id, label, command, mode, icon } = entry;
+    if (typeof id !== 'string' || id.trim() === '') {
+      throw new TypeError(path + '.id must be a non-empty string');
+    }
+    if (ids.has(id)) throw new TypeError('Duplicate menu command id: ' + id);
+    if (RESERVED_MENU_COMMAND_IDS.has(id)) {
+      throw new TypeError('Menu command id is reserved: ' + id);
+    }
+    ids.add(id);
+    if (typeof label !== 'string' || label.trim() === '') {
+      throw new TypeError(path + '.label must be a non-empty string');
+    }
+    if (typeof command !== 'string' || command.trim() === '') {
+      throw new TypeError(path + '.command must be a non-empty string');
+    }
+    if (mode !== undefined && !MENU_MODES.has(mode)) {
+      throw new TypeError(path + '.mode must be background or terminal');
+    }
+    if (icon !== undefined && (typeof icon !== 'string' || icon.trim() === '')) {
+      throw new TypeError(path + '.icon must be a non-empty string');
+    }
+    return {
+      id,
+      label,
+      command,
+      mode: mode ?? 'background',
+      ...(icon !== undefined ? { icon } : {}),
+    };
+  });
+}
+
+function normalizeMenuConfig(value) {
+  if (value === undefined) {
+    return {
+      customCommands: [...DEFAULT_CONFIG.menu.customCommands],
+      avoidObstacles: DEFAULT_CONFIG.menu.avoidObstacles,
+    };
+  }
+  if (!isObject(value)) throw new TypeError('menu must be an object');
+  for (const key of Object.keys(value)) {
+    if (key !== 'customCommands' && key !== 'avoidObstacles') {
+      throw new TypeError('Unknown configuration field: menu.' + key);
+    }
+  }
+  if (value.avoidObstacles !== undefined && typeof value.avoidObstacles !== 'boolean') {
+    throw new TypeError('menu.avoidObstacles must be a boolean');
+  }
+  return {
+    customCommands: normalizeMenuCommands(value.customCommands),
+    avoidObstacles: value.avoidObstacles ?? DEFAULT_CONFIG.menu.avoidObstacles,
+  };
 }
 
 const AUDIO_KEYS = new Set([
@@ -254,12 +327,21 @@ function mergeConfig(value) {
         ...(value.weather?.location ?? {}),
       },
     },
+    menu: {
+      ...DEFAULT_CONFIG.menu,
+      ...(value.menu ?? {}),
+      customCommands: value.menu?.customCommands ?? DEFAULT_CONFIG.menu.customCommands,
+    },
   };
 }
 
 export function validateConfig(value) {
   if (!isObject(value)) validateShape(value, SCHEMA);
-  const normalized = { ...value, audio: normalizeAudioConfig(value.audio) };
+  const normalized = {
+    ...value,
+    audio: normalizeAudioConfig(value.audio),
+    menu: normalizeMenuConfig(value.menu),
+  };
   validateShape(normalized, SCHEMA);
   const result = mergeConfig(normalized);
   const { mode, latitude, longitude } = result.weather.location;

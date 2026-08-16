@@ -4,8 +4,11 @@ const TARGET_PATTERN = /^mip-paper\|display=(-?\d+)\|bounds=(-?\d+),(-?\d+),(\d+
 const FULLSCREEN_SERVICE = 'org.mip.Paper';
 const FULLSCREEN_PATH = '/Fullscreen';
 const FULLSCREEN_INTERFACE = 'org.mip.Paper.Fullscreen';
+const WORK_AREA_INTERFACE = 'org.mip.Paper.WorkArea';
+const WORK_AREA_METHOD = 'SetOutputWorkArea';
 const tracked = new Map();
 const fullscreenByOutput = new Map();
+const workAreaByOutput = new Map();
 let reconciling = false;
 
 function parseTarget(caption) {
@@ -104,9 +107,64 @@ function outputHasFullscreen(output) {
     && window.fullScreen === true);
 }
 
+// The work area is the output geometry minus Plasma panels/docks, so the
+// wallpaper's context menu can avoid being occluded by them. Falls back to
+// the full output geometry when the KWin clientArea API is unavailable.
+function outputWorkArea(output) {
+  if (typeof KWin !== 'undefined'
+    && typeof workspace.clientArea === 'function'
+    && output && output.geometry) {
+    try {
+      const rect = workspace.clientArea(KWin.WorkArea, output, workspace.currentDesktop || 1);
+      if (rect && rect.width > 0 && rect.height > 0) return rect;
+    } catch (error) {
+      console.info(`${LOG_PREFIX} work-area-error output=${output.name} error=${error}`);
+    }
+  }
+  return output.geometry;
+}
+
+// Push per-output work areas to the wallpaper service over D-Bus. A work area
+// equal to the full output geometry is treated as "no panels" and only pushed
+// to clear a previously shrunk area, so a panel-free desktop stays quiet.
+function pushWorkAreaState({ force = false, silent = false } = {}) {
+  for (const output of workspace.screenOrder) {
+    const rect = outputWorkArea(output);
+    const previous = workAreaByOutput.get(output.name);
+    const unchanged = previous && geometryMatches(previous, rect);
+    const fullGeometry = output.geometry && geometryMatches(rect, output.geometry);
+    if (!force && (unchanged || (previous === undefined && fullGeometry))) {
+      continue;
+    }
+    workAreaByOutput.set(output.name, rect);
+    const geometry = rect || {};
+    callDBus(
+      FULLSCREEN_SERVICE,
+      FULLSCREEN_PATH,
+      WORK_AREA_INTERFACE,
+      WORK_AREA_METHOD,
+      output.name,
+      geometry.x || 0,
+      geometry.y || 0,
+      geometry.width || 0,
+      geometry.height || 0,
+      (error) => {
+        if (error && !silent) {
+          console.info(`${LOG_PREFIX} work-area-push-error output=${output.name} error=${error}`);
+        }
+      },
+    );
+  }
+}
+
 // Push per-output fullscreen state to the wallpaper service over D-Bus.
 // Change-driven pushes log failures; heartbeat pushes (force) are silent so a
 // stopped service does not spam the KWin log.
+function pushState(options) {
+  pushFullscreenState(options);
+  pushWorkAreaState(options);
+}
+
 function pushFullscreenState({ force = false, silent = false } = {}) {
   for (const output of workspace.screenOrder) {
     const hasFullscreen = outputHasFullscreen(output);
@@ -141,15 +199,15 @@ function track(window) {
   // Fullscreen state is observed for every window, not only project windows.
   // Some window kinds lack certain signals, so guard each connection.
   if (window.fullScreenChanged && typeof window.fullScreenChanged.connect === 'function') {
-    window.fullScreenChanged.connect(() => pushFullscreenState());
+    window.fullScreenChanged.connect(() => pushState());
   }
   if (window.outputChanged && typeof window.outputChanged.connect === 'function') {
-    window.outputChanged.connect(() => pushFullscreenState());
+    window.outputChanged.connect(() => pushState());
   }
   if (window.closed && typeof window.closed.connect === 'function') {
     window.closed.connect(() => {
       tracked.delete(window);
-      pushFullscreenState();
+      pushState();
     });
   }
   if (window.resourceClass !== APP_ID) return;
@@ -162,20 +220,23 @@ workspace.windowList().forEach(track);
 workspace.windowAdded.connect((window) => {
   track(window);
   reconcile('window-added');
-  pushFullscreenState();
+  pushState();
 });
-workspace.windowRemoved.connect(() => pushFullscreenState());
-workspace.windowActivated.connect(() => pushFullscreenState());
+workspace.windowRemoved.connect(() => pushState());
+workspace.windowActivated.connect(() => pushState());
 workspace.screensChanged.connect(() => {
   reconcile('screens-changed');
-  pushFullscreenState();
+  pushState();
 });
 workspace.screenOrderChanged.connect(() => {
   reconcile('screen-order-changed');
-  pushFullscreenState();
+  pushState();
 });
+if (workspace.currentDesktopChanged && typeof workspace.currentDesktopChanged.connect === 'function') {
+  workspace.currentDesktopChanged.connect(() => pushState());
+}
 reconcile('startup');
-pushFullscreenState();
+pushState();
 // KWin scripting provides no timers, so there is no script-side heartbeat.
 // The wallpaper service restarts this script on startup (unload + load +
 // start) and the startup push above re-syncs fullscreen state within a few

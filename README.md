@@ -54,7 +54,7 @@ mip-paper wallpaper use-kde
 
 `setup`（源码安装为 `install`）会为 Mip-Paper 窗口安装两项 KWin 集成：
 
-- **窗口规则**：按窗口类 `mip-paper` 匹配，强制全屏、无边框、位于其他窗口下方（below），并排除在任务栏、分页器和 Alt+Tab 切换器之外，作用于所有虚拟桌面。0.3.2 起该规则不再强制窗口“忽略焦点”，窗口按 KWin 默认策略参与焦点处理；升级到 0.3.2 时会自动清理旧规则中遗留的 `acceptfocus` 键。
+- **窗口规则**：按窗口类 `mip-paper` 匹配，强制全屏、无边框、位于其他窗口下方（below）、**不接收键盘焦点**（右键菜单为纯鼠标交互，无需焦点；避免焦点变化触发 KWin 重排窗口导致跨屏溢出），并排除在任务栏、分页器和 Alt+Tab 切换器之外，作用于所有虚拟桌面。
 - **显示协调器**（KWin Script）：从窗口标题读取其声明的目标显示器，把每个壁纸窗口移动到对应输出并固定几何形状，处理显示器热插拔与屏幕顺序变化，并上报各输出上的全屏窗口状态（经会话总线 `org.mip.Paper`）。
 
 卸载（`teardown` / `uninstall`）会移除以上两项集成。
@@ -245,7 +245,8 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
       "fallbackLocationId": "101281601"
     },
     "tideStationId": "P2352"
-  }
+  },
+  "menu": { "customCommands": [], "avoidObstacles": true }
 }
 ```
 
@@ -333,6 +334,35 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | `weather.tideStationId` | 非空字符串 | `P2352` | 潮汐观测站 ID | 实时热加载 |
 
 `auto` 模式先请求 Portal，失败后使用缓存位置，最后使用 fallback LocationID。`fixed` 模式必须同时提供数值型纬度和经度，并且不会请求 Portal。
+
+### 右键菜单
+
+在壁纸上右键打开菜单：默认提供**刷新壁纸**、**切换信息面板**（停用自动展开收起并钉住到目标状态）与**暂停/恢复壁纸**三个内置动作，作用于被右键的这块屏幕；菜单跟随系统明暗。`interactionEnabled: false` 时窗口整体穿透鼠标，右键菜单不可用。
+
+自定义命令通过 `menu.customCommands` 数组添加，保存后实时热加载；`id` 不可与内置动作重名：
+
+```json
+"menu": {
+  "customCommands": [
+    { "id": "downloads", "label": "打开下载文件夹", "command": "xdg-open ~/Downloads", "mode": "background", "icon": "folder" },
+    { "id": "update", "label": "系统更新", "command": "sudo pacman -Syu", "mode": "terminal", "icon": "update" }
+  ]
+}
+```
+
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `menu.customCommands` | 数组 | `[]` | 自定义右键菜单命令列表 | 实时热加载 |
+| `menu.customCommands[].id` | 非空字符串，全数组唯一 | — | 命令标识；`refresh`、`toggle-panel`、`toggle-pause` 为内置保留 | 实时热加载 |
+| `menu.customCommands[].label` | 非空字符串 | — | 菜单显示文字 | 实时热加载 |
+| `menu.customCommands[].command` | 非空字符串 | — | 要执行的 shell 命令 | 实时热加载 |
+| `menu.customCommands[].mode` | `background` 或 `terminal` | `background` | 后台执行，或打开终端模拟器运行 | 实时热加载 |
+| `menu.customCommands[].icon` | 非空字符串（内置图标名） | 无 | `folder`、`terminal`、`update`、`app`、`info`、`settings` 等；未知则只显示文字 | 实时热加载 |
+| `menu.avoidObstacles` | boolean | `true` | 开启避障：菜单按 KWin 工作区（扣除 Plasma 面板/应用栏）钳制，避免被遮挡 | 实时热加载 |
+
+`background` 模式通过 `sh -c` 后台执行且不弹出窗口，适合 `xdg-open` 或启动图形应用；`terminal` 模式在终端模拟器中运行并保持窗口打开，适合 `sudo pacman -Syu` 这类需要交互或查看输出的命令。终端按 `konsole` → `kitty` → `gnome-terminal` → `x-terminal-emulator` → `xdg-terminal-exec` 顺序探测，全部缺失时回退为后台执行。命令来自你自己的配置文件，失败仅记录日志；渲染进程只发送命令 id，无法注入任意命令。
+
+`menu.avoidObstacles`（默认 `true`）开启避障：KWin 协调器持续上报每块屏幕的工作区（输出几何减去 Plasma 面板/应用栏占用的区域），菜单在底部等有面板的区域打开时会钳制在工作区内，不会被应用栏遮挡。工作区跟随面板增删与跨显示器热插拔实时更新；无面板时菜单按整屏钳制。
 
 ## 诊断与常见问题
 

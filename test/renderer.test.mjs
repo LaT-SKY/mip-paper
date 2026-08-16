@@ -128,6 +128,9 @@ test('renderer uses a non-alpha high-DPI Canvas with only brightness filtering',
   assert.match(script, /getContext\('2d',\s*\{\s*alpha:\s*false\s*\}\)/);
   assert.match(script, /devicePixelRatio/);
   assert.match(script, /Math\.min\([^\n]*devicePixelRatio[^\n]*2\)/);
+  assert.match(script, /display\.bounds\.width/);
+  assert.match(script, /context\.clip\(\)/);
+  assert.match(script, /canvasSize\.width/);
   assert.match(script, /imageSmoothingEnabled\s*=\s*true/);
   assert.match(script, /imageSmoothingQuality\s*=\s*'high'/);
   assert.match(script, /context\.filter\s*=\s*`brightness\(\$\{brightness\}\)`/);
@@ -188,10 +191,14 @@ test('renderer freezes and resumes the loop on fullscreen pause state', async ()
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
 
   assert.match(script, /onFullscreenUpdated/);
-  assert.match(script, /let paused = Boolean\(bootstrap\.paused\)/);
+  assert.match(script, /let fullscreenPaused = Boolean\(bootstrap\.paused\)/);
+  assert.match(script, /let manualPaused = false;/);
+  assert.match(script, /let paused = fullscreenPaused \|\| manualPaused;/);
   assert.match(script, /scheduler\?\.stop\(\)/);
   assert.match(script, /scheduler\.start\(schedulerOptions\)/);
   assert.match(script, /if \(paused\) scheduler\.stop\(\);/);
+  assert.match(script, /fullscreenPaused = Boolean\(nextFullscreenPaused\)/);
+  assert.match(script, /applyEffectivePause\(\)/);
 });
 
 test('renderer refreshes a frozen frame on wallpaper, config, and resize changes', async () => {
@@ -208,6 +215,36 @@ test('return probe injects one interaction instead of continuous sweep input', a
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
   assert.match(script, /probe\.scenario === 'return'[\s\S]*applyPointerSample/);
   assert.match(script, /probe\.scenario === 'sweep'[\s\S]*setInterval/);
+});
+
+test('context menu is mounted with its stylesheet and wired to the canvas', async () => {
+  const html = await readFile('src/renderer/index.html', 'utf8');
+  const script = await readFile('src/renderer/renderer.mjs', 'utf8');
+  assert.match(html, /context-menu\.css/);
+  assert.match(html, /<div id="context-menu" role="menu" hidden><\/div>/);
+  assert.match(script, /import \{ buildMenuItems, createContextMenu \} from '\.\/context-menu\.mjs'/);
+  assert.match(script, /createContextMenu\(/);
+  assert.match(script, /document\.getElementById\('context-menu'\)/);
+  assert.match(script, /addEventListener\('contextmenu'/);
+  assert.match(script, /event\.preventDefault\(\)/);
+  assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds\)/);
+  assert.match(script, /menu\.isOpen\(\)/);
+  assert.match(script, /menu\.destroy\(\)/);
+  assert.match(script, /bootstrap\.appVersion/);
+  assert.match(script, /window\.wallpaper\.runMenuCommand\(\{ id \}\)/);
+  assert.match(script, /onWorkAreaUpdated/);
+  assert.match(script, /notifyMenuOpened\(\)/);
+  assert.match(script, /addEventListener\('pointerdown', handleAnyPointerDown\)/);
+  assert.match(script, /removeEventListener\('pointerdown', handleAnyPointerDown\)/);
+  assert.match(script, /onMenuOpened\(\(\) =>/);
+  assert.match(script, /menu\.isOpen\(\)\) menu\.close\(\)/);
+  assert.match(script, /bootstrap\.workArea/);
+  assert.match(script, /currentConfig\.menu\.avoidObstacles && workArea/);
+  assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds\)/);
+  assert.match(script, /panel\.toggleExpanded\(\)/);
+  assert.match(script, /refreshWallpaper\(\)/);
+  assert.match(script, /manualPaused = !manualPaused;/);
+  assert.match(script, /customCommands: currentConfig\.menu\?\.[^\n]*\[\]/);
 });
 
 test('renderer analyzes requested wallpapers and applies explicit accent transitions', async () => {

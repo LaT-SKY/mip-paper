@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Right-click context menu on the wallpaper: built-in actions (refresh
+  wallpaper, pin/toggle the information panels, pause/resume the display) and
+  data-driven custom shell commands from `menu.customCommands` (background
+  fire-and-forget or terminal-emulator mode). The menu follows the light/dark
+  appearance, is scoped to the right-clicked display, and stays extensible for
+  a future settings page.
 - Pause a display's wallpaper while a fullscreen window covers it
   (`motion.pauseWhenFullscreen`, default `true`): the render loop stops and
   the camera, panels, and audio ribbon freeze until the window closes or moves
@@ -17,12 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5-second heartbeat converges after app or KWin restarts. The wallpaper's own
   windows never trigger the pause.
 
-### Removed
+### Changed
 
-- The KWin window rule no longer forces the wallpaper window to ignore focus
-  (`acceptfocus`). New installs write no focus rule; upgrades delete the
-  legacy `acceptfocus`/`acceptfocusrule` keys so an existing installation is
-  cleaned in place (`scripts/kwin-rules.sh`).
+- The KWin window rule forces the wallpaper window to ignore focus again
+  (`acceptfocus=false`): the context menu is mouse-driven and other windows
+  must keep keyboard focus, and not accepting focus prevents KWin from
+  re-laying-out the oversized Wayland window on focus changes (which overflowed
+  into neighbouring displays). `scripts/kwin-rules.sh` writes the rule and
+  upgrades rewrite it in place.
 
 ### Changed
 

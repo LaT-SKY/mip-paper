@@ -36,6 +36,8 @@ const configurationFields = [
   'weather.location.longitude',
   'weather.location.fallbackLocationId',
   'weather.tideStationId',
+  'menu.customCommands',
+  'menu.avoidObstacles',
 ];
 
 test('publishes complete linked Chinese and English guides', async () => {
