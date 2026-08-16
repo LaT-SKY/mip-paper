@@ -180,6 +180,13 @@ test('context-menu.mjs implements the state machine with a race-safe token', asy
   assert.ok(source.includes("root.style.transform = 'scale('"));
 });
 
+test('context-menu.mjs places the menu exactly at the cursor when avoidance is off', async () => {
+  const source = await readFile('src/renderer/context-menu.mjs', 'utf8');
+  assert.ok(source.includes('function open(x, y, bounds = null, avoidObstacles = true)'));
+  assert.ok(source.includes('if (avoidObstacles === false)'));
+  assert.ok(source.includes('position = { x, y };'));
+});
+
 test('context-menu.mjs arms a cancelable auto-close timer on open', async () => {
   const source = await readFile('src/renderer/context-menu.mjs', 'utf8');
   assert.ok(source.includes('autoCloseMs = 0'));

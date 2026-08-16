@@ -227,7 +227,7 @@ test('context menu is mounted with its stylesheet and wired to the canvas', asyn
   assert.match(script, /document\.getElementById\('context-menu'\)/);
   assert.match(script, /addEventListener\('contextmenu'/);
   assert.match(script, /event\.preventDefault\(\)/);
-  assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds\)/);
+  assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds(?:, currentConfig\.menu\.avoidObstacles)?\)/);
   assert.match(script, /menu\.isOpen\(\)/);
   assert.match(script, /menu\.destroy\(\)/);
   assert.match(script, /bootstrap\.appVersion/);
@@ -253,7 +253,7 @@ test('context menu is mounted with its stylesheet and wired to the canvas', asyn
   assert.match(script, /if \(menu\.isOpen\(\)\) menu\.close\(\);/);
   assert.match(script, /bootstrap\.workArea/);
   assert.match(script, /currentConfig\.menu\.avoidObstacles && workArea/);
-  assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds\)/);
+  assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds(?:, currentConfig\.menu\.avoidObstacles)?\)/);
   assert.match(script, /panel\.toggleExpanded\(\)/);
   assert.match(script, /refreshWallpaper\(\)/);
   assert.match(script, /manualPaused = !manualPaused;/);

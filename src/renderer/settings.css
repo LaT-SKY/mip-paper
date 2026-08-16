@@ -5,6 +5,7 @@
    JS in settings.mjs; CSS only holds state classes, hover, and row stagger. */
 
 :root {
+  color-scheme: light;
   --settings-surface: #ffffff;
   --settings-surface-raised: #ffffff;
   --settings-border: rgba(21, 34, 41, 0.10);
@@ -19,6 +20,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --settings-surface: #1e2228;
   --settings-surface-raised: #262b32;
   --settings-border: rgba(255, 255, 255, 0.09);
@@ -64,11 +66,22 @@ body {
 }
 
 .app-mark {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+}
+
+.app-mark svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .app-brand h1 {
@@ -173,6 +186,13 @@ body {
 
 .field-row:last-of-type {
   border-bottom: 0;
+}
+
+.field-row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 6px 0 10px;
 }
 
 .field-row[data-invalid] {
@@ -370,7 +390,7 @@ body {
 
 .command-row {
   display: grid;
-  grid-template-columns: 110px 1fr 1.4fr 110px 120px 34px;
+  grid-template-columns: 40px 1fr 1.6fr 110px 34px;
   gap: 8px;
   align-items: center;
 }
@@ -393,26 +413,275 @@ body {
   border-color: var(--accent);
 }
 
-.command-row .command-remove {
+.command-row .command-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: transparent;
   color: var(--settings-text-muted);
-  font-size: 16px;
   line-height: 1;
   cursor: default;
   border-radius: 6px;
+  padding: 0;
+  height: 30px;
+  width: 30px;
 }
 
-.command-row .command-remove:hover {
+.command-row .command-more:hover {
   background: var(--settings-hover);
-  color: #d64545;
+  color: var(--settings-text);
+}
+
+.command-row .command-more svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The "more" glyph is three solid dots — clearly visible at 16px. */
+.command-row .command-more svg circle {
+  fill: currentColor;
+  stroke: none;
+}
+
+.command-more-popover {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 156px;
+  padding: 6px;
+  background: var(--settings-surface-raised);
+  border: 1px solid var(--settings-border);
+  border-radius: 12px;
+  box-shadow: var(--settings-shadow);
+}
+
+.command-more-popover[hidden] {
+  display: none;
+}
+
+.command-more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--settings-text);
+  font: 400 13px/1 system-ui, sans-serif;
+  text-align: left;
+  cursor: default;
+}
+
+.command-more-item:hover:not(:disabled) {
+  background: var(--settings-hover);
+}
+
+.command-more-item:disabled {
+  opacity: 0.35;
+}
+
+.command-more-item > svg {
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--settings-text-muted);
+}
+
+.command-more-item .command-more-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.command-more-item .command-more-check {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+}
+
+.command-more-item .command-more-check svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--accent);
+}
+
+.command-more-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--settings-border);
 }
 
 .command-add {
   align-self: flex-start;
 }
 
+.command-icon-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--settings-border);
+  border-radius: var(--settings-radius-row);
+  background: var(--settings-surface);
+  color: var(--settings-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: default;
+  transition: border-color 90ms ease, background-color 90ms ease, color 90ms ease;
+}
+
+.command-icon-picker:hover {
+  background: var(--settings-hover);
+  color: var(--settings-text);
+}
+
+.command-icon-picker--empty {
+  color: var(--settings-text-muted);
+}
+
+.command-icon-picker svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.command-icon-popover {
+  position: fixed;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(4, 34px);
+  gap: 6px;
+  padding: 10px;
+  background: var(--settings-surface-raised);
+  border: 1px solid var(--settings-border);
+  border-radius: 12px;
+  box-shadow: var(--settings-shadow);
+}
+
+.command-icon-popover[hidden] {
+  display: none;
+}
+
+.command-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--settings-text);
+  cursor: default;
+  transition: background-color 90ms ease, border-color 90ms ease;
+}
+
+.command-icon-tile svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.command-icon-tile:hover {
+  background: var(--settings-hover);
+}
+
+.command-icon-tile.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.command-icon-tile--none {
+  grid-column: 1 / -1;
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0 10px;
+  font: 400 12px/1 system-ui, sans-serif;
+  color: var(--settings-text-muted);
+}
+
+.command-icon-tile--none:hover {
+  color: var(--settings-text);
+}
+
 /* Wallpaper import + credentials/status areas. */
+.wallpaper-preview {
+  padding: 12px 0 4px;
+}
+
+.wallpaper-preview-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(320px, 100%);
+  height: 180px;
+  overflow: hidden;
+  border: 1px solid var(--settings-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--settings-text-muted) 10%, transparent);
+  transition: opacity 160ms ease;
+}
+
+.wallpaper-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wallpaper-preview-image[hidden] {
+  display: none;
+}
+
+.wallpaper-preview-placeholder {
+  color: var(--settings-text-muted);
+  font: 400 12px/1.4 system-ui, sans-serif;
+}
+
+.wallpaper-preview-hint {
+  display: none;
+  margin-top: 6px;
+  color: var(--settings-text-muted);
+  font: 400 12px/1.4 system-ui, sans-serif;
+}
+
+.wallpaper-preview.is-dimmed .wallpaper-preview-frame {
+  opacity: 0.38;
+}
+
+.wallpaper-preview.is-dimmed .wallpaper-preview-hint {
+  display: block;
+}
+
 .wallpaper-actions,
 .credentials-actions {
   display: flex;
@@ -424,6 +693,15 @@ body {
 .hint {
   color: var(--settings-text-muted);
   font: 400 12px/1.4 system-ui, sans-serif;
+}
+
+.about-logo {
+  display: block;
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  margin: 14px auto 4px;
+  border-radius: 18px;
 }
 
 .about-list {
@@ -453,13 +731,14 @@ body {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   padding: 12px 20px;
   border-top: 1px solid var(--settings-border);
 }
 
 .status {
+  margin-right: auto;
   color: var(--settings-text-muted);
   font: 400 12.5px/1.4 system-ui, sans-serif;
   transition: opacity 160ms ease, transform 160ms ease;

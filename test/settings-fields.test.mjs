@@ -3,14 +3,15 @@ import test from 'node:test';
 
 import { DEFAULT_CONFIG } from '../src/config.mjs';
 import {
-  COMMAND_ICON_OPTIONS,
   SETTINGS_GROUPS,
+  SETTINGS_ICONS,
   getPath,
   setPath,
 } from '../src/settings-fields.mjs';
 
 const CONFIG_LEAF_KEYS = [
-  'interactionEnabled',
+  'mouse.buttonsEnabled',
+  'mouse.interactionEnabled',
   'wallpaper.mode',
   'color.mode',
   'color.transitionDurationMs',
@@ -46,12 +47,15 @@ const CONFIG_LEAF_KEYS = [
   'menu.avoidObstacles',
   'menu.closeOnFocusChange',
   'menu.autoCloseMs',
+  'menu.terminal',
   'menu.customCommands',
 ];
 
 const FIELD_KEYS = SETTINGS_GROUPS
-  .filter((group) => !group.external && !group.static)
-  .flatMap((group) => group.fields.map((field) => field.key));
+  .filter((group) => !group.static)
+  .flatMap((group) => group.fields
+    .filter((field) => !field.external)
+    .map((field) => field.key));
 
 test('settings field schema covers every config leaf exactly once', () => {
   assert.deepEqual([...FIELD_KEYS].sort(), [...CONFIG_LEAF_KEYS].sort());
@@ -60,8 +64,29 @@ test('settings field schema covers every config leaf exactly once', () => {
 
 test('every config leaf has a readable default via the schema path helpers', () => {
   for (const key of CONFIG_LEAF_KEYS) {
-    assert.notEqual(getPath(DEFAULT_CONFIG, key), undefined, `DEFAULT_CONFIG is missing ${key}`);
+    assert.notEqual(getPath(DEFAULT_CONFIG, key), undefined, 'DEFAULT_CONFIG is missing ' + key);
   }
+});
+
+test('settings navigation is a focused set of merged groups', () => {
+  assert.deepEqual(SETTINGS_GROUPS.map((group) => group.id), [
+    'interaction',
+    'wallpaper',
+    'appearance',
+    'audio',
+    'motion',
+    'panel',
+    'weather',
+    'menu',
+    'about',
+  ]);
+});
+
+test('every navigation group and the brand mark have an SVG icon', () => {
+  for (const group of SETTINGS_GROUPS) {
+    assert.ok(SETTINGS_ICONS[group.icon], 'missing nav icon: ' + group.icon);
+  }
+  assert.ok(SETTINGS_ICONS.settings, 'missing brand icon: settings');
 });
 
 test('number field ranges mirror config.mjs validation', () => {
@@ -105,19 +130,24 @@ test('enum options match config.mjs allowed values', () => {
   assert.deepEqual(commandModeOptions, ['background', 'terminal']);
 });
 
-test('custom command icon options cover the built-in icon set', () => {
-  for (const name of ['folder', 'terminal', 'update', 'app', 'info', 'settings', 'refresh', 'panel', 'pause', 'play']) {
-    assert.ok(COMMAND_ICON_OPTIONS.includes(name), `missing icon option: ${name}`);
-  }
+test('custom command subfields are editable fields with an auto-managed id', () => {
+  const commandField = SETTINGS_GROUPS
+    .find((group) => group.id === 'menu').fields
+    .find((field) => field.type === 'commands');
+  // The icon is a visual picker and the id is auto-managed, so neither is an
+  // editable subfield.
+  const keys = commandField.fields.map((field) => field.key);
+  assert.deepEqual([...keys].sort(), ['command', 'label', 'mode']);
 });
 
-test('external and static groups carry no config keys', () => {
-  const credentials = SETTINGS_GROUPS.find((group) => group.id === 'credentials');
+test('static and external fields carry no config keys', () => {
   const about = SETTINGS_GROUPS.find((group) => group.id === 'about');
-  assert.equal(credentials.external, true);
   assert.equal(about.static, true);
-  for (const field of credentials.fields) {
-    assert.equal(FIELD_KEYS.includes(field.key), false);
+  const weather = SETTINGS_GROUPS.find((group) => group.id === 'weather');
+  for (const field of weather.fields) {
+    if (field.external) {
+      assert.equal(FIELD_KEYS.includes(field.key), false, field.key + ' must stay external');
+    }
   }
 });
 
@@ -128,5 +158,7 @@ test('path helpers read and write nested config values', () => {
   assert.equal(getPath(target, 'wallpaper.mode'), 'kde');
   setPath(target, 'weather.location.latitude', 31.23);
   assert.equal(getPath(target, 'weather.location.latitude'), 31.23);
+  setPath(target, 'mouse.interactionEnabled', false);
+  assert.equal(getPath(target, 'mouse.interactionEnabled'), false);
   assert.equal(getPath({}, 'missing.deep.value'), undefined);
 });

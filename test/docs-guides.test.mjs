@@ -17,7 +17,8 @@ async function readGuides() {
 }
 
 const configurationFields = [
-  'interactionEnabled',
+  'mouse.buttonsEnabled',
+  'mouse.interactionEnabled',
   'wallpaper.mode',
   'color.mode',
   'color.transitionDurationMs',
@@ -54,6 +55,7 @@ const configurationFields = [
   'menu.avoidObstacles',
   'menu.closeOnFocusChange',
   'menu.autoCloseMs',
+  'menu.terminal',
 ];
 
 const BT = String.fromCharCode(96);

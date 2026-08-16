@@ -1,5 +1,8 @@
 {
-  "interactionEnabled": true,
+  "mouse": {
+    "buttonsEnabled": true,
+    "interactionEnabled": true
+  },
   "wallpaper": {
     "mode": "kde"
   },
@@ -58,6 +61,7 @@
     "customCommands": [],
     "avoidObstacles": true,
     "closeOnFocusChange": true,
-    "autoCloseMs": 0
+    "autoCloseMs": 0,
+    "terminal": ""
   }
 }

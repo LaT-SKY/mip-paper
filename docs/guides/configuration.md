@@ -6,7 +6,10 @@
 
 ```json
 {
-  "interactionEnabled": true,
+  "mouse": {
+    "buttonsEnabled": true,
+    "interactionEnabled": true
+  },
   "wallpaper": { "mode": "kde" },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "appearance": {
@@ -58,18 +61,20 @@
     "customCommands": [],
     "avoidObstacles": true,
     "closeOnFocusChange": true,
-    "autoCloseMs": 0
+    "autoCloseMs": 0,
+    "terminal": ""
   }
 }
 ```
 
-未知字段会被拒绝。保存合法文件后所有字段自动生效，不会重启 Electron 或壁纸窗口。JSON 错误、未知字段、越界值、未完整写入或删除文件都会保留最后一份有效配置；文件修正后自动恢复热加载。`mip-paper restart` 仍可用于服务管理和故障排查，但不是正常配置步骤。音频字段的错误值沿用兼容行为并回退到默认值。
+0.3.2 及更早版本的顶层 `interactionEnabled` 会被自动迁移为 `mouse.buttonsEnabled` 与 `mouse.interactionEnabled`（旧值同时应用到两项）。未知字段会被拒绝。保存合法文件后所有字段自动生效，不会重启 Electron 或壁纸窗口。JSON 错误、未知字段、越界值、未完整写入或删除文件都会保留最后一份有效配置；文件修正后自动恢复热加载。`mip-paper restart` 仍可用于服务管理和故障排查，但不是正常配置步骤。音频字段的错误值沿用兼容行为并回退到默认值。
 
 ## 顶层与帧率
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
 | --- | --- | --- | --- | --- |
-| `interactionEnabled` | boolean | `true` | 是否接收鼠标并驱动视差；关闭后窗口穿透鼠标 | 实时热加载 |
+| `mouse.buttonsEnabled` | boolean | `true` | 是否接收鼠标按键；关闭后壁纸窗口穿透鼠标，右键菜单与设置入口不可用 | 实时热加载 |
+| `mouse.interactionEnabled` | boolean | `true` | 是否用指针移动驱动视差与信息面板；关闭后仅停止视差响应，仍可打开右键菜单 | 实时热加载 |
 | `frameRate.interactive` | 整数，`1–180` FPS | `60` | 交互、回归、面板展开与面板动画阶段目标帧率 | 实时热加载 |
 | `frameRate.drift` | 整数，`1–180` FPS | `30` | 面板收起且完全静止时的待机漂移阶段目标帧率 | 实时热加载 |
 
@@ -171,6 +176,8 @@
 | `menu.customCommands[].command` | 非空字符串 | — | 要执行的 shell 命令 | 实时热加载 |
 | `menu.customCommands[].mode` | `background` 或 `terminal` | `background` | 后台执行，或打开终端模拟器运行 | 实时热加载 |
 | `menu.customCommands[].icon` | 非空字符串（内置图标名） | 无 | `folder`、`terminal`、`update`、`app`、`info`、`settings` 等；未知则只显示文字 | 实时热加载 |
-| `menu.avoidObstacles` | boolean | `true` | 开启避障：菜单按 KWin 工作区（扣除 Plasma 面板/应用栏）钳制，避免被遮挡 | 实时热加载 |
+| `menu.customCommands[].autoExit` | boolean | `true` | 终端模式命令执行完后自动退出终端；`false` 保持窗口打开 | 实时热加载 |
+| `menu.avoidObstacles` | boolean | `true` | 开启避障：菜单按 KWin 工作区（扣除 Plasma 面板/应用栏）钳制，避免被遮挡；关闭后菜单精确显示在右键位置 | 实时热加载 |
 | `menu.closeOnFocusChange` | boolean | `true` | 聚焦到其他应用时自动关闭菜单 | 实时热加载 |
 | `menu.autoCloseMs` | 有限数值，`>= 0` ms | `0` | 打开后无人操作超过该时长自动关闭；`0` 关闭此兜底 | 实时热加载 |
+| `menu.terminal` | 字符串 | `""` | 终端模式命令使用的终端模拟器命令名；留空时按 konsole → xfce4-terminal → kitty → gnome-terminal → alacritty → wezterm → foot → … 顺序自动选择，未预设的终端按 `-e sh -c` 通用方式调用 | 实时热加载 |

@@ -69,6 +69,12 @@ export function createWindowManager({
   importWallpaper = null,
   wallpaperPath = null,
   getSettingsState = () => ({}),
+  // Optional icon path for the settings window (Linux window icon) and a
+  // hook fired after a wallpaper import succeeded, so the main process can
+  // re-publish the manual wallpaper immediately instead of waiting for the
+  // next sync cycle.
+  settingsIconPath = null,
+  onWallpaperImported = null,
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
@@ -131,7 +137,7 @@ export function createWindowManager({
     secureWebContents(window.webContents);
     const webContentsId = window.webContents.id;
     window.on('page-title-updated', (event) => event.preventDefault());
-    window.setIgnoreMouseEvents(!currentConfig.interactionEnabled);
+    window.setIgnoreMouseEvents(!currentConfig.mouse.buttonsEnabled);
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     window.once('ready-to-show', () => window.showInactive());
     windows.set(display.id, window);
@@ -223,6 +229,7 @@ export function createWindowManager({
       show: false,
       backgroundColor: '#152229',
       autoHideMenuBar: true,
+      ...(settingsIconPath ? { icon: settingsIconPath } : {}),
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -356,7 +363,12 @@ export function createWindowManager({
         }
         const entry = (currentConfig.menu?.customCommands ?? []).find((command) => command.id === id);
         if (!entry) throw new Error('Unknown menu command: ' + id);
-        await menuCommandRunner.run({ command: entry.command, mode: entry.mode ?? 'background' });
+        await menuCommandRunner.run({
+          command: entry.command,
+          mode: entry.mode ?? 'background',
+          terminal: currentConfig.menu?.terminal ?? '',
+          autoExit: entry.autoExit !== false,
+        });
         return { ok: true };
       });
     }
@@ -408,6 +420,11 @@ export function createWindowManager({
             wallpaper: { mode: 'manual' },
           });
         }
+        // The config hot-reload flips the mode when it changed; when the mode
+        // was already manual the file swap alone does not re-trigger the sync,
+        // so always ask the main process to re-publish the manual wallpaper
+        // right away (idempotent when the watcher already ran).
+        if (onWallpaperImported) await onWallpaperImported();
         return { ok: true, mode: 'manual', path: wallpaperPath, imported: { ...imported } };
       });
     }
@@ -464,7 +481,7 @@ export function createWindowManager({
           ...(currentAppearance ? { appearance: currentAppearance } : {}),
         });
       }
-      window.setIgnoreMouseEvents(!currentConfig.interactionEnabled);
+      window.setIgnoreMouseEvents(!currentConfig.mouse.buttonsEnabled);
       window.webContents.send(CONFIG_UPDATED_CHANNEL, runtimePayload());
     }
     // The settings window subscribes to the same runtime broadcast so an open

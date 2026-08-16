@@ -2,7 +2,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 export const DEFAULT_CONFIG = Object.freeze({
-  interactionEnabled: true,
+  mouse: Object.freeze({
+    buttonsEnabled: true,
+    interactionEnabled: true,
+  }),
   wallpaper: Object.freeze({ mode: 'kde' }),
   color: Object.freeze({ mode: 'hybrid', transitionDurationMs: 900 }),
   appearance: Object.freeze({
@@ -52,11 +55,17 @@ export const DEFAULT_CONFIG = Object.freeze({
     avoidObstacles: true,
     closeOnFocusChange: true,
     autoCloseMs: 0,
+    // Terminal emulator for menu commands in terminal mode; empty means
+    // auto-detect from the preference chain in menu-command.mjs.
+    terminal: '',
   }),
 });
 
 const SCHEMA = {
-  interactionEnabled: 'boolean',
+  mouse: {
+    buttonsEnabled: 'boolean',
+    interactionEnabled: 'boolean',
+  },
   wallpaper: { mode: 'wallpaperMode' },
   color: { mode: 'colorMode', transitionDurationMs: 'colorTransitionDuration' },
   appearance: {
@@ -109,6 +118,7 @@ const SCHEMA = {
     avoidObstacles: 'boolean',
     closeOnFocusChange: 'boolean',
     autoCloseMs: 'nonNegative',
+    terminal: 'string',
   },
 };
 
@@ -116,7 +126,7 @@ function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-const MENU_COMMAND_KEYS = new Set(['id', 'label', 'command', 'mode', 'icon']);
+const MENU_COMMAND_KEYS = new Set(['id', 'label', 'command', 'mode', 'icon', 'autoExit']);
 const MENU_MODES = new Set(['background', 'terminal']);
 // 'settings' is reserved for the built-in action that opens the settings
 // window from the wallpaper context menu; a custom command must not shadow it.
@@ -136,7 +146,7 @@ function normalizeMenuCommands(value) {
         throw new TypeError('Unknown configuration field: ' + path + '.' + key);
       }
     }
-    const { id, label, command, mode, icon } = entry;
+    const { id, label, command, mode, icon, autoExit } = entry;
     if (typeof id !== 'string' || id.trim() === '') {
       throw new TypeError(path + '.id must be a non-empty string');
     }
@@ -157,11 +167,17 @@ function normalizeMenuCommands(value) {
     if (icon !== undefined && (typeof icon !== 'string' || icon.trim() === '')) {
       throw new TypeError(path + '.icon must be a non-empty string');
     }
+    if (autoExit !== undefined && typeof autoExit !== 'boolean') {
+      throw new TypeError(path + '.autoExit must be a boolean');
+    }
     return {
       id,
       label,
       command,
       mode: mode ?? 'background',
+      // Terminal windows close by default when the command finishes; set
+      // autoExit: false to keep the window open.
+      autoExit: autoExit ?? true,
       ...(icon !== undefined ? { icon } : {}),
     };
   });
@@ -174,6 +190,7 @@ function normalizeMenuConfig(value) {
       avoidObstacles: DEFAULT_CONFIG.menu.avoidObstacles,
       closeOnFocusChange: DEFAULT_CONFIG.menu.closeOnFocusChange,
       autoCloseMs: DEFAULT_CONFIG.menu.autoCloseMs,
+      terminal: DEFAULT_CONFIG.menu.terminal,
     };
   }
   if (!isObject(value)) throw new TypeError('menu must be an object');
@@ -181,7 +198,8 @@ function normalizeMenuConfig(value) {
     if (key !== 'customCommands'
       && key !== 'avoidObstacles'
       && key !== 'closeOnFocusChange'
-      && key !== 'autoCloseMs') {
+      && key !== 'autoCloseMs'
+      && key !== 'terminal') {
       throw new TypeError('Unknown configuration field: menu.' + key);
     }
   }
@@ -200,6 +218,9 @@ function normalizeMenuConfig(value) {
     avoidObstacles: value.avoidObstacles ?? DEFAULT_CONFIG.menu.avoidObstacles,
     closeOnFocusChange: value.closeOnFocusChange ?? DEFAULT_CONFIG.menu.closeOnFocusChange,
     autoCloseMs: value.autoCloseMs ?? DEFAULT_CONFIG.menu.autoCloseMs,
+    terminal: value.terminal === undefined
+      ? DEFAULT_CONFIG.menu.terminal
+      : (typeof value.terminal === 'string' ? value.terminal.trim() : value.terminal),
   };
 }
 
@@ -300,6 +321,9 @@ function validateShape(value, schema, prefix = '') {
       && (!Number.isFinite(fieldValue) || fieldValue < -180 || fieldValue > 180)) {
       throw new RangeError(`${fieldPath} must be null or between -180 and 180`);
     }
+    if (rule === 'string' && typeof fieldValue !== 'string') {
+      throw new TypeError(`${fieldPath} must be a string`);
+    }
     if (rule === 'nonEmptyString' && (typeof fieldValue !== 'string' || fieldValue.trim() === '')) {
       throw new TypeError(`${fieldPath} must be a non-empty string`);
     }
@@ -308,7 +332,10 @@ function validateShape(value, schema, prefix = '') {
 
 function mergeConfig(value) {
   return {
-    interactionEnabled: value.interactionEnabled ?? DEFAULT_CONFIG.interactionEnabled,
+    mouse: {
+      ...DEFAULT_CONFIG.mouse,
+      ...(value.mouse ?? {}),
+    },
     wallpaper: {
       ...DEFAULT_CONFIG.wallpaper,
       ...(value.wallpaper ?? {}),
@@ -361,12 +388,30 @@ function mergeConfig(value) {
   };
 }
 
+// 0.3.2 shipped a single top-level interactionEnabled boolean that both
+// made the wallpaper window click-through and disabled parallax. 0.3.3
+// splits it into mouse.buttonsEnabled (receive mouse buttons / context menu)
+// and mouse.interactionEnabled (pointer-driven parallax); a config that still
+// carries the legacy key is migrated to both fields instead of being rejected.
+function migrateLegacyConfig(value) {
+  if (!isObject(value) || typeof value.interactionEnabled !== 'boolean'
+    || value.mouse !== undefined) {
+    return value;
+  }
+  const { interactionEnabled, ...rest } = value;
+  return {
+    ...rest,
+    mouse: { buttonsEnabled: interactionEnabled, interactionEnabled },
+  };
+}
+
 export function validateConfig(value) {
   if (!isObject(value)) validateShape(value, SCHEMA);
+  const migrated = migrateLegacyConfig(value);
   const normalized = {
-    ...value,
-    audio: normalizeAudioConfig(value.audio),
-    menu: normalizeMenuConfig(value.menu),
+    ...migrated,
+    audio: normalizeAudioConfig(migrated.audio),
+    menu: normalizeMenuConfig(migrated.menu),
   };
   validateShape(normalized, SCHEMA);
   const result = mergeConfig(normalized);

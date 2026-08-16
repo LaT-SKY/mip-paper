@@ -6,7 +6,10 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
 
 ```json
 {
-  "interactionEnabled": true,
+  "mouse": {
+    "buttonsEnabled": true,
+    "interactionEnabled": true
+  },
   "wallpaper": { "mode": "kde" },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "appearance": {
@@ -58,18 +61,20 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "customCommands": [],
     "avoidObstacles": true,
     "closeOnFocusChange": true,
-    "autoCloseMs": 0
+    "autoCloseMs": 0,
+    "terminal": ""
   }
 }
 ```
 
-Unknown fields are rejected. Every valid saved field takes effect without restarting Electron or wallpaper windows. Invalid JSON, unknown fields, out-of-range values, incomplete writes, and deleted files retain the last valid configuration and recover automatically when fixed. `mip-paper restart` remains available for service management and troubleshooting, but is not a normal configuration step. Invalid audio values keep their compatibility behavior and fall back to defaults.
+The legacy top-level `interactionEnabled` key from 0.3.2 and earlier is migrated automatically to `mouse.buttonsEnabled` and `mouse.interactionEnabled` (the old value is applied to both). Unknown fields are rejected. Every valid saved field takes effect without restarting Electron or wallpaper windows. Invalid JSON, unknown fields, out-of-range values, incomplete writes, and deleted files retain the last valid configuration and recover automatically when fixed. `mip-paper restart` remains available for service management and troubleshooting, but is not a normal configuration step. Invalid audio values keep their compatibility behavior and fall back to defaults.
 
 ## Top Level and Frame Rates
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
-| `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Live reload |
+| `mouse.buttonsEnabled` | boolean | `true` | Accept mouse buttons; false makes the wallpaper windows click-through, so the context menu and the settings entry are unavailable | Live reload |
+| `mouse.interactionEnabled` | boolean | `true` | Use pointer movement to drive parallax and the information panels; false only stops parallax, the context menu still opens | Live reload |
 | `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction, return, expanded panel, and panel animation | Live reload |
 | `frameRate.drift` | integer, `1–180` FPS | `30` | Target rate during idle drift when the panel is collapsed and settled | Live reload |
 
@@ -171,6 +176,8 @@ Menu behavior is described in [Quick Start](quickstart.en.md). Custom commands a
 | `menu.customCommands[].command` | non-empty string | — | Shell command to run | Live reload |
 | `menu.customCommands[].mode` | `background` or `terminal` | `background` | Run in the background or in a terminal emulator | Live reload |
 | `menu.customCommands[].icon` | non-empty string (built-in icon name) | none | `folder`, `terminal`, `update`, `app`, `info`, `settings`, etc.; unknown names render text only | Live reload |
-| `menu.avoidObstacles` | boolean | `true` | Avoid obstacles: clamp the menu inside the KWin work area (excluding Plasma panels/app bars) so it cannot be occluded | Live reload |
+| `menu.customCommands[].autoExit` | boolean | `true` | Close the terminal window automatically when the command finishes (terminal mode); `false` keeps the window open | Live reload |
+| `menu.avoidObstacles` | boolean | `true` | Avoid obstacles: clamp the menu inside the KWin work area (excluding Plasma panels/app bars) so it cannot be occluded; when off the menu appears exactly at the right-click point | Live reload |
 | `menu.closeOnFocusChange` | boolean | `true` | Close the menu automatically when another app gains focus | Live reload |
 | `menu.autoCloseMs` | finite number, `>= 0` ms | `0` | Auto-close the menu after this many idle milliseconds; `0` disables this fallback | Live reload |
+| `menu.terminal` | string | `""` | Terminal emulator command name for terminal-mode menu commands; empty auto-detects in the konsole → xfce4-terminal → kitty → gnome-terminal → alacritty → wezterm → foot → … preference order, and an unpreset terminal is invoked generically as `-e sh -c` | Live reload |

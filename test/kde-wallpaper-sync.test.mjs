@@ -110,8 +110,8 @@ test('manual mode publishes one managed image to every display', async () => {
   sync.start();
   await sync.whenIdle();
   assert.deepEqual(updates.map(({ displayId, wallpaperUrl, contentKey }) => [displayId, wallpaperUrl, contentKey]), [
-    ['a', 'file:///manual.jpg', `sha256:${'d'.repeat(64)}`],
-    ['b', 'file:///manual.jpg', `sha256:${'d'.repeat(64)}`],
+    ['a', 'file:///manual.jpg?v=7-0', `sha256:${'d'.repeat(64)}`],
+    ['b', 'file:///manual.jpg?v=7-0', `sha256:${'d'.repeat(64)}`],
   ]);
 });
 

@@ -6,7 +6,9 @@ function finite(value) { return Number.isFinite(value); }
 
 export function validateRuntimeConfig(value) {
   const valid = object(value)
-    && typeof value.interactionEnabled === 'boolean'
+    && object(value.mouse)
+    && typeof value.mouse.buttonsEnabled === 'boolean'
+    && typeof value.mouse.interactionEnabled === 'boolean'
     && object(value.wallpaper) && ['kde', 'manual'].includes(value.wallpaper.mode)
     && object(value.color) && ['default', 'kde', 'wallpaper', 'hybrid'].includes(value.color.mode)
     && Number.isInteger(value.color.transitionDurationMs)

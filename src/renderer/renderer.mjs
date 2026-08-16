@@ -245,7 +245,7 @@ async function start() {
       panel.setConfig(currentConfig.panel);
       audioRibbon.setConfig(currentConfig.audio);
       if (menu.isOpen()) rebuildMenuItems();
-      if (!currentConfig.interactionEnabled) {
+      if (!currentConfig.mouse.interactionEnabled) {
         state.pointer.initialized = false;
         state.pointer.lastInput = -Infinity;
       }
@@ -421,7 +421,7 @@ async function start() {
   if (paused) scheduler.stop();
 
   canvas.addEventListener('pointermove', (event) => {
-    if (!currentConfig.interactionEnabled) return;
+    if (!currentConfig.mouse.interactionEnabled) return;
     if (menu.isOpen()) return;
     const rect = canvas.getBoundingClientRect();
     const accepted = applyPointerSample(
@@ -475,6 +475,10 @@ async function start() {
 
   canvas.addEventListener('contextmenu', (event) => {
     event.preventDefault();
+    // The window is click-through while mouse.buttonsEnabled is false, so
+    // this event normally never arrives; keep the guard so a stray event can
+    // never surface the menu.
+    if (!currentConfig.mouse.buttonsEnabled) return;
     rebuildMenuItems();
     let bounds = null;
     if (currentConfig.menu.avoidObstacles && workArea) {
@@ -483,7 +487,7 @@ async function start() {
       bounds = workArea;
     }
     window.wallpaper.notifyMenuOpened();
-    menu.open(event.clientX, event.clientY, bounds);
+    menu.open(event.clientX, event.clientY, bounds, currentConfig.menu.avoidObstacles);
   });
 
   window.addEventListener('resize', () => {
