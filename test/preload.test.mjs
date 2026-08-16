@@ -48,6 +48,18 @@ test('both preload variants expose global menu singleton signals', async () => {
   }
 });
 
+test('both preload variants expose removable menu close requests', async () => {
+  const [commonJs, module] = await Promise.all([
+    readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/preload.mjs', import.meta.url), 'utf8'),
+  ]);
+  for (const preload of [commonJs, module]) {
+    assert.match(preload, /onMenuCloseRequest\s*:\s*\(listener\)/);
+    assert.match(preload, /MENU_CLOSE_CHANNEL/);
+    assert.match(preload, /removeListener\(MENU_CLOSE_CHANNEL,\s*wrapper\)/);
+  }
+});
+
 test('both preload variants expose removable work-area updates', async () => {
   const [commonJs, module] = await Promise.all([
     readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),

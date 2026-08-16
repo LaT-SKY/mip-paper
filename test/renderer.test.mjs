@@ -238,6 +238,9 @@ test('context menu is mounted with its stylesheet and wired to the canvas', asyn
   assert.match(script, /removeEventListener\('pointerdown', handleAnyPointerDown\)/);
   assert.match(script, /onMenuOpened\(\(\) =>/);
   assert.match(script, /menu\.isOpen\(\)\) menu\.close\(\)/);
+  assert.match(script, /onMenuCloseRequest/);
+  assert.match(script, /unsubscribeMenuClose\(\);/);
+  assert.match(script, /autoCloseMs: \(\) => currentConfig\.menu\.autoCloseMs/);
   assert.match(script, /bootstrap\.workArea/);
   assert.match(script, /currentConfig\.menu\.avoidObstacles && workArea/);
   assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds\)/);

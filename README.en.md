@@ -234,7 +234,12 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     },
     "tideStationId": "P2352"
   },
-  "menu": { "customCommands": [], "avoidObstacles": true }
+  "menu": {
+    "customCommands": [],
+    "avoidObstacles": true,
+    "closeOnFocusChange": true,
+    "autoCloseMs": 0
+  }
 }
 ```
 
@@ -297,6 +302,8 @@ After effective pointer input stops for `0.95` seconds, the scene returns smooth
 
 When a fullscreen or maximized window (video, game, etc.) covers a display, that display's render loop stops completely and the camera, panels, and audio ribbon freeze, saving GPU/CPU; other displays are unaffected. When the window returns to normal size or moves away, the wallpaper continues drifting from the frozen position. The wallpaper's own windows never trigger the pause. The display coordinator (KWin Script) reports covering-window state over the session bus `org.mip.Paper`, visible only to the current desktop session.
 
+**Workspace aware**: the covering check only considers windows on that display's **current virtual desktop** — the wallpaper pauses only when the current workspace has a fullscreen/maximized app. If a workspace has a fullscreen video running but you switch to a workspace without one, the wallpaper keeps drifting instead of freezing; state updates live when windows move across workspaces or you switch desktops. Windows pinned to all desktops count as covering on every workspace.
+
 ### Floating Information Panels
 
 | Field | Type / range | Default | Effect | Apply |
@@ -347,10 +354,14 @@ Custom commands are added through the `menu.customCommands` array and hot reload
 | `menu.customCommands[].mode` | `background` or `terminal` | `background` | Run in the background or in a terminal emulator | Live reload |
 | `menu.customCommands[].icon` | non-empty string (built-in icon name) | none | `folder`, `terminal`, `update`, `app`, `info`, `settings`, etc.; unknown names render text only | Live reload |
 | `menu.avoidObstacles` | boolean | `true` | Avoid obstacles: clamp the menu inside the KWin work area (excluding Plasma panels/app bars) so it cannot be occluded | Live reload |
+| `menu.closeOnFocusChange` | boolean | `true` | Close the menu automatically when another app gains focus | Live reload |
+| `menu.autoCloseMs` | finite number, `>= 0` ms | `0` | Auto-close the menu after this many idle milliseconds; `0` disables this fallback | Live reload |
 
 `background` runs the command via `sh -c` without a window, suitable for `xdg-open` or launching GUI apps; `terminal` runs it inside a terminal emulator that stays open, suitable for interactive commands such as `sudo pacman -Syu`. Terminals are probed in the order `konsole` → `kitty` → `gnome-terminal` → `x-terminal-emulator` → `xdg-terminal-exec`, falling back to background execution when none exists. Commands come from your own configuration file; failures only write to the log, and the renderer only sends command ids, so it cannot inject arbitrary commands.
 
 `menu.avoidObstacles` (default `true`) enables obstacle avoidance: the KWin coordinator continuously reports each output's work area (output geometry minus the space occupied by Plasma panels/app bars), and the menu clamps inside it near docks so it is never occluded. Work areas track panel changes and display hot-plugs in real time; without panels the menu clamps to the full screen.
+
+**Focus dismissal**: with `menu.closeOnFocusChange` (default `true`), the KWin coordinator notifies the service whenever a non-wallpaper window is activated (e.g. you click another app), and every open menu dismisses itself. The wallpaper windows themselves ignore focus, so right-clicking to open the menu never triggers a spurious close. As a fallback, `menu.autoCloseMs` auto-closes the menu after the given number of idle milliseconds (`0` disables it) — useful when the coordinator is unavailable or you never want a menu to linger. The two mechanisms are independent.
 
 ## Diagnostics and Common Problems
 

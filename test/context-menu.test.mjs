@@ -179,3 +179,18 @@ test('context-menu.mjs implements the state machine with a race-safe token', asy
   assert.ok(source.includes("root.style.opacity = String("));
   assert.ok(source.includes("root.style.transform = 'scale('"));
 });
+
+test('context-menu.mjs arms a cancelable auto-close timer on open', async () => {
+  const source = await readFile('src/renderer/context-menu.mjs', 'utf8');
+  assert.ok(source.includes('autoCloseMs = 0'));
+  assert.ok(source.includes('let closeTimer = null;'));
+  assert.ok(source.includes('function cancelAutoClose()'));
+  assert.ok(source.includes('function scheduleAutoClose()'));
+  assert.ok(source.includes('win.setTimeout'));
+  assert.ok(source.includes('win.clearTimeout'));
+  // The timer is armed when the menu opens, cleared on close/destroy, and a
+  // non-positive delay disables it entirely.
+  assert.ok(source.includes('scheduleAutoClose();'));
+  assert.ok(source.includes('cancelAutoClose();'));
+  assert.ok(source.includes('delay <= 0'));
+});

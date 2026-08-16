@@ -50,7 +50,7 @@ test('defaults match the approved v1 design', () => {
       location: { mode: 'auto', latitude: null, longitude: null, fallbackLocationId: '101281601' },
       tideStationId: 'P2352',
     },
-    menu: { customCommands: [], avoidObstacles: true },
+    menu: { customCommands: [], avoidObstacles: true, closeOnFocusChange: true, autoCloseMs: 0 },
   });
 });
 
@@ -304,8 +304,18 @@ test('rejects malformed menu command entries', () => {
 
 test('packaged config ships the menu defaults', async () => {
   const packaged = JSON.parse(await readFile('config/default.json', 'utf8'));
-  assert.deepEqual(packaged.menu, { customCommands: [], avoidObstacles: true });
-  assert.deepEqual(validateConfig(packaged).menu, { customCommands: [], avoidObstacles: true });
+  assert.deepEqual(packaged.menu, {
+    customCommands: [],
+    avoidObstacles: true,
+    closeOnFocusChange: true,
+    autoCloseMs: 0,
+  });
+  assert.deepEqual(validateConfig(packaged).menu, {
+    customCommands: [],
+    avoidObstacles: true,
+    closeOnFocusChange: true,
+    autoCloseMs: 0,
+  });
 });
 
 test('validates the menu obstacle avoidance toggle', () => {
@@ -314,6 +324,25 @@ test('validates the menu obstacle avoidance toggle', () => {
   assert.throws(
     () => validateConfig({ menu: { avoidObstacles: 'yes' } }),
     /menu\.avoidObstacles must be a boolean/,
+  );
+});
+
+test('validates the menu focus-dismissal and auto-close options', () => {
+  assert.equal(validateConfig({ menu: { closeOnFocusChange: false } }).menu.closeOnFocusChange, false);
+  assert.equal(validateConfig({ menu: { autoCloseMs: 5000 } }).menu.autoCloseMs, 5000);
+  assert.equal(validateConfig({}).menu.closeOnFocusChange, true);
+  assert.equal(validateConfig({}).menu.autoCloseMs, 0);
+  assert.throws(
+    () => validateConfig({ menu: { closeOnFocusChange: 'yes' } }),
+    /menu\.closeOnFocusChange must be a boolean/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { autoCloseMs: -1 } }),
+    /menu\.autoCloseMs must be a finite number at least 0/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { autoCloseMs: Number.NaN } }),
+    /menu\.autoCloseMs must be a finite number at least 0/,
   );
 });
 

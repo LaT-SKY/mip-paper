@@ -13,6 +13,7 @@ import {
   CONFIG_UPDATED_CHANNEL,
   WALLPAPER_UPDATED_CHANNEL,
   FULLSCREEN_UPDATED_CHANNEL,
+  MENU_CLOSE_CHANNEL,
   createWindowManager,
   formatDisplayTargetTitle,
 } from '../src/window-manager.mjs';
@@ -513,6 +514,26 @@ test('updateFullscreen broadcasts only to the owning display', async () => {
   });
 
   assert.equal(manager.updateFullscreen(999, true), false);
+});
+
+test('closeMenus asks every display to dismiss its context menu', async () => {
+  const { manager } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+  const second = FakeWindow.instances[1];
+
+  manager.closeMenus();
+
+  assert.deepEqual(first.webContents.sent.at(-1), { channel: MENU_CLOSE_CHANNEL, value: {} });
+  assert.deepEqual(second.webContents.sent.at(-1), { channel: MENU_CLOSE_CHANNEL, value: {} });
+  assert.equal(
+    first.webContents.sent.filter((sent) => sent.channel === MENU_CLOSE_CHANNEL).length,
+    1,
+  );
+  assert.equal(
+    second.webContents.sent.filter((sent) => sent.channel === MENU_CLOSE_CHANNEL).length,
+    1,
+  );
 });
 
 test('stop closes windows, removes IPC, and detaches display listeners', async () => {

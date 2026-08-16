@@ -38,6 +38,8 @@ const configurationFields = [
   'weather.tideStationId',
   'menu.customCommands',
   'menu.avoidObstacles',
+  'menu.closeOnFocusChange',
+  'menu.autoCloseMs',
 ];
 
 test('publishes complete linked Chinese and English guides', async () => {

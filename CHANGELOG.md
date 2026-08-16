@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `org.mip.Paper`; the service restarts the coordinator on startup to
   re-sync state after app or KWin restarts. The wallpaper's own windows never
   trigger the pause.
+- Workspace-aware covering detection: a fullscreen/maximized window only
+  pauses the wallpaper when it lives on the display's **current virtual
+  desktop** (windows pinned to all desktops still count everywhere). Switching
+  workspaces or moving windows across desktops re-evaluates each display live,
+  so a video running on another workspace no longer freezes the wallpaper.
+- Dismiss open context menus when another application is activated
+  (`menu.closeOnFocusChange`, default `true`): the KWin coordinator reports
+  non-wallpaper window activations over the session bus and every renderer
+  closes its menu. A timed fallback (`menu.autoCloseMs`, default `0` =
+  disabled) auto-closes a menu after the configured idle delay, independent of
+  the focus signal.
 
 ### Changed
 
