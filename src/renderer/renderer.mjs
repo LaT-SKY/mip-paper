@@ -198,6 +198,7 @@ async function start() {
       state,
       config: currentConfig,
       viewport,
+      panelActive: () => panel.attention(),
       advance: (...args) => {
         const started = performance.now();
         advanceScene(...args);
@@ -257,6 +258,7 @@ async function start() {
     state,
     config: currentConfig,
     viewport,
+    panelActive: () => panel.attention(),
     advance: advanceScene,
     draw: (nextState, nextViewport) => draw(
       image,

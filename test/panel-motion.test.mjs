@@ -5,6 +5,8 @@ import {
   advancePanel,
   createPanelState,
   getCardTransforms,
+  isPanelAnimating,
+  panelRequestsInteractiveFps,
   recordPointer,
   requestCollapsed,
   requestExpanded,
@@ -71,6 +73,42 @@ test('matches the frozen spring trajectory at 60 FPS', () => {
   assert.ok(Math.abs(state.cards[0].progress - 0.9623548657483698) < 1e-10);
   assert.equal(state.cards[0].bounceCount, 2);
   assert.equal(state.cards[0].settling, true);
+});
+
+test('settled collapsed panel is not animating and does not request interactive FPS', () => {
+  const state = createPanelState(config, centers);
+  assert.equal(isPanelAnimating(state), false);
+  assert.equal(panelRequestsInteractiveFps(state), false);
+});
+
+test('expanding panel requests interactive FPS until the staggered spring settles', () => {
+  const state = createPanelState(config, centers);
+  requestExpanded(state, { x: 0, y: 0 }, 0);
+  assert.equal(isPanelAnimating(state), true);
+  assert.equal(panelRequestsInteractiveFps(state), true);
+  for (let frame = 0; frame < 40; frame += 1) advancePanel(state, 0.05);
+  assert.equal(isPanelAnimating(state), false);
+  assert.equal(state.expanded, true);
+  assert.equal(panelRequestsInteractiveFps(state), true);
+});
+
+test('collapsing panel requests interactive FPS and releases it once settled', () => {
+  const state = createPanelState(config, centers);
+  requestExpanded(state, { x: 0, y: 0 }, 0);
+  for (let frame = 0; frame < 40; frame += 1) advancePanel(state, 0.05);
+  requestCollapsed(state, { x: 0, y: 0 }, 2000);
+  assert.equal(isPanelAnimating(state), true);
+  assert.equal(panelRequestsInteractiveFps(state), true);
+  for (let frame = 0; frame < 40; frame += 1) advancePanel(state, 0.05);
+  assert.equal(isPanelAnimating(state), false);
+  assert.equal(panelRequestsInteractiveFps(state), false);
+});
+
+test('re-collapsing an already settled collapsed panel is not animating', () => {
+  const state = createPanelState(config, centers);
+  requestCollapsed(state, { x: 0, y: 0 }, 0);
+  assert.equal(isPanelAnimating(state), false);
+  assert.equal(panelRequestsInteractiveFps(state), false);
 });
 
 test('preserves frozen card-specific collapse and energy mapping', () => {

@@ -234,8 +234,8 @@ Unknown fields are rejected. Every valid saved field takes effect without restar
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
 | `interactionEnabled` | boolean | `true` | Accept pointer input for parallax; false enables mouse pass-through | Live reload |
-| `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction and return | Live reload |
-| `frameRate.drift` | integer, `1–180` FPS | `30` | Target rate during idle drift | Live reload |
+| `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction, return, expanded panel, and panel animation | Live reload |
+| `frameRate.drift` | integer, `1–180` FPS | `30` | Target rate during idle drift when the panel is collapsed and settled | Live reload |
 
 ### Light and Dark Appearance
 
@@ -271,7 +271,7 @@ Every `audio.*` setting live reloads and updates the active spectrum controller 
 
 ### Motion and Parallax
 
-After effective pointer input stops for `0.95` seconds, the scene returns smoothly at the existing `motion.returnSpeed`; frame-rate switching does not change that setting or the camera trajectory. The first `1.5` seconds of return keep the interactive frame rate, then only the drawing cadence restores the configured drift frame rate while the camera continues its natural return at the original speed. New input restarts this frame-rate hold window.
+After effective pointer input stops for `0.95` seconds, the scene returns smoothly at the existing `motion.returnSpeed`; frame-rate switching does not change that setting or the camera trajectory. The first `1.5` seconds of return keep the interactive frame rate, then only the drawing cadence restores the configured drift frame rate while the camera continues its natural return at the original speed. New input restarts this frame-rate hold window. An expanded panel or an in-flight panel animation keeps the interactive frame rate (including during return); only when the panel is collapsed and fully settled does the drawing cadence fall back to the drift frame rate.
 
 | Field | Type / range | Default | Effect | Apply |
 | --- | --- | --- | --- | --- |
@@ -294,6 +294,8 @@ After effective pointer input stops for `0.95` seconds, the scene returns smooth
 | `panel.collapsedOpacity` | `0–1` | `0.08` | Minimum opacity of collapsed panels | Live reload |
 | `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `60` | Delay between panel animations | Live reload |
 | `panel.animation.durationMs` | finite number, `>= 400` ms | `950` | Single-panel animation including two rebounds | Live reload |
+
+An expanded panel or an in-flight panel animation renders at the interactive frame rate; after the collapse animation finishes and the cards settle, the drawing cadence falls back to `frameRate.drift`.
 
 ### Weather, Location, and Tides
 

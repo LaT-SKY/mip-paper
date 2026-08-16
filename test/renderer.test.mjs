@@ -168,6 +168,12 @@ test('renderer loads only atomic user-managed wallpaper transactions', async () 
   assert.doesNotMatch(script, /assets\/161-2\.jpeg/);
 });
 
+test('renderer feeds panel attention into both scheduler starts', async () => {
+  const script = await readFile('src/renderer/renderer.mjs', 'utf8');
+  const occurrences = script.match(/panelActive:\s*\(\)\s*=>\s*panel\.attention\(\)/g) ?? [];
+  assert.equal(occurrences.length, 2);
+});
+
 test('renderer consumes the motion core and read-only preload bootstrap', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
 
