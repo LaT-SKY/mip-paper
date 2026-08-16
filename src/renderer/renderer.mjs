@@ -93,6 +93,11 @@ async function start() {
   const currentConfig = validateRuntimeConfig(bootstrap.config);
   let currentAppearance = normalizeAppearanceState(bootstrap.appearance);
   let currentColor = bootstrap.color ?? bootstrap.wallpaper?.color ?? null;
+  let paused = Boolean(bootstrap.paused);
+  let scheduler = null;
+  let schedulerOptions = null;
+  let state;
+  let viewport;
   const brightnessTransition = createBrightnessTransition(currentAppearance.wallpaperBrightness);
   applyAppearanceState(document.documentElement, currentAppearance, {
     reducedMotion: reducedMotion.matches,
@@ -108,7 +113,10 @@ async function start() {
     analyzeImage: analyzeWallpaperImage,
     submitAccent: (submission) => window.wallpaper.submitWallpaperAccent(submission),
     applyColor,
-    promoteImage: (nextImage) => { image = nextImage; },
+    promoteImage: (nextImage) => {
+      image = nextImage;
+      if (paused) drawOnce();
+    },
   });
   const unsubscribeColor = window.wallpaper.onColorUpdated(applyColor);
   const unsubscribeWallpaper = window.wallpaper.onWallpaperUpdated((wallpaper) => {
@@ -121,8 +129,8 @@ async function start() {
     window.wallpaper.getInformationSnapshot(),
   ]);
   const { display } = bootstrap;
-  const viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
-  const state = createMotionState(currentConfig, viewport, displayPhase(display.id));
+  viewport = { width: Math.max(canvas.clientWidth, 1), height: Math.max(canvas.clientHeight, 1) };
+  state = createMotionState(currentConfig, viewport, displayPhase(display.id));
   const panel = createPanelController({
     root: document.getElementById('information-panel'),
     cards: [...document.querySelectorAll('[data-panel-card]')],
@@ -156,9 +164,13 @@ async function start() {
         state.pointer.initialized = false;
         state.pointer.lastInput = -Infinity;
       }
+      if (paused) drawOnce();
     } catch (error) {
       console.error(`Runtime configuration ignored: ${error?.message || error}`);
     }
+  });
+  const unsubscribeFullscreen = window.wallpaper.onFullscreenUpdated(({ paused: nextPaused }) => {
+    setPaused(Boolean(nextPaused));
   });
   const onReducedMotionChanged = () => {
     applyAppearanceState(document.documentElement, currentAppearance, {
@@ -167,6 +179,7 @@ async function start() {
       transition: brightnessTransition,
     });
     if (currentColor) applyColor(currentColor);
+    if (paused) drawOnce();
   };
   reducedMotion.addEventListener('change', onReducedMotionChanged);
   window.addEventListener('pagehide', () => {
@@ -175,6 +188,7 @@ async function start() {
     unsubscribeConfig();
     unsubscribeColor();
     unsubscribeWallpaper();
+    unsubscribeFullscreen();
     reducedMotion.removeEventListener('change', onReducedMotionChanged);
     audioRibbon.destroy();
   }, { once: true });
@@ -183,6 +197,20 @@ async function start() {
     panel.advance(args[1], state.camera, state.pointer);
     audioRibbon.advance(args[1] * 1000, args[2] * 1000);
   };
+  function drawOnce() {
+    if (!image || !state || !viewport) return;
+    draw(image, state, viewport, sampleBrightness(brightnessTransition, performance.now()));
+  }
+
+  function setPaused(nextPaused) {
+    if (paused === nextPaused) return;
+    paused = nextPaused;
+    if (paused) {
+      scheduler?.stop();
+    } else if (scheduler && schedulerOptions) {
+      scheduler.start(schedulerOptions);
+    }
+  }
   const probe = bootstrap.probe?.enabled ? bootstrap.probe : null;
   if (probe) {
     const collector = createProbeCollector({ clock: () => performance.now() / 1000 });
@@ -253,8 +281,8 @@ async function start() {
     }, 1000);
     return;
   }
-  const scheduler = createScheduler('adaptive');
-  scheduler.start({
+  scheduler = createScheduler('adaptive');
+  schedulerOptions = {
     state,
     config: currentConfig,
     viewport,
@@ -266,7 +294,9 @@ async function start() {
       nextViewport,
       sampleBrightness(brightnessTransition, performance.now()),
     ),
-  });
+  };
+  scheduler.start(schedulerOptions);
+  if (paused) scheduler.stop();
 
   canvas.addEventListener('pointermove', (event) => {
     if (!currentConfig.interactionEnabled) return;
@@ -295,6 +325,7 @@ async function start() {
       Math.max(canvas.clientHeight, 1),
     );
     audioRibbon.resize();
+    if (paused) drawOnce();
   });
 
 }

@@ -55,7 +55,7 @@ A failed replacement preserves the previous valid image. A successful replacemen
 `setup` (or `install` for source installs) installs two KWin integrations for Mip-Paper windows:
 
 - **Window rule**: matches the window class `mip-paper` and forces fullscreen, no border, below other windows, and exclusion from the taskbar, pager, and Alt+Tab switcher, on all virtual desktops. Since 0.3.2 the rule no longer forces the window to ignore focus; the window follows KWin's default focus policy, and upgrades automatically clean the legacy `acceptfocus` keys.
-- **Display coordinator** (KWin Script): reads each window's declared target display from its caption, moves the window to that output, pins its geometry, and reacts to display hot-plug and screen-order changes.
+- **Display coordinator** (KWin Script): reads each window's declared target display from its caption, moves the window to that output, pins its geometry, reacts to display hot-plug and screen-order changes, and reports fullscreen window state per output over the session bus `org.mip.Paper`.
 
 Removal (`teardown` / `uninstall`) removes both integrations.
 
@@ -214,7 +214,8 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "deadZonePx": 2,
     "horizontalPanPercent": 4.6,
     "verticalPanPercent": 4.5,
-    "maxRotationDegrees": 0.7
+    "maxRotationDegrees": 0.7,
+    "pauseWhenFullscreen": true
   },
   "panel": {
     "autoExpandHide": true,
@@ -291,6 +292,9 @@ After effective pointer input stops for `0.95` seconds, the scene returns smooth
 | `motion.horizontalPanPercent` | finite number, `>= 0` % | `4.6` | Maximum horizontal pan as viewport percentage | Live reload |
 | `motion.verticalPanPercent` | finite number, `>= 0` % | `4.5` | Maximum vertical pan as viewport percentage | Live reload |
 | `motion.maxRotationDegrees` | finite number, `>= 0` degrees | `0.7` | Maximum image rotation | Live reload |
+| `motion.pauseWhenFullscreen` | boolean | `true` | Pause that display's wallpaper motion and rendering while a fullscreen window covers it; resume automatically when it closes | Live reload |
+
+When a fullscreen window (video, game, etc.) covers a display, that display's render loop stops completely and the camera, panels, and audio ribbon freeze, saving GPU/CPU; other displays are unaffected. When the fullscreen window closes or moves away, the wallpaper continues drifting from the frozen position. The wallpaper's own windows never trigger the pause. The display coordinator (KWin Script) reports fullscreen state over the session bus `org.mip.Paper`, visible only to the current desktop session.
 
 ### Floating Information Panels
 

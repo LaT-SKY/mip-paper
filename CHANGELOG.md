@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — 0.3.2 (in development)
 
+### Added
+
+- Pause a display's wallpaper while a fullscreen window covers it
+  (`motion.pauseWhenFullscreen`, default `true`): the render loop stops and
+  the camera, panels, and audio ribbon freeze until the window closes or moves
+  away; other displays are unaffected. The KWin display coordinator reports
+  per-output fullscreen state over the session bus `org.mip.Paper`, and a
+  5-second heartbeat converges after app or KWin restarts. The wallpaper's own
+  windows never trigger the pause.
+
 ### Removed
 
 - The KWin window rule no longer forces the wallpaper window to ignore focus

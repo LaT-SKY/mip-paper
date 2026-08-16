@@ -7,6 +7,7 @@ export const CONFIG_UPDATED_CHANNEL = 'wallpaper:config-updated';
 export const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
 export const COLOR_UPDATED_CHANNEL = 'wallpaper:color-updated';
 export const COLOR_SUBMIT_CHANNEL = 'wallpaper:submit-color';
+export const FULLSCREEN_UPDATED_CHANNEL = 'wallpaper:fullscreen-updated';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -36,6 +37,7 @@ export function createWindowManager({
   const bootstrapByWebContents = new Map();
   const informationUnsubscribers = new Map();
   const audioUnsubscribers = new Map();
+  const pausedByDisplay = new Map();
   let currentConfig = config;
   let currentAppearance = appearance;
   let queue = Promise.resolve();
@@ -92,6 +94,7 @@ export function createWindowManager({
       config: currentConfig,
       ...(currentAppearance ? { appearance: currentAppearance } : {}),
       display,
+      paused: pausedByDisplay.get(display.id) ?? false,
       wallpaper: getWallpaperTransaction(display),
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
       ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
@@ -130,6 +133,10 @@ export function createWindowManager({
       }
     }
 
+    for (const displayId of [...pausedByDisplay.keys()]) {
+      if (!displayById.has(displayId)) pausedByDisplay.delete(displayId);
+    }
+
     for (const display of displays) {
       const window = windows.get(display.id);
       if (!window) {
@@ -142,6 +149,7 @@ export function createWindowManager({
         config: currentConfig,
         ...(currentAppearance ? { appearance: currentAppearance } : {}),
         display,
+        paused: pausedByDisplay.get(display.id) ?? false,
         wallpaper: getWallpaperTransaction(display),
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
         ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
@@ -278,6 +286,19 @@ export function createWindowManager({
     return true;
   }
 
+  function updateFullscreen(displayId, paused) {
+    const active = Boolean(paused);
+    pausedByDisplay.set(displayId, active);
+    const window = windows.get(displayId);
+    if (!window) return false;
+    const bootstrap = bootstrapByWebContents.get(window.webContents.id);
+    if (bootstrap) {
+      bootstrapByWebContents.set(window.webContents.id, { ...bootstrap, paused: active });
+    }
+    window.webContents.send(FULLSCREEN_UPDATED_CHANNEL, { paused: active });
+    return true;
+  }
+
   return {
     start,
     stop,
@@ -286,6 +307,7 @@ export function createWindowManager({
     updateAppearance,
     updateWallpaper,
     updateColor,
+    updateFullscreen,
     whenIdle: () => queue,
   };
 }

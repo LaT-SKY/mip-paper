@@ -28,6 +28,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     horizontalPanPercent: 4.6,
     verticalPanPercent: 4.5,
     maxRotationDegrees: 0.7,
+    pauseWhenFullscreen: true,
   }),
   panel: Object.freeze({
     autoExpandHide: true,
@@ -75,6 +76,7 @@ const SCHEMA = {
     horizontalPanPercent: 'nonNegative',
     verticalPanPercent: 'nonNegative',
     maxRotationDegrees: 'nonNegative',
+    pauseWhenFullscreen: 'boolean',
   },
   panel: {
     autoExpandHide: 'boolean',

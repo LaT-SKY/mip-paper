@@ -31,7 +31,8 @@
     "deadZonePx": 2,
     "horizontalPanPercent": 4.6,
     "verticalPanPercent": 4.5,
-    "maxRotationDegrees": 0.7
+    "maxRotationDegrees": 0.7,
+    "pauseWhenFullscreen": true
   },
   "panel": {
     "autoExpandHide": true,
