@@ -188,6 +188,10 @@ async function start() {
         label: paused ? '恢复壁纸' : '暂停壁纸',
         icon: paused ? 'play' : 'pause',
       },
+      // Opens the visual settings window (normal framed window, above the
+      // wallpaper). Handled here before the custom-command fallthrough; the id
+      // is reserved in config.mjs so a user command cannot shadow it.
+      { id: 'settings', label: '设置', icon: 'settings' },
     ];
   }
 
@@ -210,6 +214,12 @@ async function start() {
     if (id === 'toggle-pause') {
       manualPaused = !manualPaused;
       applyEffectivePause();
+      return;
+    }
+    if (id === 'settings') {
+      void window.wallpaper.openSettings().catch((error) => {
+        console.error('Settings window failed to open: ' + (error?.message || error));
+      });
       return;
     }
     void window.wallpaper.runMenuCommand({ id }).catch((error) => {

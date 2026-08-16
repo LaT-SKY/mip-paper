@@ -297,6 +297,10 @@ test('rejects malformed menu command entries', () => {
     /Menu command id is reserved: refresh/,
   );
   assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'settings', label: 'Shadow', command: 'echo shadow' }] } }),
+    /Menu command id is reserved: settings/,
+  );
+  assert.throws(
     () => validateConfig({ menu: { items: [] } }),
     /Unknown configuration field: menu\.items/,
   );

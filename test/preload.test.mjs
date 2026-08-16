@@ -83,6 +83,36 @@ test('both preload variants expose removable work-area updates', async () => {
   }
 });
 
+test('both preload variants expose the settings-window opener', async () => {
+  const [commonJs, module] = await Promise.all([
+    readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/preload.mjs', import.meta.url), 'utf8'),
+  ]);
+  for (const preload of [commonJs, module]) {
+    assert.ok(preload.includes('openSettings: () => ipcRenderer.invoke'));
+    assert.ok(preload.includes('SETTINGS_OPEN_CHANNEL'));
+  }
+  assert.ok(commonJs.includes("'settings:open'"));
+  assert.ok(module.includes("SETTINGS_OPEN_CHANNEL,"));
+  assert.ok(module.includes("from './window-manager.mjs'"));
+});
+
+test('settings preload exposes only the settings bridge', async () => {
+  const preload = await readFile(new URL('../src/settings-preload.cjs', import.meta.url), 'utf8');
+  assert.ok(preload.includes("exposeInMainWorld('settings'"));
+  for (const method of ['getState', 'saveConfig', 'saveCredentials', 'importWallpaper', 'onConfigUpdated']) {
+    assert.ok(preload.includes(method + ':'));
+  }
+  assert.ok(preload.includes('settings:get-state'));
+  assert.ok(preload.includes('settings:save-config'));
+  assert.ok(preload.includes('settings:save-credentials'));
+  assert.ok(preload.includes('settings:import-wallpaper'));
+  assert.ok(!preload.includes("exposeInMainWorld('wallpaper'"));
+  assert.ok(!preload.includes('getBootstrap'));
+  assert.ok(!preload.includes('runMenuCommand'));
+  assert.ok(!preload.includes('submitWallpaperAccent'));
+});
+
 test('both preload variants expose removable complete runtime updates', async () => {
   const [commonJs, module] = await Promise.all([
     readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),

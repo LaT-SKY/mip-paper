@@ -260,6 +260,51 @@ test('context menu is mounted with its stylesheet and wired to the canvas', asyn
   assert.match(script, /customCommands: currentConfig\.menu\?\.[^\n]*\[\]/);
 });
 
+test('renderer wires the built-in settings action that opens the settings window', async () => {
+  const script = await readFile('src/renderer/renderer.mjs', 'utf8');
+  assert.match(script, /\{ id: 'settings', label: '设置', icon: 'settings' \}/);
+  assert.match(script, /if \(id === 'settings'\)/);
+  assert.match(script, /window\.wallpaper\.openSettings\(\)/);
+  assert.match(script, /runMenuCommand\(\{ id \}\)/);
+});
+
+test('settings page is a module script page without wallpaper canvas controls', async () => {
+  const html = await readFile('src/renderer/settings.html', 'utf8');
+  const script = await readFile('src/renderer/settings.mjs', 'utf8');
+  assert.match(html, /<script type="module" src="\.\/settings\.mjs"><\/script>/);
+  assert.doesNotMatch(html, /<canvas/);
+  assert.doesNotMatch(html, /id="wallpaper"/);
+  assert.match(html, /id="settings-nav"/);
+  assert.match(html, /id="settings-content"/);
+  assert.match(html, /id="action-save"/);
+  assert.match(script, /window\.settings\.saveConfig/);
+  assert.match(script, /window\.settings\.getState/);
+  assert.match(script, /window\.settings\.importWallpaper/);
+  assert.match(script, /window\.settings\.onConfigUpdated/);
+  assert.match(script, /structuredClone\(state\.config\)/);
+});
+
+test('settings stylesheet mirrors the context-menu design tokens and reduced motion', async () => {
+  const css = await readFile('src/renderer/settings.css', 'utf8');
+  assert.match(css, /--settings-surface: #ffffff/);
+  assert.match(css, /--settings-radius: 16px/);
+  assert.match(css, /--settings-hover: #f2f5f6/);
+  assert.match(css, /--settings-shadow: 0 8px 24px rgba\(13, 25, 32, 0\.14\)/);
+  assert.match(css, /data-theme="dark"/);
+  assert.match(css, /#1e2228/);
+  assert.match(css, /var\(--accent\)/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.doesNotMatch(css, /transition:\s*all/);
+});
+
+test('settings controller reuses the context-menu spring for section motion', async () => {
+  const script = await readFile('src/renderer/settings.mjs', 'utf8');
+  assert.match(script, /omega: Math\.PI \* 2 \* 6\.5/);
+  assert.match(script, /damping: 0\.6/);
+  assert.match(script, /requestAnimationFrame\(frame\)/);
+  assert.match(script, /ROW_STAGGER_MS/);
+});
+
 test('renderer analyzes requested wallpapers and applies explicit accent transitions', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
   const panelCss = await readFile('src/renderer/panel.css', 'utf8');
