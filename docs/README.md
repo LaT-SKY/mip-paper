@@ -8,7 +8,15 @@ Mip-Paper 的工程文档按以下目录组织：
 | design/ | 视觉风格探索与设计稿 | 仅本地（`.gitignore` 忽略） |
 | superpowers/ | 开发计划（plans）与设计规格（specs） | 仅本地（`.gitignore` 忽略） |
 
-用户使用指南见根目录 [README.md](../README.md)（中文）与 [README.en.md](../README.en.md)（英文），版本变更见 [CHANGELOG.md](../CHANGELOG.md)。
+## 用户指南
+
+| 指南 | 语言 |
+| --- | --- |
+| [快速开始](guides/quickstart.md) · [Quick Start](guides/quickstart.en.md) | 中文 / English |
+| [配置](guides/configuration.md) · [Configuration](guides/configuration.en.md) | 中文 / English |
+| [隐私与许可证](guides/privacy.md) · [Privacy and Licenses](guides/privacy.en.md) | 中文 / English |
+
+用户使用指南的落地页见根目录 [README.md](../README.md)（中文）与 [README.en.md](../README.en.md)（英文），版本变更见 [CHANGELOG.md](../CHANGELOG.md)。
 
 ## 研究记录
 
