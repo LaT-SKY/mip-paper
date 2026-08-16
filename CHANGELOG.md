@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-08-17
+
+### Fixed
+
+- Restore automatic KWin coordinator activation during packaged setup so a
+  fresh installation loads the display-routing script immediately.
+
 ## [0.3.6] - 2026-08-17
 
 ### Changed
