@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-08-16
+
+### Fixed
+
+- Packaged/AUR setup now loads the KWin display coordinator from its actual
+  system package path instead of an absent per-user path, so wallpaper windows
+  are assigned to their independent displays after a clean installation.
+- KWin script activation now fails loudly when D-Bus loading or startup fails,
+  and `mip-paper doctor` verifies that the coordinator is actually loaded.
+
 ## [0.3.3] - 2026-08-16
 
 ### Added
