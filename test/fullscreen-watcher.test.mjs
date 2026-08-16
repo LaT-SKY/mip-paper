@@ -1,0 +1,218 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  FULLSCREEN_INTERFACE,
+  FULLSCREEN_METHOD,
+  FULLSCREEN_PATH,
+  FULLSCREEN_SERVICE,
+  createFullscreenTracker,
+  createFullscreenWatcher,
+} from '../src/fullscreen-watcher.mjs';
+
+function fakeMessage({ path, interface: iface, member, body }) {
+  return { path, interface: iface, member, body };
+}
+
+function createFakeBus() {
+  const state = {
+    requestNames: [],
+    releases: [],
+    disconnectCount: 0,
+    addedHandlers: [],
+    removedHandlers: [],
+    sent: [],
+  };
+  const handlers = [];
+  const bus = {
+    async requestName(name) { state.requestNames.push(name); return 1; },
+    releaseName(name) { state.releases.push(name); },
+    disconnect() { state.disconnectCount += 1; },
+    addMethodHandler(fn) { handlers.push(fn); state.addedHandlers.push(fn); },
+    removeMethodHandler(fn) { state.removedHandlers.push(fn); },
+    send(msg) { state.sent.push(msg); },
+  };
+  return { bus, handlers, state };
+}
+
+function createFakeDbus(bus) {
+  return {
+    sessionBus: () => bus,
+    Message: {
+      newMethodReturn: (msg, signature, body) => ({ __reply: true, to: msg, signature, body }),
+    },
+  };
+}
+
+const DISPLAYS = Object.freeze([
+  { id: 11, bounds: { x: 0, y: 0, width: 1920, height: 1080 } },
+  { id: 22, bounds: { x: 1920, y: 0, width: 2560, height: 1440 } },
+]);
+
+function pushMessage({ x = 0, y = 0, width = 1920, height = 1080, fullscreen = true, name = 'DP-1' } = {}) {
+  return fakeMessage({
+    path: FULLSCREEN_PATH,
+    interface: FULLSCREEN_INTERFACE,
+    member: FULLSCREEN_METHOD,
+    body: [name, x, y, width, height, fullscreen],
+  });
+}
+
+test('tracker emits a change only when a key toggles and reset unpauses', () => {
+  const tracker = createFullscreenTracker();
+  assert.deepEqual(tracker.apply('11', true), { outputKey: '11', paused: true });
+  assert.equal(tracker.apply('11', true), null);
+  assert.deepEqual(tracker.apply('22', true), { outputKey: '22', paused: true });
+  assert.deepEqual(tracker.reset(), [
+    { outputKey: '11', paused: false },
+    { outputKey: '22', paused: false },
+  ]);
+  assert.deepEqual(tracker.reset(), []);
+});
+
+test('watcher owns the service name and registers a method handler on start', async () => {
+  const { bus, state } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const changes = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onStateChange: (displayId, paused) => changes.push([displayId, paused]),
+  });
+  await watcher.start();
+  assert.deepEqual(state.requestNames, [FULLSCREEN_SERVICE]);
+  assert.equal(state.addedHandlers.length, 1);
+  await watcher.stop();
+  assert.equal(state.removedHandlers.length, 1);
+  assert.deepEqual(state.releases, [FULLSCREEN_SERVICE]);
+  assert.equal(state.disconnectCount, 1);
+});
+
+test('handles SetOutputFullscreen by geometry and broadcasts only real changes', async () => {
+  const { bus, handlers, state } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const changes = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onStateChange: (displayId, paused) => changes.push([displayId, paused]),
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  assert.equal(handle(pushMessage({ x: 0, y: 0, width: 1920, height: 1080, fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true]]);
+  assert.equal(state.sent.length, 1);
+  assert.equal(state.sent[0].__reply, true);
+
+  // Heartbeat re-push with the same state is acknowledged but deduped.
+  assert.equal(handle(pushMessage({ x: 0, y: 0, width: 1920, height: 1080, fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true]]);
+  assert.equal(state.sent.length, 2);
+
+  // The second display pauses independently.
+  assert.equal(handle(pushMessage({ x: 1920, y: 0, width: 2560, height: 1440, fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true], [22, true]]);
+
+  // Leaving fullscreen resumes only that display.
+  assert.equal(handle(pushMessage({ x: 1920, y: 0, width: 2560, height: 1440, fullscreen: false })), true);
+  assert.deepEqual(changes, [[11, true], [22, true], [22, false]]);
+
+  assert.equal(watcher.isPaused(11), true);
+  assert.equal(watcher.isPaused(22), false);
+  await watcher.stop();
+});
+
+test('matches display geometry within one pixel of rounding', async () => {
+  const { bus, handlers } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const changes = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onStateChange: (displayId, paused) => changes.push([displayId, paused]),
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  assert.equal(handle(pushMessage({ x: 1, y: 0, width: 1920, height: 1080, fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true]]);
+
+  // A geometry that matches no display is acknowledged but ignored.
+  assert.equal(handle(pushMessage({ x: 9999, y: 9999, width: 640, height: 480, fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true]]);
+  await watcher.stop();
+});
+
+test('ignores unrelated messages and malformed bodies', async () => {
+  const { bus, handlers } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const changes = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onStateChange: (displayId, paused) => changes.push([displayId, paused]),
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  assert.equal(handle(fakeMessage({ path: '/Elsewhere', interface: FULLSCREEN_INTERFACE, member: FULLSCREEN_METHOD, body: [] })), false);
+  assert.equal(handle(fakeMessage({ path: FULLSCREEN_PATH, interface: 'org.example.Other', member: FULLSCREEN_METHOD, body: [] })), false);
+  assert.equal(handle(fakeMessage({ path: FULLSCREEN_PATH, interface: FULLSCREEN_INTERFACE, member: 'OtherMethod', body: [] })), false);
+  assert.equal(handle(fakeMessage({ path: FULLSCREEN_PATH, interface: FULLSCREEN_INTERFACE, member: FULLSCREEN_METHOD, body: ['only-one'] })), false);
+  assert.equal(handle(fakeMessage({ path: FULLSCREEN_PATH, interface: FULLSCREEN_INTERFACE, member: FULLSCREEN_METHOD, body: null })), false);
+  assert.deepEqual(changes, []);
+  await watcher.stop();
+});
+
+test('acknowledges pushes while disabled but ignores them and unpauses on disable', async () => {
+  const { bus, handlers, state } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const changes = [];
+  let enabled = true;
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onStateChange: (displayId, paused) => changes.push([displayId, paused]),
+    enabled: () => enabled,
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  assert.equal(handle(pushMessage({ fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true]]);
+
+  watcher.setEnabled(false);
+  assert.deepEqual(changes, [[11, true], [11, false]]);
+  assert.equal(watcher.isPaused(11), false);
+
+  // While disabled, pushes are acknowledged but produce no state change.
+  assert.equal(handle(pushMessage({ fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true], [11, false]]);
+  assert.equal(state.sent.length, 2);
+
+  // Re-enabling does not unpause; the heartbeat re-push re-learns state.
+  watcher.setEnabled(true);
+  assert.deepEqual(changes, [[11, true], [11, false]]);
+  assert.equal(handle(pushMessage({ fullscreen: true })), true);
+  assert.deepEqual(changes, [[11, true], [11, false], [11, true]]);
+  await watcher.stop();
+});
+
+test('start failure logs and leaves the watcher stopped', async () => {
+  const bus = {
+    async requestName() { throw new Error('bus unavailable'); },
+    disconnect() {},
+  };
+  const dbusModule = createFakeDbus(bus);
+  const errors = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    log: (message) => errors.push(message),
+  });
+  await watcher.start();
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /Fullscreen D-Bus service unavailable/);
+  assert.equal(watcher.isPaused(11), false);
+});

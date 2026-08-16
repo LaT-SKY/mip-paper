@@ -55,7 +55,7 @@ mip-paper wallpaper use-kde
 `setup`（源码安装为 `install`）会为 Mip-Paper 窗口安装两项 KWin 集成：
 
 - **窗口规则**：按窗口类 `mip-paper` 匹配，强制全屏、无边框、位于其他窗口下方（below），并排除在任务栏、分页器和 Alt+Tab 切换器之外，作用于所有虚拟桌面。0.3.2 起该规则不再强制窗口“忽略焦点”，窗口按 KWin 默认策略参与焦点处理；升级到 0.3.2 时会自动清理旧规则中遗留的 `acceptfocus` 键。
-- **显示协调器**（KWin Script）：从窗口标题读取其声明的目标显示器，把每个壁纸窗口移动到对应输出并固定几何形状，处理显示器热插拔与屏幕顺序变化。
+- **显示协调器**（KWin Script）：从窗口标题读取其声明的目标显示器，把每个壁纸窗口移动到对应输出并固定几何形状，处理显示器热插拔与屏幕顺序变化，并上报各输出上的全屏窗口状态（经会话总线 `org.mip.Paper`）。
 
 卸载（`teardown` / `uninstall`）会移除以上两项集成。
 
@@ -223,7 +223,8 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
     "deadZonePx": 2,
     "horizontalPanPercent": 4.6,
     "verticalPanPercent": 4.5,
-    "maxRotationDegrees": 0.7
+    "maxRotationDegrees": 0.7,
+    "pauseWhenFullscreen": true
   },
   "panel": {
     "autoExpandHide": true,
@@ -303,6 +304,9 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | `motion.horizontalPanPercent` | 有限数值，`>= 0` % | `4.6` | 最大水平平移占视口宽度的比例 | 实时热加载 |
 | `motion.verticalPanPercent` | 有限数值，`>= 0` % | `4.5` | 最大垂直平移占视口高度的比例 | 实时热加载 |
 | `motion.maxRotationDegrees` | 有限数值，`>= 0` 度 | `0.7` | 最大画面旋转角度 | 实时热加载 |
+| `motion.pauseWhenFullscreen` | boolean | `true` | 显示器上出现全屏窗口时暂停该屏壁纸的移动与渲染，窗口关闭后自动恢复 | 实时热加载 |
+
+当某台显示器上出现全屏窗口（视频、游戏等）时，该屏壁纸的渲染循环会完全停止，相机、面板与音频一并冻结，节省 GPU/CPU；其他显示器不受影响。全屏窗口关闭或移出该屏后，壁纸从冻结位置继续漂移。壁纸自身的窗口不会触发暂停。该功能通过显示协调器（KWin Script）经会话总线 `org.mip.Paper` 上报，仅当前桌面会话可见。
 
 ### 悬浮信息面板
 

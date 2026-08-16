@@ -13,6 +13,7 @@ export function createShutdownCoordinator({
   stopAudioSpectrum = async () => {},
   stopInformation = () => {},
   stopWindowManager = () => {},
+  stopFullscreenWatcher = () => {},
   logger = console,
 } = {}) {
   if (typeof quit !== 'function') throw new TypeError('quit must be a function');
@@ -37,6 +38,7 @@ export function createShutdownCoordinator({
     await stop('color service', stopColorService);
     await stop('audio spectrum', stopAudioSpectrum);
     await stop('information service', stopInformation);
+    await stop('fullscreen watcher', stopFullscreenWatcher);
     await stop('window manager', stopWindowManager);
     quitAllowed = true;
     quit();

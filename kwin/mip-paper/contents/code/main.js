@@ -1,7 +1,12 @@
 const APP_ID = 'mip-paper';
 const LOG_PREFIX = 'mip-paper-coordinator:';
 const TARGET_PATTERN = /^mip-paper\|display=(-?\d+)\|bounds=(-?\d+),(-?\d+),(\d+),(\d+)$/;
+const FULLSCREEN_SERVICE = 'org.mip.Paper';
+const FULLSCREEN_PATH = '/Fullscreen';
+const FULLSCREEN_INTERFACE = 'org.mip.Paper.Fullscreen';
+const FULLSCREEN_HEARTBEAT_MS = 5000;
 const tracked = new Map();
+const fullscreenByOutput = new Map();
 let reconciling = false;
 
 function parseTarget(caption) {
@@ -89,22 +94,88 @@ function reconcile(reason) {
   }
 }
 
+// Report whether any non-wallpaper window is fullscreen on the given output.
+// The mip-paper windows are excluded because the KWin rule forces them
+// fullscreen; they must never pause the wallpaper themselves.
+function outputHasFullscreen(output) {
+  return workspace.windowList().some((window) =>
+    window.resourceClass !== APP_ID
+    && window.output
+    && window.output.name === output.name
+    && window.fullScreen === true);
+}
+
+// Push per-output fullscreen state to the wallpaper service over D-Bus.
+// Change-driven pushes log failures; heartbeat pushes (force) are silent so a
+// stopped service does not spam the KWin log.
+function pushFullscreenState({ force = false, silent = false } = {}) {
+  for (const output of workspace.screenOrder) {
+    const hasFullscreen = outputHasFullscreen(output);
+    if (!force && fullscreenByOutput.get(output.name) === hasFullscreen) {
+      continue;
+    }
+    fullscreenByOutput.set(output.name, hasFullscreen);
+    const geometry = output.geometry || {};
+    callDBus(
+      FULLSCREEN_SERVICE,
+      FULLSCREEN_PATH,
+      FULLSCREEN_INTERFACE,
+      'SetOutputFullscreen',
+      output.name,
+      geometry.x || 0,
+      geometry.y || 0,
+      geometry.width || 0,
+      geometry.height || 0,
+      hasFullscreen,
+      (error) => {
+        if (error && !silent) {
+          console.info(`${LOG_PREFIX} fullscreen-push-error output=${output.name} fullscreen=${hasFullscreen} error=${error}`);
+        }
+      },
+    );
+  }
+}
+
 function track(window) {
-  if (!window || window.resourceClass !== APP_ID || tracked.has(window)) return;
+  if (!window || tracked.has(window)) return;
   tracked.set(window, true);
+  // Fullscreen state is observed for every window, not only project windows.
+  // Some window kinds lack certain signals, so guard each connection.
+  if (window.fullScreenChanged && typeof window.fullScreenChanged.connect === 'function') {
+    window.fullScreenChanged.connect(() => pushFullscreenState());
+  }
+  if (window.outputChanged && typeof window.outputChanged.connect === 'function') {
+    window.outputChanged.connect(() => pushFullscreenState());
+  }
+  if (window.closed && typeof window.closed.connect === 'function') {
+    window.closed.connect(() => {
+      tracked.delete(window);
+      pushFullscreenState();
+    });
+  }
+  if (window.resourceClass !== APP_ID) return;
   window.captionChanged.connect(() => reconcile('caption-changed'));
   window.outputChanged.connect(() => reconcile('output-changed'));
-  window.closed.connect(() => {
-    tracked.delete(window);
-    reconcile('window-closed');
-  });
+  window.closed.connect(() => reconcile('window-closed'));
 }
 
 workspace.windowList().forEach(track);
 workspace.windowAdded.connect((window) => {
   track(window);
   reconcile('window-added');
+  pushFullscreenState();
 });
-workspace.screensChanged.connect(() => reconcile('screens-changed'));
-workspace.screenOrderChanged.connect(() => reconcile('screen-order-changed'));
+workspace.windowRemoved.connect(() => pushFullscreenState());
+workspace.screensChanged.connect(() => {
+  reconcile('screens-changed');
+  pushFullscreenState();
+});
+workspace.screenOrderChanged.connect(() => {
+  reconcile('screen-order-changed');
+  pushFullscreenState();
+});
 reconcile('startup');
+pushFullscreenState();
+// Heartbeat: re-push current state so a service restarted while a fullscreen
+// window is already open converges within a few seconds.
+setInterval(() => pushFullscreenState({ force: true, silent: true }), FULLSCREEN_HEARTBEAT_MS);

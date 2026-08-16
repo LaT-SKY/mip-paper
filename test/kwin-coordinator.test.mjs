@@ -27,7 +27,22 @@ function wallpaper(id, title, currentOutput) {
     output: currentOutput,
     frameGeometry: null,
     noBorder: false,
+    fullScreen: false,
     captionChanged: new Signal(),
+    fullScreenChanged: new Signal(),
+    outputChanged: new Signal(),
+    closed: new Signal(),
+  };
+}
+
+function appWindow(id, currentOutput, fullScreen = false) {
+  return {
+    internalId: id,
+    resourceClass: 'unrelated-application',
+    caption: 'Some App',
+    output: currentOutput,
+    fullScreen,
+    fullScreenChanged: new Signal(),
     outputChanged: new Signal(),
     closed: new Signal(),
   };
@@ -41,6 +56,7 @@ async function runCoordinator({ outputs, windows }) {
     screenOrder: outputs,
     windowList: () => windows,
     windowAdded: new Signal(),
+    windowRemoved: new Signal(),
     screensChanged: new Signal(),
     screenOrderChanged: new Signal(),
     sendClientToScreen(window, target) {
@@ -50,9 +66,45 @@ async function runCoordinator({ outputs, windows }) {
     },
     raiseWindow(window) { raises.push(window); },
   };
+  const dbusCalls = [];
+  const dbusCallbacks = [];
+  const intervals = [];
+  const context = {
+    workspace,
+    console: { info: (line) => logs.push(line) },
+    callDBus(...args) {
+      dbusCalls.push(args);
+      const callback = args[args.length - 1];
+      if (typeof callback === 'function') dbusCallbacks.push(callback);
+    },
+    setInterval(fn, ms) {
+      intervals.push({ fn, ms });
+      return intervals.length;
+    },
+  };
   const source = await readFile('kwin/mip-paper/contents/code/main.js', 'utf8');
-  vm.runInNewContext(source, { workspace, console: { info: (line) => logs.push(line) } });
-  return { workspace, moves, raises, logs };
+  vm.runInNewContext(source, context);
+  return { workspace, moves, raises, logs, dbusCalls, dbusCallbacks, intervals };
+}
+
+function pushArgs(call) {
+  return {
+    service: call[0],
+    path: call[1],
+    interface: call[2],
+    method: call[3],
+    output: call[4],
+    x: call[5],
+    y: call[6],
+    width: call[7],
+    height: call[8],
+    fullscreen: call[9],
+  };
+}
+
+function singlePush(result) {
+  assert.equal(result.dbusCalls.length, 1);
+  return pushArgs(result.dbusCalls[0]);
 }
 
 test('moves duplicate-output wallpaper windows to their declared targets', async () => {
@@ -210,4 +262,116 @@ test('tracks and reconciles a newly added wallpaper window once', async () => {
   assert.equal(moves.length, 1);
   assert.equal(moves[0][0], added);
   assert.equal(moves[0][1], primary);
+});
+
+test('pushes fullscreen state with output geometry on startup', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const fullscreen = appWindow('video', primary, true);
+  const result = await runCoordinator({ outputs: [primary], windows: [fullscreen] });
+
+  const push = singlePush(result);
+  assert.equal(push.service, 'org.mip.Paper');
+  assert.equal(push.path, '/Fullscreen');
+  assert.equal(push.interface, 'org.mip.Paper.Fullscreen');
+  assert.equal(push.method, 'SetOutputFullscreen');
+  assert.equal(push.output, 'eDP-1');
+  assert.equal(push.x, 0);
+  assert.equal(push.y, 0);
+  assert.equal(push.width, 1536);
+  assert.equal(push.height, 960);
+  assert.equal(push.fullscreen, true);
+});
+
+test('never pauses for the mip-paper windows themselves', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const own = wallpaper('own', 'mip-paper|display=11|bounds=0,0,1536,960', primary);
+  own.fullScreen = true;
+  const result = await runCoordinator({ outputs: [primary], windows: [own] });
+
+  assert.equal(result.dbusCalls.length, 1);
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, false);
+});
+
+test('pushes toggles when a window enters and leaves fullscreen', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const video = appWindow('video', primary, false);
+  const result = await runCoordinator({ outputs: [primary], windows: [video] });
+  result.dbusCalls.length = 0;
+
+  video.fullScreen = true;
+  video.fullScreenChanged.emit();
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, true);
+
+  video.fullScreen = false;
+  video.fullScreenChanged.emit();
+  assert.equal(pushArgs(result.dbusCalls[1]).fullscreen, false);
+});
+
+test('pushes unpause when a fullscreen window closes and leaves the list', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const video = appWindow('video', primary, true);
+  const windows = [video];
+  const result = await runCoordinator({ outputs: [primary], windows });
+  result.dbusCalls.length = 0;
+
+  video.closed.emit();
+  windows.length = 0;
+  result.workspace.windowRemoved.emit(video);
+
+  assert.equal(result.dbusCalls.length, 1);
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, false);
+});
+
+test('pushes when a fullscreen window is added to the workspace', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const windows = [];
+  const result = await runCoordinator({ outputs: [primary], windows });
+  result.dbusCalls.length = 0;
+  const video = appWindow('video', primary, true);
+
+  windows.push(video);
+  result.workspace.windowAdded.emit(video);
+
+  assert.equal(result.dbusCalls.length, 1);
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, true);
+});
+
+test('pushes per-output state when a fullscreen window changes outputs', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const secondary = output('HDMI-A-1', { x: 1536, y: 0, width: 1932, height: 1087 });
+  const video = appWindow('video', primary, true);
+  const result = await runCoordinator({ outputs: [primary, secondary], windows: [video] });
+  result.dbusCalls.length = 0;
+
+  video.output = secondary;
+  video.outputChanged.emit();
+
+  const pushes = result.dbusCalls.map(pushArgs);
+  assert.equal(pushes.find((p) => p.output === 'eDP-1').fullscreen, false);
+  assert.equal(pushes.find((p) => p.output === 'HDMI-A-1').fullscreen, true);
+});
+
+test('registers a heartbeat that force re-pushes unchanged state', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const video = appWindow('video', primary, true);
+  const result = await runCoordinator({ outputs: [primary], windows: [video] });
+
+  assert.equal(result.intervals.length, 1);
+  assert.equal(result.intervals[0].ms, 5000);
+  assert.equal(result.dbusCalls.length, 1);
+
+  result.intervals[0].fn();
+
+  assert.equal(result.dbusCalls.length, 2);
+  assert.equal(pushArgs(result.dbusCalls[1]).fullscreen, true);
+});
+
+test('logs callDBus failures only for change-driven pushes', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const video = appWindow('video', primary, true);
+  const result = await runCoordinator({ outputs: [primary], windows: [video] });
+
+  result.dbusCallbacks[0]('No such service');
+
+  assert.match(result.logs.join('\n'), /fullscreen-push-error output=eDP-1 fullscreen=true error=No such service/);
 });

@@ -36,6 +36,7 @@ test('defaults match the approved v1 design', () => {
       horizontalPanPercent: 4.6,
       verticalPanPercent: 4.5,
       maxRotationDegrees: 0.7,
+      pauseWhenFullscreen: true,
     },
     panel: {
       autoExpandHide: true,
@@ -210,6 +211,18 @@ test('rejects non-finite and negative motion values', () => {
   assert.throws(
     () => validateConfig({ motion: { deadZonePx: -1 } }),
     /motion\.deadZonePx must be a finite number at least 0/,
+  );
+});
+
+test('validates the fullscreen pause toggle', () => {
+  assert.equal(validateConfig({ motion: { pauseWhenFullscreen: false } }).motion.pauseWhenFullscreen, false);
+  assert.throws(
+    () => validateConfig({ motion: { pauseWhenFullscreen: 'yes' } }),
+    /motion\.pauseWhenFullscreen must be a boolean/,
+  );
+  assert.throws(
+    () => validateConfig({ motion: { pauseWhenFullscreen: 1 } }),
+    /motion\.pauseWhenFullscreen must be a boolean/,
   );
 });
 

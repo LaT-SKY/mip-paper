@@ -9,6 +9,7 @@ const CONFIG_UPDATED_CHANNEL = 'wallpaper:config-updated';
 const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
 const COLOR_UPDATED_CHANNEL = 'wallpaper:color-updated';
 const COLOR_SUBMIT_CHANNEL = 'wallpaper:submit-color';
+const FULLSCREEN_UPDATED_CHANNEL = 'wallpaper:fullscreen-updated';
 
 contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
   getBootstrap: () => ipcRenderer.invoke(BOOTSTRAP_CHANNEL),
@@ -40,4 +41,9 @@ contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
     return () => ipcRenderer.removeListener(COLOR_UPDATED_CHANNEL, wrapper);
   },
   submitWallpaperAccent: (submission) => ipcRenderer.invoke(COLOR_SUBMIT_CHANNEL, submission),
+  onFullscreenUpdated: (listener) => {
+    const wrapper = (_event, payload) => listener(payload);
+    ipcRenderer.on(FULLSCREEN_UPDATED_CHANNEL, wrapper);
+    return () => ipcRenderer.removeListener(FULLSCREEN_UPDATED_CHANNEL, wrapper);
+  },
 }));

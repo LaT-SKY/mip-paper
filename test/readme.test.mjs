@@ -23,6 +23,7 @@ const configurationFields = [
   'motion.horizontalPanPercent',
   'motion.verticalPanPercent',
   'motion.maxRotationDegrees',
+  'motion.pauseWhenFullscreen',
   'panel.autoExpandHide',
   'panel.expandTriggerDistancePx',
   'panel.collapseDelaySeconds',

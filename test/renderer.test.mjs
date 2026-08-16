@@ -184,6 +184,26 @@ test('renderer consumes the motion core and read-only preload bootstrap', async 
   assert.match(script, /createScheduler\('adaptive'\)/);
 });
 
+test('renderer freezes and resumes the loop on fullscreen pause state', async () => {
+  const script = await readFile('src/renderer/renderer.mjs', 'utf8');
+
+  assert.match(script, /onFullscreenUpdated/);
+  assert.match(script, /let paused = Boolean\(bootstrap\.paused\)/);
+  assert.match(script, /scheduler\?\.stop\(\)/);
+  assert.match(script, /scheduler\.start\(schedulerOptions\)/);
+  assert.match(script, /if \(paused\) scheduler\.stop\(\);/);
+});
+
+test('renderer refreshes a frozen frame on wallpaper, config, and resize changes', async () => {
+  const script = await readFile('src/renderer/renderer.mjs', 'utf8');
+
+  assert.match(script, /function drawOnce\(\)/);
+  assert.match(script, /if \(paused\) drawOnce\(\);/);
+  const occurrences = script.match(/if \(paused\) drawOnce\(\);/g) ?? [];
+  assert.equal(occurrences.length, 4);
+  assert.match(script, /unsubscribeFullscreen\(\);/);
+});
+
 test('return probe injects one interaction instead of continuous sweep input', async () => {
   const script = await readFile('src/renderer/renderer.mjs', 'utf8');
   assert.match(script, /probe\.scenario === 'return'[\s\S]*applyPointerSample/);

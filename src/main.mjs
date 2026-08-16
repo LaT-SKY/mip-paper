@@ -31,6 +31,7 @@ import { createKdeAccentWatcher } from './kde-accent.mjs';
 import { createColorService, colorCacheDirectory } from './color-service.mjs';
 import { createKdeAppearanceWatcher } from './kde-appearance.mjs';
 import { createAppearanceCoordinator } from './appearance.mjs';
+import { createFullscreenWatcher } from './fullscreen-watcher.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
@@ -43,6 +44,7 @@ let wallpaperSync;
 let colorService;
 let kdeAccentWatcher;
 let appearanceCoordinator;
+let fullscreenWatcher;
 const wallpaperTransactions = new Map();
 
 const shutdownCoordinator = createShutdownCoordinator({
@@ -56,6 +58,7 @@ const shutdownCoordinator = createShutdownCoordinator({
   stopWindowManager: () => manager?.stop(),
   stopWallpaperSync: () => wallpaperSync?.stop(),
   stopColorService: () => colorService?.stop(),
+  stopFullscreenWatcher: () => fullscreenWatcher?.stop(),
 });
 
 installShutdownHandlers({
@@ -230,6 +233,13 @@ async function run() {
     } : null,
   });
   await manager.start();
+  fullscreenWatcher = createFullscreenWatcher({
+    getDisplays: () => screen.getAllDisplays(),
+    onStateChange: (displayId, paused) => manager?.updateFullscreen(displayId, paused),
+    enabled: () => currentConfig.motion.pauseWhenFullscreen,
+    log: (message) => console.error(message),
+  });
+  await fullscreenWatcher.start();
   informationService.start();
   await audioSpectrumService.start();
   const credentialsPathname = weatherCredentialsPath(process.env, os.homedir());
@@ -264,6 +274,7 @@ async function run() {
         assertCurrent();
         manager.updateRuntime({ config: nextConfig, appearance: nextAppearance });
         currentConfig = nextConfig;
+        fullscreenWatcher?.setEnabled(nextConfig.motion.pauseWhenFullscreen);
       } catch (error) {
         await audioSpectrumService.updateConfig(previousConfig.audio).catch(() => {});
         const previousSources = buildWeatherSources(previousConfig, credentials, cache);

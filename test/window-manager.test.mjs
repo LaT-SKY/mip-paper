@@ -12,6 +12,7 @@ import {
   INFORMATION_UPDATED_CHANNEL,
   CONFIG_UPDATED_CHANNEL,
   WALLPAPER_UPDATED_CHANNEL,
+  FULLSCREEN_UPDATED_CHANNEL,
   createWindowManager,
   formatDisplayTargetTitle,
 } from '../src/window-manager.mjs';
@@ -258,6 +259,7 @@ test('provides bootstrap data only to a managed renderer', async () => {
     config: DEFAULT_CONFIG,
     appearance: DEFAULT_APPEARANCE,
     display: displays[0],
+    paused: false,
     wallpaper: wallpaperTransactions.get(11),
     information: { weather: { status: 'fresh' } },
     audioSpectrum: {
@@ -465,6 +467,41 @@ test('uses configuration to control mouse passthrough', async () => {
   const { manager } = createFixture(passthrough);
   await manager.start();
   assert.equal(FakeWindow.instances[0].ignoreMouse, true);
+});
+
+test('bootstrap reflects the live fullscreen pause state', async () => {
+  const { manager, displays, ipcMain } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+  const handler = ipcMain.handlers.get(BOOTSTRAP_CHANNEL);
+
+  assert.equal((await handler({ sender: first.webContents })).paused, false);
+
+  assert.equal(manager.updateFullscreen(displays[0].id, true), true);
+  assert.equal((await handler({ sender: first.webContents })).paused, true);
+  assert.equal((await handler({ sender: FakeWindow.instances[1].webContents })).paused, false);
+});
+
+test('updateFullscreen broadcasts only to the owning display', async () => {
+  const { manager, displays } = createFixture();
+  await manager.start();
+  const first = FakeWindow.instances[0];
+  const second = FakeWindow.instances[1];
+
+  assert.equal(manager.updateFullscreen(displays[0].id, true), true);
+  assert.deepEqual(first.webContents.sent.at(-1), {
+    channel: FULLSCREEN_UPDATED_CHANNEL,
+    value: { paused: true },
+  });
+  assert.equal(second.webContents.sent.some((sent) => sent.channel === FULLSCREEN_UPDATED_CHANNEL), false);
+
+  assert.equal(manager.updateFullscreen(displays[0].id, false), true);
+  assert.deepEqual(first.webContents.sent.at(-1), {
+    channel: FULLSCREEN_UPDATED_CHANNEL,
+    value: { paused: false },
+  });
+
+  assert.equal(manager.updateFullscreen(999, true), false);
 });
 
 test('stop closes windows, removes IPC, and detaches display listeners', async () => {
