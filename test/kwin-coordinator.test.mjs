@@ -67,6 +67,15 @@ function desktop(id) {
   return { id, name: 'Desktop ' + id };
 }
 
+// KWin exposes window.desktops as an array-LIKE object: it has length and
+// indexed access (even map/includes) but Array.isArray() returns false.
+// Mirror that quirk so the coordinator's normalization is exercised.
+function arrayLike(items) {
+  const list = { length: items.length };
+  for (let i = 0; i < items.length; i += 1) list[i] = items[i];
+  return list;
+}
+
 async function runCoordinator({ outputs, windows, clientArea = null, currentDesktop = 1 }) {
   const moves = [];
   const raises = [];
@@ -407,6 +416,21 @@ test('does not notify menu dismissal when a wallpaper window is activated', asyn
   assert.equal(result.dbusCalls.length, 0);
 });
 
+test('does not notify menu dismissal when an app UI window is activated', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const settings = appWindow('settings', primary, false);
+  // A future settings dialog carries the app's class with a suffix; it is
+  // part of our own interface, so activating it never dismisses menus.
+  settings.resourceClass = 'mip-paper-settings';
+  const result = await runCoordinator({ outputs: [primary], windows: [settings] });
+  result.dbusCalls.length = 0;
+
+  result.workspace.windowActivated.emit(settings);
+
+  assert.equal(result.dbusCalls.length, 0);
+  assert.equal(menuCalls(result).length, 0);
+});
+
 function menuCalls(result) {
   return result.dbusCalls.filter((call) => call[1] === '/Menu' && call[3] === 'WindowActivated');
 }
@@ -498,6 +522,30 @@ test('legacy numeric desktop model only covers the current workspace', async () 
     outputs: [primary],
     windows: [video],
     currentDesktop: 2,
+  });
+  assert.equal(same.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen').fullscreen, true);
+});
+
+test('treats an array-like desktops list (KWin quirk) as the real list', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const first = desktop('1');
+  const second = desktop('2');
+  const video = appWindow('video', primary, true);
+  // Array.isArray() is false for KWin's desktops object even though it has
+  // length and indexed access; the coordinator must still compare desktops.
+  video.desktops = arrayLike([first]);
+
+  const other = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: second,
+  });
+  assert.equal(other.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen').fullscreen, false);
+
+  const same = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: first,
   });
   assert.equal(same.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen').fullscreen, true);
 });

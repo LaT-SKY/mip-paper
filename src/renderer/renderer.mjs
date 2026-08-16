@@ -427,9 +427,33 @@ async function start() {
     if (accepted) panel.recordPointer(event.clientX - rect.left, event.clientY - rect.top, performance.now());
   });
 
-  canvas.addEventListener('pointerleave', () => {
+  canvas.addEventListener('pointerleave', (event) => {
     state.pointer.initialized = false;
     state.pointer.lastInput = -Infinity;
+    if (!currentConfig.menu.closeOnFocusChange || !menu.isOpen()) return;
+    // Dismiss the open menu when the pointer leaves the wallpaper onto
+    // another window/panel. Focus-change dismissal (windowActivated) only
+    // fires when a DIFFERENT window gains focus, so clicking the window that
+    // is already focused would otherwise leave the menu open. The pointer
+    // must leave the wallpaper surface to click any other window, so this
+    // covers that case. Same dismissal-policy toggle as focus change.
+    //
+    // The context menu itself is a sibling surface stacked above the canvas,
+    // so moving the pointer onto it fires pointerleave on the canvas; never
+    // dismiss the menu while the pointer is still over it.
+    const menuRoot = document.getElementById('context-menu');
+    const target = document.elementFromPoint(event.clientX, event.clientY)
+      ?? event.relatedTarget;
+    if (menuRoot && target && menuRoot.contains(target)) return;
+    // Also keep the menu open when the pointer moves onto one of our own app
+    // UI windows (e.g. a future settings dialog). The main process owns the
+    // registry and answers with the current cursor position.
+    void window.wallpaper.isPointerOverAppUi().then((overAppUi) => {
+      if (overAppUi) return;
+      if (menu.isOpen()) menu.close();
+    }).catch(() => {
+      if (menu.isOpen()) menu.close();
+    });
   });
 
   // Any pointer press on any display closes every other display's context

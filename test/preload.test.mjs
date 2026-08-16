@@ -60,6 +60,17 @@ test('both preload variants expose removable menu close requests', async () => {
   }
 });
 
+test('both preload variants expose the app-UI pointer query', async () => {
+  const [commonJs, module] = await Promise.all([
+    readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/preload.mjs', import.meta.url), 'utf8'),
+  ]);
+  for (const preload of [commonJs, module]) {
+    assert.match(preload, /isPointerOverAppUi\s*:\s*\(\)\s*=>\s*ipcRenderer\.invoke/);
+    assert.match(preload, /IS_POINTER_OVER_APP_UI_CHANNEL/);
+  }
+});
+
 test('both preload variants expose removable work-area updates', async () => {
   const [commonJs, module] = await Promise.all([
     readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),

@@ -108,16 +108,24 @@ function reconcile(reason) {
 // desktops with a video running elsewhere would freeze the wallpaper
 // forever. The wallpaper windows themselves are visible on all workspaces,
 // so this never affects them.
+//
+// NOTE: KWin exposes window.desktops as an array-LIKE object (it has
+// length/index access and even map/includes) but Array.isArray() returns
+// false for it, so the list is normalized with a plain loop before
+// comparing.
 function windowOnCurrentDesktop(window) {
   if (window.onAllDesktops === true) return true;
   const current = workspace.currentDesktop;
-  if (Array.isArray(window.desktops)) {
-    // Plasma 6: window.desktops lists the VirtualDesktop objects the window
-    // is on (empty when on all desktops) and currentDesktop is a
-    // VirtualDesktop; compare by identity or by id.
+  const desktops = window.desktops;
+  if (desktops != null) {
+    // Plasma 6: desktops lists the VirtualDesktop objects the window is on
+    // (empty when on all desktops) and currentDesktop is a VirtualDesktop;
+    // compare by identity or by id.
+    const list = [];
+    for (let i = 0; i < desktops.length; i += 1) list.push(desktops[i]);
     if (current && typeof current === 'object') {
-      return window.desktops.includes(current)
-        || window.desktops.some((desktop) => desktop && current.id != null && desktop.id === current.id);
+      return list.includes(current)
+        || list.some((desktop) => desktop && current.id != null && desktop.id === current.id);
     }
     return true;
   }
@@ -276,11 +284,20 @@ workspace.windowAdded.connect((window) => {
 });
 workspace.windowRemoved.connect(() => pushState());
 // Activation changes re-evaluate covering state and dismiss open context
-// menus. The wallpaper's own windows ignore focus and are never activated,
-// so they are skipped (their resourceClass also cannot appear here).
+// menus. Windows belonging to the app itself never dismiss menus: the
+// wallpaper windows ignore focus (acceptfocus=false) and are never
+// activated, and future app UI windows (e.g. a settings dialog) are part of
+// our own interface — activating them must not count as "focusing another
+// app". App windows are identified by resourceClass 'mip-paper' or a
+// suffixed variant such as 'mip-paper-settings'.
+function isAppWindow(window) {
+  return typeof window.resourceClass === 'string'
+    && (window.resourceClass === APP_ID || window.resourceClass.startsWith(APP_ID + '-'));
+}
+
 workspace.windowActivated.connect((window) => {
   pushState();
-  if (!window || window.resourceClass === APP_ID) return;
+  if (!window || isAppWindow(window)) return;
   callDBus(
     FULLSCREEN_SERVICE,
     MENU_PATH,

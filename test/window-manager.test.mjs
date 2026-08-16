@@ -13,6 +13,7 @@ import {
   CONFIG_UPDATED_CHANNEL,
   WALLPAPER_UPDATED_CHANNEL,
   FULLSCREEN_UPDATED_CHANNEL,
+  IS_POINTER_OVER_APP_UI_CHANNEL,
   MENU_CLOSE_CHANNEL,
   createWindowManager,
   formatDisplayTargetTitle,
@@ -119,10 +120,15 @@ class FakeScreen extends EventEmitter {
   constructor(displays) {
     super();
     this.displays = displays;
+    this.cursor = { x: 0, y: 0 };
   }
 
   getAllDisplays() {
     return this.displays;
+  }
+
+  getCursorScreenPoint() {
+    return { ...this.cursor };
   }
 }
 
@@ -536,6 +542,66 @@ test('closeMenus asks every display to dismiss its context menu', async () => {
   );
 });
 
+test('is-pointer-over-app-ui consults the app UI window registry', async () => {
+  const { manager, screen, ipcMain } = createFixture();
+  await manager.start();
+  const handler = ipcMain.handlers.get(IS_POINTER_OVER_APP_UI_CHANNEL);
+  const sender = { id: FakeWindow.instances[0].webContents.id };
+
+  // No app UI windows registered yet: the pointer is never over one.
+  screen.cursor = { x: 250, y: 250 };
+  assert.equal(await handler({ sender }), false);
+
+  // A future settings window registers as an app UI window at (100,100) 400x300.
+  const uiWindow = {
+    getPosition: () => [100, 100],
+    getSize: () => [400, 300],
+    isDestroyed: () => false,
+    once: () => {},
+  };
+  manager.registerAppUiWindow(uiWindow);
+
+  screen.cursor = { x: 250, y: 250 };
+  assert.equal(await handler({ sender }), true);
+  // Boundary and outside points are not inside the window.
+  screen.cursor = { x: 100, y: 100 };
+  assert.equal(await handler({ sender }), true);
+  screen.cursor = { x: 500, y: 400 };
+  assert.equal(await handler({ sender }), false);
+  screen.cursor = { x: 0, y: 0 };
+  assert.equal(await handler({ sender }), false);
+
+  // Unregistering removes the window from the check.
+  manager.unregisterAppUiWindow(uiWindow);
+  screen.cursor = { x: 250, y: 250 };
+  assert.equal(await handler({ sender }), false);
+
+  // Unknown renderers are rejected like every other channel.
+  assert.throws(() => handler({ sender: { id: 999 } }), /Unknown wallpaper renderer/);
+});
+
+test('app UI window registration survives window close via auto-unregister', async () => {
+  const { manager, screen, ipcMain } = createFixture();
+  await manager.start();
+  const handler = ipcMain.handlers.get(IS_POINTER_OVER_APP_UI_CHANNEL);
+  const sender = { id: FakeWindow.instances[0].webContents.id };
+  let closeHandler = null;
+  const uiWindow = {
+    getPosition: () => [0, 0],
+    getSize: () => [100, 100],
+    isDestroyed: () => false,
+    once: (name, handler) => { closeHandler = handler; },
+  };
+  manager.registerAppUiWindow(uiWindow);
+
+  screen.cursor = { x: 50, y: 50 };
+  assert.equal(await handler({ sender }), true);
+
+  closeHandler();
+  screen.cursor = { x: 50, y: 50 };
+  assert.equal(await handler({ sender }), false);
+});
+
 test('stop closes windows, removes IPC, and detaches display listeners', async () => {
   const {
     manager, screen, ipcMain, informationListeners, audioListeners,
@@ -547,6 +613,7 @@ test('stop closes windows, removes IPC, and detaches display listeners', async (
   assert.equal(ipcMain.handlers.has(BOOTSTRAP_CHANNEL), false);
   assert.equal(ipcMain.handlers.has(INFORMATION_CHANNEL), false);
   assert.equal(ipcMain.handlers.has(COLOR_SUBMIT_CHANNEL), false);
+  assert.equal(ipcMain.handlers.has(IS_POINTER_OVER_APP_UI_CHANNEL), false);
   assert.equal(screen.listenerCount('display-added'), 0);
   assert.equal(screen.listenerCount('display-removed'), 0);
   assert.equal(screen.listenerCount('display-metrics-changed'), 0);

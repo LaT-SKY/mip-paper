@@ -361,7 +361,11 @@ Custom commands are added through the `menu.customCommands` array and hot reload
 
 `menu.avoidObstacles` (default `true`) enables obstacle avoidance: the KWin coordinator continuously reports each output's work area (output geometry minus the space occupied by Plasma panels/app bars), and the menu clamps inside it near docks so it is never occluded. Work areas track panel changes and display hot-plugs in real time; without panels the menu clamps to the full screen.
 
-**Focus dismissal**: with `menu.closeOnFocusChange` (default `true`), the KWin coordinator notifies the service whenever a non-wallpaper window is activated (e.g. you click another app), and every open menu dismisses itself. The wallpaper windows themselves ignore focus, so right-clicking to open the menu never triggers a spurious close. As a fallback, `menu.autoCloseMs` auto-closes the menu after the given number of idle milliseconds (`0` disables it) — useful when the coordinator is unavailable or you never want a menu to linger. The two mechanisms are independent.
+**Focus dismissal**: with `menu.closeOnFocusChange` (default `true`), the KWin coordinator notifies the service whenever a non-wallpaper window is activated (e.g. you click another app), and every open menu dismisses itself. Moving the pointer off the wallpaper (onto another window or a panel) also dismisses the menu immediately — this covers clicking a window that is **already focused**, where no activation signal fires because the pointer necessarily left the wallpaper. The wallpaper windows themselves ignore focus, so right-clicking to open the menu never triggers a spurious close.
+
+**Own-interface exclusion**: the context menu itself is a surface stacked above the canvas, so moving the pointer onto it (e.g. between menu items) never dismisses it. Future app UI windows shipped with the application (e.g. a settings dialog) are also excluded — they are part of the same app (`mip-paper` window class), so focusing them or moving the pointer into them is not "focusing another app"; both the KWin coordinator and the main process exclude them from auto-dismissal.
+
+As a fallback, `menu.autoCloseMs` auto-closes the menu after the given number of idle milliseconds (`0` disables it) — useful when the coordinator is unavailable or you never want a menu to linger. The three mechanisms are independent.
 
 ## Diagnostics and Common Problems
 
