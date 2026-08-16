@@ -599,7 +599,11 @@ NODE
   fi
   if [[ -x "$coordinator_helper" ]] \
     && KWIN_SCRIPT_SOURCE="$coordinator_source" "$coordinator_helper" "$coordinator_command" >/dev/null 2>&1; then
-    check_pass 'KWin coordinator' 'display coordinator is installed and enabled'
+    if KWIN_SCRIPT_SOURCE="$coordinator_source" "$coordinator_helper" check-loaded >/dev/null 2>&1; then
+      check_pass 'KWin coordinator' 'display coordinator is installed, enabled, and loaded'
+    else
+      check_fail 'KWin coordinator' 'display coordinator is enabled but not loaded'
+    fi
   else
     check_fail 'KWin coordinator' 'display coordinator is missing or disabled'
   fi
