@@ -54,19 +54,23 @@ function setup(name, mode = 'interactive') {
     draw: (...args) => draws.push(args),
     report: (event) => reports.push(event),
   });
-  return { clock, state, scheduler, advances, draws, reports };
+  return { name, clock, state, scheduler, advances, draws, reports };
+}
+
+function runFrame(run, time) {
+  if (run.name === 'timer') {
+    run.clock.runTimer(time);
+    return;
+  }
+  if (run.name === 'adaptive') run.clock.runTimer(time);
+  run.clock.runRaf(time);
 }
 
 for (const name of SCHEDULER_NAMES) {
   test(`${name} advances with elapsed seconds without mutating motion state`, () => {
     const { clock, state, scheduler, advances } = setup(name);
-    if (name === 'timer') {
-      clock.runTimer(0);
-      clock.runTimer(25);
-    } else {
-      clock.runRaf(0);
-      clock.runRaf(25);
-    }
+    runFrame({ name, clock }, 0);
+    runFrame({ name, clock }, 25);
     assert.equal(advances.length, 2);
     assert.equal(advances[1][1], 0.025);
     assert.deepEqual(state, { mode: 'interactive', untouched: { value: 1 } });
@@ -81,10 +85,11 @@ test('interactive mode draws at 60 FPS', () => {
   scheduler.stop();
 });
 
-test('adaptive drift mode skips alternate VSync callbacks at 30 FPS', () => {
+test('adaptive drift mode draws at its configured 30 FPS deadline', () => {
   const { clock, scheduler, draws } = setup('adaptive', 'drift');
-  for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60, 4000 / 60]) clock.runRaf(time);
-  assert.equal(draws.length, 3);
+  const run = { name: 'adaptive', clock };
+  for (const time of [0, 1000 / 30, 2000 / 30, 3000 / 30, 4000 / 30]) runFrame(run, time);
+  assert.equal(draws.length, 5);
   scheduler.stop();
 });
 
@@ -103,9 +108,9 @@ test('adaptive adopts drift cadence when motion requests the lower rate', () => 
     report: (event) => reports.push(event),
   });
 
-  for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60]) clock.runRaf(time);
+  for (const time of [0, 1000 / 30, 2000 / 30, 3000 / 30]) runFrame({ name: 'adaptive', clock }, time);
 
-  assert.equal(draws.length, 2);
+  assert.equal(draws.length, 4);
   assert.ok(reports.every((event) => event.targetFrameRate === 30));
   scheduler.stop();
 });
@@ -121,8 +126,8 @@ test('adaptive carries a late callback deadline while raf resets its fixed deadl
   const raf = setup('raf', 'drift');
   const adaptive = setup('adaptive', 'drift');
   for (const time of [0, 100, 110]) {
-    raf.clock.runRaf(time);
-    adaptive.clock.runRaf(time);
+    runFrame(raf, time);
+    runFrame(adaptive, time);
   }
   assert.equal(raf.draws.length, 2);
   assert.equal(adaptive.draws.length, 3);
@@ -151,21 +156,66 @@ test('timer routes frames through timers and never requests RAF', () => {
   scheduler.stop();
 });
 
-test('raf and adaptive route frames through RAF and never timers', () => {
-  for (const name of ['raf', 'adaptive']) {
-    const clock = createClock();
-    const scheduler = createScheduler(name, clock);
-    scheduler.start({
-      state: { mode: 'interactive' },
-      config: { frameRate: { interactive: 60, drift: 30 } },
-      viewport: {},
-      advance() {},
-      draw() {},
-    });
-    assert.equal(clock.queuedRaf(), 1);
-    assert.equal(clock.queuedTimers(), 0);
-    scheduler.stop();
-  }
+test('adaptive waits for its deadline before requesting one VSync frame', () => {
+  const clock = createClock();
+  const scheduler = createScheduler('adaptive', clock);
+  const advances = [];
+  const draws = [];
+  scheduler.start({
+    state: { mode: 'drift' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    advance: (...args) => advances.push(args),
+    draw: (...args) => draws.push(args),
+  });
+
+  assert.equal(clock.queuedTimers(), 1);
+  assert.equal(clock.queuedRaf(), 0);
+  clock.runTimer(0);
+  assert.equal(clock.queuedTimers(), 0);
+  assert.equal(clock.queuedRaf(), 1);
+  assert.equal(advances.length, 0);
+
+  clock.runRaf(0);
+  assert.equal(advances.length, 1);
+  assert.equal(draws.length, 1);
+  assert.equal(clock.queuedRaf(), 0);
+  assert.equal(clock.queuedTimers(), 1);
+
+  clock.runTimer(1000 / 30);
+  assert.equal(clock.queuedRaf(), 1);
+  clock.runRaf(1000 / 30);
+  assert.equal(advances.length, 2);
+  assert.equal(draws.length, 2);
+  scheduler.stop();
+});
+
+test('raf routes frames through RAF while adaptive gates RAF with a timer', () => {
+  const rafClock = createClock();
+  const rafScheduler = createScheduler('raf', rafClock);
+  rafScheduler.start({
+    state: { mode: 'interactive' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    advance() {},
+    draw() {},
+  });
+  assert.equal(rafClock.queuedRaf(), 1);
+  assert.equal(rafClock.queuedTimers(), 0);
+  rafScheduler.stop();
+
+  const adaptiveClock = createClock();
+  const adaptiveScheduler = createScheduler('adaptive', adaptiveClock);
+  adaptiveScheduler.start({
+    state: { mode: 'interactive' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    advance() {},
+    draw() {},
+  });
+  assert.equal(adaptiveClock.queuedRaf(), 0);
+  assert.equal(adaptiveClock.queuedTimers(), 1);
+  adaptiveScheduler.stop();
 });
 
 test('stop makes queued RAF callbacks inert', () => {
@@ -202,8 +252,9 @@ test('restarting invalidates queued callbacks from the previous run', () => {
 
 test('late callbacks report a missed deadline', () => {
   const { clock, scheduler, reports } = setup('adaptive');
-  clock.runRaf(0);
-  clock.runRaf(100);
+  const run = { name: 'adaptive', clock };
+  runFrame(run, 0);
+  runFrame(run, 100);
   const missed = reports.find((event) => event.type === 'missed-deadline');
   assert.ok(missed);
   assert.equal(missed.targetFrameRate, 60);
@@ -221,7 +272,10 @@ test('VSync schedulers do not require timer dependencies', () => {
     requestAnimationFrame() {},
   };
   assert.doesNotThrow(() => createScheduler('raf', dependencies));
-  assert.doesNotThrow(() => createScheduler('adaptive', dependencies));
+  assert.throws(
+    () => createScheduler('adaptive', { ...dependencies, setTimeout: undefined, clearTimeout: undefined }),
+    /setTimeout/,
+  );
   assert.throws(
     () => createScheduler('timer', { ...dependencies, setTimeout: undefined, clearTimeout: undefined }),
     /setTimeout and clearTimeout/,
@@ -230,8 +284,9 @@ test('VSync schedulers do not require timer dependencies', () => {
 
 test('reports actual callback intervals for probe timing percentiles', () => {
   const { clock, scheduler, reports } = setup('adaptive');
-  clock.runRaf(0);
-  clock.runRaf(16.7);
+  const run = { name: 'adaptive', clock };
+  runFrame(run, 0);
+  runFrame(run, 16.7);
   assert.ok(reports.some((event) => event.type === 'callback' && Math.abs(event.intervalMs - 16.7) < 0.01));
   scheduler.stop();
 });

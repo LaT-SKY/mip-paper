@@ -7,6 +7,7 @@ function defaultDependencies() {
   return {
     now: () => (typeof performance === 'undefined' ? Date.now() : performance.now()),
     requestAnimationFrame: root.requestAnimationFrame?.bind(root),
+    cancelAnimationFrame: root.cancelAnimationFrame?.bind(root),
     setTimeout: root.setTimeout?.bind(root),
     clearTimeout: root.clearTimeout?.bind(root),
   };
@@ -22,6 +23,10 @@ export function createScheduler(name, dependencies = {}) {
   if (name !== 'timer' && typeof timing.requestAnimationFrame !== 'function') {
     throw new TypeError('requestAnimationFrame must be a function');
   }
+  if (name === 'adaptive'
+    && (typeof timing.setTimeout !== 'function' || typeof timing.clearTimeout !== 'function')) {
+    throw new TypeError('setTimeout and clearTimeout must be functions for adaptive scheduling');
+  }
   if (name === 'timer'
     && (typeof timing.setTimeout !== 'function' || typeof timing.clearTimeout !== 'function')) {
     throw new TypeError('setTimeout and clearTimeout must be functions');
@@ -29,6 +34,7 @@ export function createScheduler(name, dependencies = {}) {
 
   let running = false;
   let timerId = null;
+  let animationFrameId = null;
   let options = null;
   let previousTime = null;
   let drawAccumulatorMs = 0;
@@ -46,6 +52,20 @@ export function createScheduler(name, dependencies = {}) {
         timerId = null;
         handleFrame(timing.now());
       }, 1000 / rate);
+      return;
+    }
+    if (name === 'adaptive') {
+      const now = timing.now();
+      if (nextDeadlineMs === null) nextDeadlineMs = now;
+      timerId = timing.setTimeout(() => {
+        if (!running || runGeneration !== generation) return;
+        timerId = null;
+        animationFrameId = timing.requestAnimationFrame((time) => {
+          if (!running || runGeneration !== generation) return;
+          animationFrameId = null;
+          handleFrame(time);
+        });
+      }, Math.max(0, nextDeadlineMs - now));
       return;
     }
     timing.requestAnimationFrame((time) => {
@@ -81,7 +101,8 @@ export function createScheduler(name, dependencies = {}) {
       });
     }
 
-    if (hadPreviousTime && elapsedMs > intervalMs + 1e-6) {
+    const deadlineToleranceMs = Math.max(1, intervalMs * 0.05);
+    if (hadPreviousTime && elapsedMs > intervalMs + deadlineToleranceMs) {
       options.report?.({
         type: 'missed-deadline',
         latenessMs: elapsedMs - intervalMs,
@@ -98,6 +119,8 @@ export function createScheduler(name, dependencies = {}) {
         shouldDraw = true;
         nextDeadlineMs = frameTime + intervalMs;
       }
+    } else if (name === 'adaptive') {
+      shouldDraw = true;
     } else if (!shouldDraw) {
       drawAccumulatorMs += elapsedMs;
       if (drawAccumulatorMs + 1e-6 >= intervalMs) {
@@ -107,6 +130,16 @@ export function createScheduler(name, dependencies = {}) {
       }
     }
     if (shouldDraw) options.draw(options.state, options.viewport, frameTime / 1000);
+    if (name === 'adaptive') {
+      if (nextDeadlineMs === null || nextDeadlineMs <= frameTime + deadlineToleranceMs) {
+        nextDeadlineMs = frameTime + intervalMs;
+      } else {
+        nextDeadlineMs += intervalMs;
+        while (nextDeadlineMs <= frameTime + deadlineToleranceMs) {
+          nextDeadlineMs += intervalMs;
+        }
+      }
+    }
     schedule();
   }
 
@@ -125,6 +158,10 @@ export function createScheduler(name, dependencies = {}) {
           timing.clearTimeout(timerId);
           timerId = null;
         }
+        if (animationFrameId !== null && typeof timing.cancelAnimationFrame === 'function') {
+          timing.cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
       }
       generation += 1;
       running = true;
@@ -141,6 +178,10 @@ export function createScheduler(name, dependencies = {}) {
       if (timerId !== null) {
         timing.clearTimeout(timerId);
         timerId = null;
+      }
+      if (animationFrameId !== null && typeof timing.cancelAnimationFrame === 'function') {
+        timing.cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
       }
     },
     handleFrame,
