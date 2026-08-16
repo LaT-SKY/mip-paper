@@ -296,7 +296,8 @@ install_app() {
     "$INSTALL_ROOT/scripts/kwin-script.sh" install
   systemctl --user daemon-reload
   if ((start_after_install == 1)); then
-    systemctl --user reenable --now "$SERVICE_NAME"
+    systemctl --user reenable "$SERVICE_NAME"
+    systemctl --user start "$SERVICE_NAME"
   fi
 
   committed=1

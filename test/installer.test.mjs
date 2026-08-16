@@ -61,7 +61,7 @@ printf '{"name":"fft.js","version":"4.0.4"}\n' > "$prefix/node_modules/fft.js/pa
 
   await writeExecutable(path.join(fakeBin, 'systemctl'), `#!/usr/bin/env bash
 printf '%s\n' "$*" >> "$SYSTEMCTL_LOG"
-if [[ "\${FAKE_SYSTEMCTL_FAIL_ENABLE:-0}" == 1 && "$*" == *'reenable --now'* ]]; then exit 8; fi
+if [[ "\${FAKE_SYSTEMCTL_FAIL_ENABLE:-0}" == 1 && "$*" == *'start mip-paper.service'* ]]; then exit 8; fi
 case "$*" in
   *'is-enabled'*) exit 1 ;;
   *'is-active'*) [[ "\${FAKE_SYSTEMCTL_ACTIVE:-0}" == 1 ]] ;;
@@ -241,15 +241,15 @@ test('failed KWin activation restores the prior package and enabled state', asyn
   }
 });
 
-test('install re-enables and starts the Plasma session service by default', async () => {
+test('install re-enables and explicitly starts the Plasma session service by default', async () => {
   const fixture = await createFixture();
   try {
     await runCli(['install', '--image', fixture.sourceImage], fixture);
     assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'manual');
-    assert.match(
-      await readFile(fixture.systemctlLog, 'utf8'),
-      /--user reenable --now mip-paper\.service/,
-    );
+    const systemctlLog = await readFile(fixture.systemctlLog, 'utf8');
+    assert.match(systemctlLog, /--user reenable mip-paper\.service/);
+    assert.match(systemctlLog, /--user start mip-paper\.service/);
+    assert.doesNotMatch(systemctlLog, /reenable --now/);
   } finally {
     await cleanup(fixture);
   }
@@ -263,7 +263,7 @@ test('install imports the default wallpaper before first start', async () => {
       await readFile(fixture.wallpaper),
       await readFile(path.join(repositoryRoot, 'assets', 'default-wallpaper.jpg')),
     );
-    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /reenable --now/);
+    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user start mip-paper\.service/);
     assert.match(stdout, /Wallpaper file:/);
     assert.match(stdout, /mip-paper wallpaper set/);
     assert.match(stdout, /Weather is not configured yet/);
