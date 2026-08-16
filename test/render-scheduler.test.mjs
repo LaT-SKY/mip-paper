@@ -93,6 +93,69 @@ test('adaptive drift mode draws at its configured 30 FPS deadline', () => {
   scheduler.stop();
 });
 
+test('panelActive overrides drift cadence to interactive', () => {
+  const clock = createClock();
+  const draws = [];
+  const reports = [];
+  const scheduler = createScheduler('adaptive', clock);
+  scheduler.start({
+    state: { mode: 'drift' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    panelActive: () => true,
+    advance() {},
+    draw: (...args) => draws.push(args),
+    report: (event) => reports.push(event),
+  });
+  const run = { name: 'adaptive', clock };
+  for (const time of [0, 1000 / 60, 2000 / 60, 3000 / 60]) runFrame(run, time);
+  assert.equal(draws.length, 4);
+  assert.ok(reports.every((event) => event.targetFrameRate === 60));
+  scheduler.stop();
+});
+
+test('inactive panel keeps the motion drift cadence', () => {
+  const clock = createClock();
+  const draws = [];
+  const reports = [];
+  const scheduler = createScheduler('adaptive', clock);
+  scheduler.start({
+    state: { mode: 'drift' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    panelActive: () => false,
+    advance() {},
+    draw: (...args) => draws.push(args),
+    report: (event) => reports.push(event),
+  });
+  const run = { name: 'adaptive', clock };
+  for (const time of [0, 1000 / 30, 2000 / 30, 3000 / 30]) runFrame(run, time);
+  assert.equal(draws.length, 4);
+  assert.ok(reports.every((event) => event.targetFrameRate === 30));
+  scheduler.stop();
+});
+
+test('panelActive flips cadence mid-run without restarting', () => {
+  const clock = createClock();
+  let frames = 0;
+  const draws = [];
+  const scheduler = createScheduler('adaptive', clock);
+  scheduler.start({
+    state: { mode: 'drift' },
+    config: { frameRate: { interactive: 60, drift: 30 } },
+    viewport: {},
+    panelActive: () => frames >= 2,
+    advance() { frames += 1; },
+    draw: (...args) => draws.push(args),
+  });
+  const run = { name: 'adaptive', clock };
+  for (const time of [0, 1000 / 30, 1000 / 30 + 1000 / 60, 1000 / 30 + 2 * 1000 / 60, 1000 / 30 + 3 * 1000 / 60]) {
+    runFrame(run, time);
+  }
+  assert.equal(draws.length, 5);
+  scheduler.stop();
+});
+
 test('adaptive adopts drift cadence when motion requests the lower rate', () => {
   const clock = createClock();
   const state = { mode: 'returning' };

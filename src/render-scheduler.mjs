@@ -43,10 +43,16 @@ export function createScheduler(name, dependencies = {}) {
   let nextDeadlineMs = null;
   let generation = 0;
 
+  function targetRate() {
+    return options.panelActive?.()
+      ? options.config.frameRate.interactive
+      : requestedFrameRate(options.state, options.config);
+  }
+
   function schedule(runGeneration = generation) {
     if (!running) return;
     if (name === 'timer') {
-      const rate = requestedFrameRate(options.state, options.config);
+      const rate = targetRate();
       timerId = timing.setTimeout(() => {
         if (!running || runGeneration !== generation) return;
         timerId = null;
@@ -83,7 +89,7 @@ export function createScheduler(name, dependencies = {}) {
 
     options.advance(options.state, elapsedMs / 1000, frameTime / 1000, options.config, options.viewport);
 
-    const rate = requestedFrameRate(options.state, options.config);
+    const rate = targetRate();
     const intervalMs = 1000 / rate;
     if (previousIntervalMs !== intervalMs) {
       drawAccumulatorMs = 0;

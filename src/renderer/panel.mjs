@@ -2,6 +2,7 @@ import {
   advancePanel,
   createPanelState,
   getCardTransforms,
+  panelRequestsInteractiveFps,
   recordPointer,
   updatePanelConfig,
 } from '../panel-motion.mjs';
@@ -54,6 +55,7 @@ export function createPanelController({ root, cards, config, viewport }) {
 
   return {
     setConfig(nextConfig) { updatePanelConfig(state, nextConfig); },
+    attention() { return panelRequestsInteractiveFps(state); },
     recordPointer(x, y, nowMs) { recordPointer(state, x, y, nowMs); },
     resize(width, height) {
       viewport.width = width;

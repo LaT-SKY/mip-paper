@@ -129,6 +129,14 @@ export function advancePanel(state, elapsedSeconds) {
   return state;
 }
 
+export function isPanelAnimating(state) {
+  return state.cards.some((card) => Math.abs(card.progress - card.pending) > 1e-9);
+}
+
+export function panelRequestsInteractiveFps(state) {
+  return state.expanded || isPanelAnimating(state);
+}
+
 export function getCardTransforms(state) {
   return state.cards.map((card) => {
     const collapsed = 1 - card.progress;
