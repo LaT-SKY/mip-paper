@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-08-16
+
 ### Fixed
 
 - Enabling the packaged KWin coordinator now performs the complete plugin
