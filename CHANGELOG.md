@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enabling the packaged KWin coordinator now performs the complete plugin
   manager transition that Plasma's checkbox applies, so a fresh setup does not
   require manually unchecking and rechecking the script.
+- Source installation now starts the user service explicitly after re-enabling
+  it; `systemctl reenable --now` could leave the service inactive while the
+  installer still reported success.
 - Packaged teardown now explains that the system KWin script is pacman-owned
   and must be removed with `sudo pacman -R mip-paper`.
 
