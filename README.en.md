@@ -50,6 +50,15 @@ mip-paper wallpaper use-kde
 
 A failed replacement preserves the previous valid image. A successful replacement restarts the service when it is active.
 
+## KWin Integration
+
+`setup` (or `install` for source installs) installs two KWin integrations for Mip-Paper windows:
+
+- **Window rule**: matches the window class `mip-paper` and forces fullscreen, no border, below other windows, and exclusion from the taskbar, pager, and Alt+Tab switcher, on all virtual desktops. Since 0.3.2 the rule no longer forces the window to ignore focus; the window follows KWin's default focus policy, and upgrades automatically clean the legacy `acceptfocus` keys.
+- **Display coordinator** (KWin Script): reads each window's declared target display from its caption, moves the window to that output, pins its geometry, and reacts to display hot-plug and screen-order changes.
+
+Removal (`teardown` / `uninstall`) removes both integrations.
+
 ## Requirements
 
 - Arch Linux or a compatible environment

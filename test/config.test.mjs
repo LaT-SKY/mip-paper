@@ -78,6 +78,12 @@ test('ships the explicit appearance defaults in the packaged config', async () =
   assert.deepEqual(validateConfig(packaged).appearance, DEFAULT_CONFIG.appearance);
 });
 
+test('packaged frame rate default is never the stale 12 FPS drift', async () => {
+  const packaged = JSON.parse(await readFile('config/default.json', 'utf8'));
+  assert.notEqual(packaged.frameRate.drift, 12);
+  assert.equal(packaged.frameRate.drift, DEFAULT_CONFIG.frameRate.drift);
+});
+
 test('normalizes invalid audio values without weakening other config validation', () => {
   assert.deepEqual(validateConfig({ audio: {
     enabled: 'yes',
