@@ -36,6 +36,9 @@ printf '%s\\n' "$*" >> "$FAKE_QDBUS_LOG"
 if [[ "\${FAKE_QDBUS_FAIL_LOAD:-0}" == 1 && "$*" == *Scripting.loadScript* ]]; then
   exit 9
 fi
+if [[ "\${FAKE_QDBUS_FAIL_RECONFIGURE:-0}" == 1 && "$*" == */KWin\\ reconfigure* ]]; then
+  exit 9
+fi
 if [[ "$*" == *Scripting.isScriptLoaded* ]]; then
   printf 'true\\n'
 fi
@@ -114,7 +117,7 @@ test('enables and disables an existing system package without copying it', async
   }
 });
 
-test('enabling a system package loads the coordinator from its system source', async () => {
+test('enabling a system package cycles the plugin manager state', async () => {
   const data = await fixture();
   try {
     const systemSource = path.join(data.directory, 'usr', 'share', 'kwin', 'scripts', 'mip-paper');
@@ -130,21 +133,23 @@ test('enabling a system package loads the coordinator from its system source', a
     await runHelper('enable', env);
 
     const qdbusCalls = await readFile(data.qdbusLog, 'utf8');
-    assert.match(qdbusCalls, new RegExp(`Scripting\\.loadScript ${systemSource}/contents/code/main\\.js mip-paper`));
+    assert.equal((qdbusCalls.match(/org\.kde\.KWin \/KWin reconfigure/g) ?? []).length, 2);
+    assert.doesNotMatch(qdbusCalls, /Scripting\.loadScript/);
     assert.doesNotMatch(qdbusCalls, new RegExp(`${data.destination}/contents/code/main\\.js`));
   } finally {
     await rm(data.directory, { recursive: true, force: true });
   }
 });
 
-test('enabling a coordinator fails when KWin rejects loadScript', async () => {
+test('enabling a coordinator fails when KWin rejects plugin reconfiguration', async () => {
   const data = await fixture();
   try {
     await assert.rejects(runHelper('enable', {
       ...data.env,
       KWIN_SCRIPT_NO_RELOAD: '0',
-      FAKE_QDBUS_FAIL_LOAD: '1',
+      FAKE_QDBUS_FAIL_RECONFIGURE: '1',
     }));
+    assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=true/);
   } finally {
     await rm(data.directory, { recursive: true, force: true });
   }

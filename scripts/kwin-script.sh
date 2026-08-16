@@ -14,17 +14,27 @@ check_loaded_script() {
 }
 
 load_script() {
-  local script_path=$1
   if [[ "${KWIN_SCRIPT_NO_RELOAD:-0}" == 1 ]]; then
     return 0
   fi
-  qdbus6 org.kde.KWin /KWin reconfigure
-  # KWin keeps running an already-loaded script instance, so an upgrade only
-  # takes effect after the script is unloaded and loaded again.
-  qdbus6 org.kde.KWin /Scripting \
-    org.kde.kwin.Scripting.unloadScript "$APP_ID" >/dev/null 2>&1 || true
-  qdbus6 org.kde.KWin /Scripting \
-    org.kde.kwin.Scripting.loadScript "$script_path" "$APP_ID" >/dev/null
+  # KWin's plugin manager does not reliably apply a newly written Enabled=true
+  # value until the plugin makes a complete false -> reconfigure -> true ->
+  # reconfigure transition. This mirrors Plasma's checkbox Apply action and
+  # lets KWin load the script from its registered system or user data path.
+  kwriteconfig6 --file "$KWINRC" --group Plugins \
+    --key "${APP_ID}Enabled" --type bool false
+  if ! qdbus6 org.kde.KWin /KWin reconfigure; then
+    kwriteconfig6 --file "$KWINRC" --group Plugins \
+      --key "${APP_ID}Enabled" --type bool true
+    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+    return 1
+  fi
+  kwriteconfig6 --file "$KWINRC" --group Plugins \
+    --key "${APP_ID}Enabled" --type bool true
+  if ! qdbus6 org.kde.KWin /KWin reconfigure; then
+    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+    return 1
+  fi
   qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null
   check_loaded_script
 }
@@ -52,7 +62,7 @@ install_script() {
   stage=''
 
   kwriteconfig6 --file "$KWINRC" --group Plugins --key "${APP_ID}Enabled" --type bool true
-  load_script "$DESTINATION/contents/code/main.js"
+  load_script
 }
 
 remove_script() {
@@ -73,7 +83,7 @@ enable_script() {
   mkdir -p "$(dirname -- "$KWINRC")"
   kwriteconfig6 --file "$KWINRC" --group Plugins \
     --key "${APP_ID}Enabled" --type bool true
-  load_script "$SOURCE/contents/code/main.js"
+  load_script
 }
 
 disable_script() {
