@@ -96,15 +96,20 @@ function reconcile(reason) {
   }
 }
 
-// Report whether any non-wallpaper window is fullscreen on the given output.
-// The mip-paper windows are excluded because the KWin rule forces them
-// fullscreen; they must never pause the wallpaper themselves.
-function outputHasFullscreen(output) {
-  return workspace.windowList().some((window) =>
-    window.resourceClass !== APP_ID
-    && window.output
-    && window.output.name === output.name
-    && window.fullScreen === true);
+// Report whether a non-wallpaper window hides the wallpaper on the output:
+// explicitly fullscreen or fully maximized (MaximizeFull = 3). Geometry is
+// deliberately NOT used: desktop-layer windows such as plasmashell also cover
+// the output, so a geometric test would false-positive on them. The mip-paper
+// windows are excluded because the KWin rule forces them fullscreen; they must
+// never pause the wallpaper themselves.
+function windowCoversOutput(window, output) {
+  if (window.resourceClass === APP_ID) return false;
+  if (!window.output || window.output.name !== output.name) return false;
+  return window.fullScreen === true || window.maximizeMode === 3;
+}
+
+function outputHasCoveringWindow(output) {
+  return workspace.windowList().some((window) => windowCoversOutput(window, output));
 }
 
 // The work area is the output geometry minus Plasma panels/docks, so the
@@ -167,11 +172,11 @@ function pushState(options) {
 
 function pushFullscreenState({ force = false, silent = false } = {}) {
   for (const output of workspace.screenOrder) {
-    const hasFullscreen = outputHasFullscreen(output);
-    if (!force && fullscreenByOutput.get(output.name) === hasFullscreen) {
+    const covering = outputHasCoveringWindow(output);
+    if (!force && fullscreenByOutput.get(output.name) === covering) {
       continue;
     }
-    fullscreenByOutput.set(output.name, hasFullscreen);
+    fullscreenByOutput.set(output.name, covering);
     const geometry = output.geometry || {};
     callDBus(
       FULLSCREEN_SERVICE,
@@ -183,10 +188,10 @@ function pushFullscreenState({ force = false, silent = false } = {}) {
       geometry.y || 0,
       geometry.width || 0,
       geometry.height || 0,
-      hasFullscreen,
+      covering,
       (error) => {
         if (error && !silent) {
-          console.info(`${LOG_PREFIX} fullscreen-push-error output=${output.name} fullscreen=${hasFullscreen} error=${error}`);
+          console.info(`${LOG_PREFIX} fullscreen-push-error output=${output.name} covering=${covering} error=${error}`);
         }
       },
     );
@@ -200,6 +205,14 @@ function track(window) {
   // Some window kinds lack certain signals, so guard each connection.
   if (window.fullScreenChanged && typeof window.fullScreenChanged.connect === 'function') {
     window.fullScreenChanged.connect(() => pushState());
+  }
+  if (window.maximizedChanged && typeof window.maximizedChanged.connect === 'function') {
+    window.maximizedChanged.connect(() => pushState());
+  }
+  // Geometry changes settle after the maximize signal, so re-evaluate on the
+  // final geometry as well; state changes are deduped before any D-Bus push.
+  if (window.frameGeometryChanged && typeof window.frameGeometryChanged.connect === 'function') {
+    window.frameGeometryChanged.connect(() => pushState());
   }
   if (window.outputChanged && typeof window.outputChanged.connect === 'function') {
     window.outputChanged.connect(() => pushState());

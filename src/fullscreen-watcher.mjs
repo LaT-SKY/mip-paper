@@ -155,7 +155,15 @@ export function createFullscreenWatcher({
       enabledState = Boolean(enabled());
       try {
         bus = dbusModule.sessionBus();
-        await bus.requestName(FULLSCREEN_SERVICE);
+        // Take the name even from a stale instance (e.g. an orphaned dev run),
+        // otherwise pushes would reach the old owner and pause nothing.
+        const reply = await bus.requestName(
+          FULLSCREEN_SERVICE,
+          dbusModule.NameFlag?.REPLACE_EXISTING ?? 2,
+        );
+        if (reply !== 1 && reply !== 4) {
+          log(`Fullscreen D-Bus name not acquired: reply=${reply}`);
+        }
         bus.addMethodHandler(handleMethod);
         started = true;
         if (scriptPath) {
