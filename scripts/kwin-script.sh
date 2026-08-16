@@ -8,19 +8,34 @@ readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 readonly DESTINATION="$DATA_HOME/kwin/scripts/$APP_ID"
 readonly KWINRC="${KWIN_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/kwinrc}"
 
-reload_kwin() {
+check_loaded_script() {
+  [[ "$(qdbus6 org.kde.KWin /Scripting \
+    org.kde.kwin.Scripting.isScriptLoaded "$APP_ID" 2>/dev/null)" == true ]]
+}
+
+load_script() {
+  local script_path=$1
   if [[ "${KWIN_SCRIPT_NO_RELOAD:-0}" == 1 ]]; then
     return 0
   fi
   qdbus6 org.kde.KWin /KWin reconfigure
   # KWin keeps running an already-loaded script instance, so an upgrade only
-  # takes effect after the script is unloaded and loaded again. These reload
-  # steps are best-effort; the reconfigure above is the failure checkpoint.
+  # takes effect after the script is unloaded and loaded again.
   qdbus6 org.kde.KWin /Scripting \
     org.kde.kwin.Scripting.unloadScript "$APP_ID" >/dev/null 2>&1 || true
   qdbus6 org.kde.KWin /Scripting \
-    org.kde.kwin.Scripting.loadScript "$DESTINATION/contents/code/main.js" "$APP_ID" >/dev/null 2>&1 || true
-  qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1 || true
+    org.kde.kwin.Scripting.loadScript "$script_path" "$APP_ID" >/dev/null
+  qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null
+  check_loaded_script
+}
+
+unload_script() {
+  if [[ "${KWIN_SCRIPT_NO_RELOAD:-0}" == 1 ]]; then
+    return 0
+  fi
+  qdbus6 org.kde.KWin /KWin reconfigure
+  qdbus6 org.kde.KWin /Scripting \
+    org.kde.kwin.Scripting.unloadScript "$APP_ID" >/dev/null 2>&1 || true
 }
 
 install_script() {
@@ -37,13 +52,13 @@ install_script() {
   stage=''
 
   kwriteconfig6 --file "$KWINRC" --group Plugins --key "${APP_ID}Enabled" --type bool true
-  reload_kwin
+  load_script "$DESTINATION/contents/code/main.js"
 }
 
 remove_script() {
   kwriteconfig6 --file "$KWINRC" --group Plugins --key "${APP_ID}Enabled" --type bool false
   rm -rf -- "$DESTINATION"
-  reload_kwin
+  unload_script
 }
 
 check_script() {
@@ -58,13 +73,13 @@ enable_script() {
   mkdir -p "$(dirname -- "$KWINRC")"
   kwriteconfig6 --file "$KWINRC" --group Plugins \
     --key "${APP_ID}Enabled" --type bool true
-  reload_kwin
+  load_script "$SOURCE/contents/code/main.js"
 }
 
 disable_script() {
   kwriteconfig6 --file "$KWINRC" --group Plugins \
     --key "${APP_ID}Enabled" --type bool false
-  reload_kwin
+  unload_script
 }
 
 check_enabled_script() {
@@ -81,8 +96,9 @@ case "${1:-}" in
   enable) enable_script ;;
   disable) disable_script ;;
   check-enabled) check_enabled_script ;;
+  check-loaded) check_loaded_script ;;
   *)
-    printf 'Usage: %s {install|remove|check|enable|disable|check-enabled}\n' "$0" >&2
+    printf 'Usage: %s {install|remove|check|enable|disable|check-enabled|check-loaded}\n' "$0" >&2
     exit 2
     ;;
 esac
