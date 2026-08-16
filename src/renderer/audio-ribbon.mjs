@@ -206,10 +206,9 @@ export function createAudioRibbonController({ root, config } = {}) {
   const paths = {
     left: root.querySelector('[data-audio-path="left"]'),
     energy: root.querySelector('[data-audio-path="energy"]'),
-    energyOutline: root.querySelector('[data-audio-path="energy-outline"]'),
     right: root.querySelector('[data-audio-path="right"]'),
   };
-  if (!paths.left || !paths.energy || !paths.energyOutline || !paths.right) {
+  if (!paths.left || !paths.energy || !paths.right) {
     throw new TypeError('audio ribbon paths are required');
   }
   const state = createAudioRibbonState(config);
@@ -217,9 +216,7 @@ export function createAudioRibbonController({ root, config } = {}) {
 
   function render() {
     const points = buildMirroredRibbonPoints(state.left, state.right);
-    const energyPath = pointsToSmoothPath(points.energy);
-    paths.energyOutline.setAttribute('d', energyPath);
-    paths.energy.setAttribute('d', energyPath);
+    paths.energy.setAttribute('d', pointsToSmoothPath(points.energy));
     paths.left.setAttribute('d', pointsToSmoothPath(points.left));
     paths.right.setAttribute('d', pointsToSmoothPath(points.right));
     root.style.opacity = String(state.opacity);

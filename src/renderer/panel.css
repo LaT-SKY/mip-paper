@@ -6,7 +6,6 @@
   --accent-audio-primary: rgb(255 52 120);
   --accent-audio-complement: rgb(74 233 180);
   --accent-audio-neutral: rgb(255 255 255);
-  --accent-audio-neutral-outline: rgb(0 0 0);
   --accent-transition-ms: 900ms;
   --appearance-transition-ms: 900ms;
 }
@@ -152,12 +151,6 @@
 .audio-path-energy {
   stroke: var(--accent-audio-neutral);
   stroke-width: 3.4;
-  transition: stroke var(--accent-transition-ms) ease;
-}
-
-.audio-path-energy-outline {
-  stroke: var(--accent-audio-neutral-outline);
-  stroke-width: 5.8;
   transition: stroke var(--accent-transition-ms) ease;
 }
 

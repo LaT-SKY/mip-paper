@@ -79,59 +79,6 @@ export function contrastingNeutral(luminance) {
     : Object.freeze([255, 255, 255]);
 }
 
-function percentile(values, fraction) {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((left, right) => left - right);
-  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
-}
-
-export function selectAudioNeutral(pixels, width, { previous = null } = {}) {
-  if (!pixels || typeof pixels.length !== 'number' || pixels.length % 4 !== 0
-      || !Number.isInteger(width) || width < 1 || pixels.length / 4 % width !== 0) {
-    throw new TypeError('audio sample must contain complete RGBA rows');
-  }
-  const height = pixels.length / 4 / width;
-  const firstRow = height >= 4 ? Math.floor(height * 0.68) : 0;
-  const lastRow = height >= 4 ? Math.max(firstRow + 1, Math.ceil(height * 0.82)) : height;
-  const luminances = [];
-  let darkShare = 0;
-  let brightShare = 0;
-  let colorfulShare = 0;
-  let sum = 0;
-  let count = 0;
-  for (let y = firstRow; y < lastRow; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = (y * width + x) * 4;
-      if (pixels[index + 3] < 220) continue;
-      const rgb = [pixels[index], pixels[index + 1], pixels[index + 2]];
-      const luminance = relativeLuminance(rgb);
-      const maximum = Math.max(...rgb);
-      const minimum = Math.min(...rgb);
-      luminances.push(luminance);
-      sum += luminance;
-      darkShare += luminance < 0.28 ? 1 : 0;
-      brightShare += luminance > 0.72 ? 1 : 0;
-      colorfulShare += maximum - minimum > 55 ? 1 : 0;
-      count += 1;
-    }
-  }
-  if (count === 0) return Object.freeze([255, 255, 255]);
-  darkShare /= count;
-  brightShare /= count;
-  colorfulShare /= count;
-  const mean = sum / count;
-  const variance = luminances.reduce((total, value) => total + (value - mean) ** 2, 0) / count;
-  const whiteScore = percentile(luminances.map((value) => 1.05 / (value + 0.05)), 0.20)
-    + darkShare * 1.4 + colorfulShare * 6 + Math.sqrt(variance) * 1.5;
-  const blackScore = percentile(luminances.map((value) => (value + 0.05) / 0.05), 0.20)
-    + brightShare * 1.1;
-  const previousIsWhite = Array.isArray(previous) && previous[0] > 127;
-  const selected = Math.abs(whiteScore - blackScore) < 0.45
-    ? previousIsWhite
-    : whiteScore > blackScore;
-  return Object.freeze(selected ? [255, 255, 255] : [0, 0, 0]);
-}
-
 function binColor(key) {
   return [((key >> 8) & 15) * 17, ((key >> 4) & 15) * 17, (key & 15) * 17];
 }
@@ -173,7 +120,7 @@ export function selectWallpaperAccent(pixels) {
   });
 }
 
-export function analyzeWallpaperPixels(pixels, { width = null, previousAudioNeutral = null } = {}) {
+export function analyzeWallpaperPixels(pixels) {
   const rgb = selectWallpaperAccent(pixels);
   if (!rgb) return null;
   let luminance = 0;
@@ -183,10 +130,5 @@ export function analyzeWallpaperPixels(pixels, { width = null, previousAudioNeut
     luminance += relativeLuminance([pixels[index], pixels[index + 1], pixels[index + 2]]);
     opaqueCount += 1;
   }
-  const sampleWidth = width ?? Math.max(1, Math.floor(Math.sqrt(pixels.length / 4)));
-  return Object.freeze({
-    rgb,
-    luminance: luminance / opaqueCount,
-    audioNeutral: selectAudioNeutral(pixels, sampleWidth, { previous: previousAudioNeutral }),
-  });
+  return Object.freeze({ rgb, luminance: luminance / opaqueCount });
 }

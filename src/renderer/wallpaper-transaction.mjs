@@ -12,9 +12,6 @@ function validTransaction(value) {
     && (value.wallpaperLuminance === null
       || (Number.isFinite(value.wallpaperLuminance)
         && value.wallpaperLuminance >= 0 && value.wallpaperLuminance <= 1))
-    && (value.audioNeutral === undefined || value.audioNeutral === null
-      || (Array.isArray(value.audioNeutral) && value.audioNeutral.length === 3
-        && value.audioNeutral.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255)))
     && value.color && value.color.contentKey === value.contentKey
     && value.color.generation === value.generation);
 }
@@ -38,18 +35,13 @@ export function createWallpaperTransactionCoordinator({
       const image = await loadImage(transaction.wallpaperUrl);
       if (token !== latestToken) return false;
       promoteImage(image, transaction);
-      applyColor({ ...transaction.color, wallpaperLuminance: transaction.wallpaperLuminance,
-        ...(transaction.audioNeutral ? { audioNeutral: transaction.audioNeutral } : {}) });
+      applyColor({ ...transaction.color, wallpaperLuminance: transaction.wallpaperLuminance });
       if (!transaction.color.analyzeWallpaper) return true;
       const analysis = await analyzeImage(image);
       if (token !== latestToken || !analysis) return false;
-      applyColor({ ...transaction.color, wallpaperLuminance: analysis.luminance,
-        ...(analysis.audioNeutral ? { audioNeutral: analysis.audioNeutral } : {}) });
-      if (!transaction.color.analyzeWallpaper) return true;
       await submitAccent({
         rgb: analysis.rgb,
         luminance: analysis.luminance,
-        ...(analysis.audioNeutral ? { audioNeutral: analysis.audioNeutral } : {}),
         wallpaperIdentity: transaction.wallpaperIdentity,
         contentKey: transaction.contentKey,
         generation: transaction.generation,

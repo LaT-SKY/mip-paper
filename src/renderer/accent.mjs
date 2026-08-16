@@ -14,7 +14,6 @@ function cssRgb(rgb, alpha = null) {
 
 export function applyAccentState(root, state, { reducedMotion = false } = {}) {
   const rgb = normalizeRgb(state?.rgb);
-  const audioNeutral = normalizeRgb(state?.audioNeutral);
   const luminance = state?.wallpaperLuminance;
   if (!root?.style || !rgb || typeof state.source !== 'string'
       || !Number.isInteger(state.transitionDurationMs)
@@ -29,12 +28,7 @@ export function applyAccentState(root, state, { reducedMotion = false } = {}) {
   root.style.setProperty('--accent-audio-primary', cssRgb(rgb));
   root.style.setProperty('--accent-audio-complement', cssRgb(complementaryRgb(rgb)));
   if (Number.isFinite(luminance)) {
-    const neutral = audioNeutral ?? contrastingNeutral(luminance);
-    root.style.setProperty('--accent-audio-neutral', cssRgb(neutral));
-    root.style.setProperty('--accent-audio-neutral-outline', cssRgb(neutral[0] > 127 ? [0, 0, 0] : [255, 255, 255]));
-  } else if (audioNeutral) {
-    root.style.setProperty('--accent-audio-neutral', cssRgb(audioNeutral));
-    root.style.setProperty('--accent-audio-neutral-outline', cssRgb(audioNeutral[0] > 127 ? [0, 0, 0] : [255, 255, 255]));
+    root.style.setProperty('--accent-audio-neutral', cssRgb(contrastingNeutral(luminance)));
   }
   root.style.setProperty('--accent-transition-ms', `${reducedMotion ? 0 : state.transitionDurationMs}ms`);
   root.dataset.accentSource = state.source;
@@ -55,5 +49,5 @@ export function analyzeWallpaperImage(image, {
   const context = canvas.getContext('2d', { alpha: true, willReadFrequently: true });
   if (!context) return null;
   context.drawImage(image, 0, 0, width, height);
-  return analyzeWallpaperPixels(context.getImageData(0, 0, width, height).data, { width });
+  return analyzeWallpaperPixels(context.getImageData(0, 0, width, height).data);
 }
