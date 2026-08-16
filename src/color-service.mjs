@@ -1,11 +1,11 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { contrastingNeutral, DEFAULT_ACCENT_RGB, normalizeRgb } from './accent-color.mjs';
+import { DEFAULT_ACCENT_RGB, normalizeRgb } from './accent-color.mjs';
 
 const MODES = new Set(['default', 'kde', 'wallpaper', 'hybrid']);
 const CACHE_VERSION = 3;
-const ALGORITHM_VERSION = 3;
+const ALGORITHM_VERSION = 2;
 const CONTENT_KEY_PATTERN = /^sha256:([0-9a-f]{64})$/;
 
 function normalizeConfig(value) {
@@ -51,7 +51,6 @@ function recordFor(displayId) {
     wallpaperAnalysis: null,
     lastValidRgb: null,
     lastValidLuminance: null,
-    lastValidAudioNeutral: null,
   };
 }
 
@@ -88,16 +87,14 @@ export function createColorService({
     if (colorConfig.mode === 'wallpaper') {
       if (record.wallpaperAnalysis) return { ...record.wallpaperAnalysis, source: 'wallpaper' };
       if (record.lastValidRgb) return {
-        rgb: record.lastValidRgb, luminance: record.lastValidLuminance,
-        audioNeutral: record.lastValidAudioNeutral, source: 'fallback',
+        rgb: record.lastValidRgb, luminance: record.lastValidLuminance, source: 'fallback',
       };
     }
     if (colorConfig.mode === 'hybrid') {
       if (record.wallpaperAnalysis) return { ...record.wallpaperAnalysis, source: 'wallpaper' };
       if (kdeRgb) return { rgb: kdeRgb, source: 'kde' };
       if (record.lastValidRgb) return {
-        rgb: record.lastValidRgb, luminance: record.lastValidLuminance,
-        audioNeutral: record.lastValidAudioNeutral, source: 'fallback',
+        rgb: record.lastValidRgb, luminance: record.lastValidLuminance, source: 'fallback',
       };
     }
     return { rgb: DEFAULT_ACCENT_RGB, source: 'default' };
@@ -109,12 +106,9 @@ export function createColorService({
       rgb: [...choice.rgb],
       source: choice.source,
       wallpaperLuminance: choice.luminance ?? record.lastValidLuminance,
-      ...(choice.audioNeutral || record.lastValidAudioNeutral
-        ? { audioNeutral: [...(choice.audioNeutral ?? record.lastValidAudioNeutral)] } : {}),
       transitionDurationMs: colorConfig.transitionDurationMs,
       analyzeWallpaper: (colorConfig.mode === 'wallpaper' || colorConfig.mode === 'hybrid')
-        && Boolean(record.identity && record.contentKey)
-        && (!record.wallpaperAnalysis || !record.wallpaperAnalysis.audioNeutral),
+        && Boolean(record.identity && record.contentKey) && !record.wallpaperAnalysis,
       wallpaperIdentity: copyIdentity(record.identity),
       contentKey: record.contentKey,
       generation: record.generation,
@@ -160,9 +154,7 @@ export function createColorService({
         const rgb = normalizeRgb(value.rgb);
         if (rgb && Number.isFinite(value.luminance)
             && value.luminance >= 0 && value.luminance <= 1) {
-          const audioNeutral = normalizeRgb(value.audioNeutral) ?? contrastingNeutral(value.luminance);
-          analysis = Object.freeze({ rgb, luminance: value.luminance,
-            ...(audioNeutral ? { audioNeutral } : {}) });
+          analysis = Object.freeze({ rgb, luminance: value.luminance });
         }
       }
     } catch {
@@ -182,7 +174,6 @@ export function createColorService({
       contentKey,
       rgb: [...analysis.rgb],
       luminance: analysis.luminance,
-      audioNeutral: analysis.audioNeutral ?? null,
       updatedAt: now().toISOString(),
     };
     await writeFile(temporary, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
@@ -255,7 +246,6 @@ export function createColorService({
         if (record.wallpaperAnalysis) {
           record.lastValidRgb = record.wallpaperAnalysis.rgb;
           record.lastValidLuminance = record.wallpaperAnalysis.luminance;
-          record.lastValidAudioNeutral = record.wallpaperAnalysis.audioNeutral ?? null;
         }
       }
       if (started) publish(displayId);
@@ -280,17 +270,13 @@ export function createColorService({
           || submission.luminance < 0 || submission.luminance > 1) {
         throw new TypeError('invalid wallpaper luminance');
       }
-      const audioNeutral = normalizeRgb(submission.audioNeutral)
-        ?? contrastingNeutral(submission.luminance);
-      const analysis = Object.freeze({ rgb, luminance: submission.luminance,
-        ...(audioNeutral ? { audioNeutral } : {}) });
+      const analysis = Object.freeze({ rgb, luminance: submission.luminance });
       contentCache.set(contentKey, analysis);
       for (const active of records.values()) {
         if (active.contentKey !== contentKey) continue;
         active.wallpaperAnalysis = analysis;
         active.lastValidRgb = rgb;
         active.lastValidLuminance = analysis.luminance;
-        active.lastValidAudioNeutral = analysis.audioNeutral ?? null;
       }
       await persistContentColor(contentKey, analysis, record.generation);
       if (started) {
