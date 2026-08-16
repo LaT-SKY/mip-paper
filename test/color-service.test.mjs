@@ -176,7 +176,7 @@ test('writes versioned content cache and ignores stale or malformed entries', as
     const pathname = path.join(f.root, 'by-content', `${'a'.repeat(64)}.json`);
     const cached = JSON.parse(await readFile(pathname, 'utf8'));
     assert.equal(cached.version, 3);
-    assert.equal(cached.algorithmVersion, 2);
+  assert.equal(cached.algorithmVersion, 3);
     assert.equal(cached.contentKey, keyA);
     assert.equal(cached.luminance, luminanceA);
 
