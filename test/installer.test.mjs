@@ -389,7 +389,7 @@ test('normal uninstall preserves config and purge removes it', async () => {
   }
 });
 
-test('packaged setup imports an image and enables per-user integration', async () => {
+test('packaged setup installs integration and leaves KWin activation to the user', async () => {
   const fixture = await createPackagedFixture();
   try {
     const { stdout } = await runCli(['setup', '--image', fixture.sourceImage], fixture);
@@ -399,10 +399,14 @@ test('packaged setup imports an image and enables per-user integration', async (
     assert.equal(await exists(fixture.credentials), true);
     assert.equal((await stat(fixture.credentials)).mode & 0o777, 0o600);
     assert.equal(await exists(fixture.kwinScript), false);
-    assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
-    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user enable --now mip-paper\.service/);
+    assert.equal(await exists(fixture.kwinrc), false);
+    const systemctlLog = await readFile(fixture.systemctlLog, 'utf8');
+    assert.match(systemctlLog, /--user enable --now mip-paper\.service/);
+    assert.doesNotMatch(systemctlLog, /kwin-script\.sh enable/);
     assert.match(stdout, /Imported custom wallpaper/);
     assert.match(stdout, /mip-paper wallpaper set/);
+    assert.match(stdout, /KWin Scripts/);
+    assert.match(stdout, /Mip-Paper Display Coordinator/);
     assert.match(stdout, /Weather is not configured yet/);
   } finally {
     await cleanup(fixture);
