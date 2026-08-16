@@ -118,7 +118,9 @@ function isObject(value) {
 
 const MENU_COMMAND_KEYS = new Set(['id', 'label', 'command', 'mode', 'icon']);
 const MENU_MODES = new Set(['background', 'terminal']);
-const RESERVED_MENU_COMMAND_IDS = new Set(['refresh', 'toggle-panel', 'toggle-pause']);
+// 'settings' is reserved for the built-in action that opens the settings
+// window from the wallpaper context menu; a custom command must not shadow it.
+const RESERVED_MENU_COMMAND_IDS = new Set(['refresh', 'toggle-panel', 'toggle-pause', 'settings']);
 
 function normalizeMenuCommands(value) {
   if (value === undefined) return [...DEFAULT_CONFIG.menu.customCommands];

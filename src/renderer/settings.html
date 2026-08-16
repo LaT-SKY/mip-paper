@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mip-Paper 设置</title>
+    <link rel="stylesheet" href="./settings.css">
+  </head>
+  <body>
+    <div id="app">
+      <header id="app-header">
+        <div class="app-brand">
+          <span class="app-mark" aria-hidden="true"></span>
+          <h1>Mip-Paper</h1>
+        </div>
+        <span id="app-version" class="app-version"></span>
+      </header>
+      <div id="app-body">
+        <nav id="settings-nav" aria-label="设置分区"></nav>
+        <main id="settings-content" aria-live="polite"></main>
+      </div>
+      <footer id="app-footer">
+        <div id="status" class="status" role="status" hidden></div>
+        <div id="footer-actions">
+          <button id="action-reload" type="button" class="button">重新加载</button>
+          <button id="action-reset" type="button" class="button">恢复默认</button>
+          <button id="action-save" type="button" class="button primary" disabled>保存更改</button>
+        </div>
+      </footer>
+    </div>
+    <output id="error" hidden></output>
+    <script type="module" src="./settings.mjs"></script>
+  </body>
+</html>

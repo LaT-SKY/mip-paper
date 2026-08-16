@@ -56,8 +56,8 @@ test('install adds an exact project rule without replacing existing rules', asyn
     assert.equal(await readKey(file, 'rustdesk-autohide', 'Description'), 'Unrelated existing rule');
     assert.equal(await readKey(file, 'mip-paper', 'wmclass'), 'mip-paper');
     assert.equal(await readKey(file, 'mip-paper', 'wmclassmatch'), '1');
-    assert.equal(await readKey(file, 'mip-paper', 'title', 'missing'), 'missing');
-    assert.equal(await readKey(file, 'mip-paper', 'titlematch', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'title'), 'mip-paper|display=');
+    assert.equal(await readKey(file, 'mip-paper', 'titlematch'), '2');
     assert.equal(await readKey(file, 'mip-paper', 'below'), 'true');
     assert.equal(await readKey(file, 'mip-paper', 'skiptaskbar'), 'true');
     assert.equal(await readKey(file, 'mip-paper', 'skippager'), 'true');
@@ -87,7 +87,7 @@ test('install is idempotent and check detects the project rule', async () => {
   }
 });
 
-test('install removes legacy exact-title matching keys', async () => {
+test('install replaces legacy exact-title matching with the wallpaper-target title substring', async () => {
   const { directory, file } = await fixture();
   try {
     await writeFile(file, [
@@ -100,8 +100,8 @@ test('install removes legacy exact-title matching keys', async () => {
 
     await runHelper('install', file);
 
-    assert.equal(await readKey(file, 'mip-paper', 'title', 'missing'), 'missing');
-    assert.equal(await readKey(file, 'mip-paper', 'titlematch', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'title'), 'mip-paper|display=');
+    assert.equal(await readKey(file, 'mip-paper', 'titlematch'), '2');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -91,8 +91,14 @@ install_rule() {
   write_key "$RULE_ID" wmclass "$RULE_ID"
   write_key "$RULE_ID" wmclasscomplete false --type bool
   write_key "$RULE_ID" wmclassmatch 1
-  delete_key "$RULE_ID" title
-  delete_key "$RULE_ID" titlematch
+  # Scope the rule to the wallpaper windows only: their caption always starts
+  # with the display target pattern (mip-paper|display=...). Substring match
+  # avoids KConfig escaping pitfalls with regex alternation. This keeps the
+  # rule's forced fullscreen/below/no-focus properties away from the app's own
+  # GUI windows (the settings dialog, which must render as a normal framed
+  # window above the wallpaper). KWin ANDs all match conditions.
+  write_key "$RULE_ID" title 'mip-paper|display='
+  write_key "$RULE_ID" titlematch 2
   # The wallpaper window must never take keyboard focus: the context menu is
   # mouse-driven and other windows must keep focus. Accepting focus caused the
   # window to be resized on focus changes, overflowing into neighbouring

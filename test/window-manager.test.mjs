@@ -15,6 +15,11 @@ import {
   FULLSCREEN_UPDATED_CHANNEL,
   IS_POINTER_OVER_APP_UI_CHANNEL,
   MENU_CLOSE_CHANNEL,
+  SETTINGS_OPEN_CHANNEL,
+  SETTINGS_STATE_CHANNEL,
+  SETTINGS_SAVE_CONFIG_CHANNEL,
+  SETTINGS_SAVE_CREDENTIALS_CHANNEL,
+  SETTINGS_IMPORT_WALLPAPER_CHANNEL,
   createWindowManager,
   formatDisplayTargetTitle,
 } from '../src/window-manager.mjs';
@@ -103,6 +108,26 @@ class FakeWindow extends EventEmitter {
     this.shownInactive = true;
   }
 
+  isDestroyed() {
+    return this.destroyed;
+  }
+
+  isMinimized() {
+    return false;
+  }
+
+  restore() {}
+  show() { this.shown = true; }
+  focus() { this.focused = true; }
+
+  getPosition() {
+    return [this.bounds.x ?? 0, this.bounds.y ?? 0];
+  }
+
+  getSize() {
+    return [this.bounds.width ?? 0, this.bounds.height ?? 0];
+  }
+
   close() {
     this.destroyed = true;
     this.emit('closed');
@@ -157,7 +182,7 @@ class FakeIpcMain {
   }
 }
 
-function createFixture(config = DEFAULT_CONFIG) {
+function createFixture(config = DEFAULT_CONFIG, settings = null) {
   FakeWindow.instances = [];
   FakeWebContents.nextId = 1;
   const displays = [
@@ -226,6 +251,7 @@ function createFixture(config = DEFAULT_CONFIG) {
     rendererPath: '/app/src/renderer/index.html',
     preloadPath: '/app/src/preload.mjs',
     getWallpaperTransaction: (display) => wallpaperTransactions.get(display.id),
+    ...(settings ?? {}),
   });
   return {
     manager,
@@ -628,4 +654,181 @@ test('stop closes every window without reading webContents after destruction', a
 
   assert.doesNotThrow(() => manager.stop());
   assert.equal(FakeWindow.instances.every((window) => window.destroyed), true);
+});
+
+function createSettingsFixture() {
+  const saveConfigCalls = [];
+  const credentialsCalls = [];
+  const importResults = [];
+  const settingsService = {
+    saveConfigFile: async (pathname, candidate) => {
+      saveConfigCalls.push([pathname, candidate]);
+      return { ...candidate };
+    },
+    saveWeatherCredentialsFile: async (pathname, payload) => {
+      credentialsCalls.push([pathname, payload]);
+      return { apiHost: payload.apiHost, apiKey: payload.apiKey };
+    },
+  };
+  const dialogResults = { canceled: false, filePaths: ['/tmp/pic.jpg'] };
+  const dialog = {
+    showOpenDialog: async () => dialogResults,
+  };
+  const settings = {
+    settingsPath: '/app/src/renderer/settings.html',
+    settingsPreloadPath: '/app/src/settings-preload.cjs',
+    dialog,
+    configPath: '/home/test/.config/mip-paper/config.json',
+    weatherCredentialsPath: '/home/test/.config/mip-paper/weather-credentials.json',
+    settingsService,
+    importWallpaper: async (source, destination) => {
+      importResults.push([source, destination]);
+      return { pathname: destination, format: 'jpeg', size: 123, width: 10, height: 10 };
+    },
+    wallpaperPath: '/home/test/.local/share/mip-paper/wallpaper',
+    getSettingsState: () => ({
+      credentials: { configured: true, apiHost: 'console.example.com' },
+      accent: [255, 52, 120],
+      wallpaper: { mode: 'kde', path: '/home/test/.local/share/mip-paper/wallpaper' },
+    }),
+  };
+  return { settings, saveConfigCalls, credentialsCalls, dialogResults, importResults };
+}
+
+async function openSettingsWindow(manager, ipcMain) {
+  const open = ipcMain.handlers.get(SETTINGS_OPEN_CHANNEL);
+  await open({ sender: FakeWindow.instances[0].webContents });
+  return FakeWindow.instances.at(-1);
+}
+
+test('openSettings creates a single framed settings window and reuses it', async () => {
+  const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, createSettingsFixture().settings);
+  await manager.start();
+  const open = ipcMain.handlers.get(SETTINGS_OPEN_CHANNEL);
+  const wallpaperWebContents = FakeWindow.instances[0].webContents;
+
+  await open({ sender: wallpaperWebContents });
+  const settingsWindow = FakeWindow.instances.at(-1);
+  assert.equal(FakeWindow.instances.length, 3);
+  assert.equal(settingsWindow.loadedFile, '/app/src/renderer/settings.html');
+  assert.equal(settingsWindow.options.webPreferences.preload, '/app/src/settings-preload.cjs');
+  assert.equal(settingsWindow.options.width, 880);
+  assert.equal(settingsWindow.options.skipTaskbar, undefined);
+
+  await open({ sender: wallpaperWebContents });
+  assert.equal(FakeWindow.instances.length, 3, 'second open must reuse the existing window');
+
+  await assert.rejects(async () => open({ sender: { id: 999 } }), /Unknown wallpaper renderer/);
+});
+
+test('settings window is registered as app UI so menus stay open over it', async () => {
+  const { manager, ipcMain, screen } = createFixture(DEFAULT_CONFIG, createSettingsFixture().settings);
+  await manager.start();
+  const settingsWindow = await openSettingsWindow(manager, ipcMain);
+  screen.cursor = { x: 100, y: 100 };
+  const query = ipcMain.handlers.get(IS_POINTER_OVER_APP_UI_CHANNEL);
+  const wallpaperSender = { sender: FakeWindow.instances[0].webContents };
+  assert.equal(await query(wallpaperSender), true);
+  settingsWindow.close();
+  assert.equal(await query(wallpaperSender), false);
+});
+
+test('settings get-state returns config, defaults, appearance, and extras', async () => {
+  const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, createSettingsFixture().settings);
+  await manager.start();
+  await openSettingsWindow(manager, ipcMain);
+  const handler = ipcMain.handlers.get(SETTINGS_STATE_CHANNEL);
+  const sender = { sender: FakeWindow.instances.at(-1).webContents };
+  const state = await handler(sender);
+  assert.deepEqual(state.config, DEFAULT_CONFIG);
+  assert.deepEqual(state.defaults, DEFAULT_CONFIG);
+  assert.deepEqual(state.appearance, DEFAULT_APPEARANCE);
+  assert.deepEqual(state.credentials, { configured: true, apiHost: 'console.example.com' });
+  assert.deepEqual(state.accent, [255, 52, 120]);
+  assert.equal(state.wallpaper.mode, 'kde');
+  assert.equal(state.wallpaper.path, '/home/test/.local/share/mip-paper/wallpaper');
+  assert.equal(state.configPath, '/home/test/.config/mip-paper/config.json');
+  await assert.rejects(async () => handler({ sender: { id: 999 } }), /Unknown settings renderer/);
+});
+
+test('settings save-config and save-credentials go through the injected service', async () => {
+  const { settings, saveConfigCalls, credentialsCalls } = createSettingsFixture();
+  const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, settings);
+  await manager.start();
+  await openSettingsWindow(manager, ipcMain);
+  const sender = { sender: FakeWindow.instances.at(-1).webContents };
+
+  const candidate = { ...DEFAULT_CONFIG, frameRate: { interactive: 60, drift: 24 } };
+  const saved = await ipcMain.handlers.get(SETTINGS_SAVE_CONFIG_CHANNEL)(sender, candidate);
+  assert.deepEqual(saved, { ...candidate });
+  assert.deepEqual(saveConfigCalls, [['/home/test/.config/mip-paper/config.json', candidate]]);
+
+  const credentials = await ipcMain.handlers.get(SETTINGS_SAVE_CREDENTIALS_CHANNEL)(sender, {
+    apiHost: 'console.example.com',
+    apiKey: 'secret',
+  });
+  assert.deepEqual(credentials, { configured: true, apiHost: 'console.example.com' });
+  assert.deepEqual(credentialsCalls, [[
+    '/home/test/.config/mip-paper/weather-credentials.json',
+    { apiHost: 'console.example.com', apiKey: 'secret' },
+  ]]);
+
+  await assert.rejects(
+    ipcMain.handlers.get(SETTINGS_SAVE_CONFIG_CHANNEL)({ sender: { id: 999 } }, candidate),
+    /Unknown settings renderer/,
+  );
+});
+
+test('settings import-wallpaper cancels, imports, and switches to manual mode', async () => {
+  const { settings, saveConfigCalls, dialogResults, importResults } = createSettingsFixture();
+  const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, settings);
+  await manager.start();
+  await openSettingsWindow(manager, ipcMain);
+  const sender = { sender: FakeWindow.instances.at(-1).webContents };
+  const handler = ipcMain.handlers.get(SETTINGS_IMPORT_WALLPAPER_CHANNEL);
+
+  dialogResults.canceled = true;
+  dialogResults.filePaths = [];
+  assert.deepEqual(await handler(sender), { ok: false, canceled: true });
+  assert.deepEqual(importResults, []);
+
+  dialogResults.canceled = false;
+  dialogResults.filePaths = ['/tmp/pic.jpg'];
+  const result = await handler(sender);
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'manual');
+  assert.deepEqual(importResults, [['/tmp/pic.jpg', '/home/test/.local/share/mip-paper/wallpaper']]);
+  assert.equal(saveConfigCalls.length, 1);
+  assert.equal(saveConfigCalls[0][1].wallpaper.mode, 'manual');
+});
+
+test('runtime broadcasts reach the open settings window', async () => {
+  const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, createSettingsFixture().settings);
+  await manager.start();
+  const settingsWindow = await openSettingsWindow(manager, ipcMain);
+  const config = { ...DEFAULT_CONFIG, interactionEnabled: false };
+  const appearance = { ...DEFAULT_APPEARANCE, resolvedTheme: 'dark' };
+  manager.updateRuntime({ config, appearance });
+  assert.deepEqual(settingsWindow.webContents.sent.at(-1), {
+    channel: CONFIG_UPDATED_CHANNEL,
+    value: { config, appearance },
+  });
+});
+
+test('stop closes the settings window and removes settings IPC handlers', async () => {
+  const { manager, ipcMain } = createFixture(DEFAULT_CONFIG, createSettingsFixture().settings);
+  await manager.start();
+  const settingsWindow = await openSettingsWindow(manager, ipcMain);
+
+  manager.stop();
+  assert.equal(settingsWindow.destroyed, true);
+  for (const channel of [
+    SETTINGS_OPEN_CHANNEL,
+    SETTINGS_STATE_CHANNEL,
+    SETTINGS_SAVE_CONFIG_CHANNEL,
+    SETTINGS_SAVE_CREDENTIALS_CHANNEL,
+    SETTINGS_IMPORT_WALLPAPER_CHANNEL,
+  ]) {
+    assert.equal(ipcMain.handlers.has(channel), false);
+  }
 });

@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import { BOOTSTRAP_CHANNEL, CONFIG_UPDATED_CHANNEL } from './window-manager.mjs';
 import { COLOR_SUBMIT_CHANNEL, COLOR_UPDATED_CHANNEL } from './window-manager.mjs';
-import { FULLSCREEN_UPDATED_CHANNEL, GET_WORK_AREA_CHANNEL, IS_POINTER_OVER_APP_UI_CHANNEL, MENU_CLOSE_CHANNEL, MENU_COMMAND_CHANNEL, MENU_OPENED_CHANNEL, NOTIFY_MENU_OPENED_CHANNEL, WORK_AREA_UPDATED_CHANNEL } from './window-manager.mjs';
+import { FULLSCREEN_UPDATED_CHANNEL, GET_WORK_AREA_CHANNEL, IS_POINTER_OVER_APP_UI_CHANNEL, MENU_CLOSE_CHANNEL, MENU_COMMAND_CHANNEL, MENU_OPENED_CHANNEL, NOTIFY_MENU_OPENED_CHANNEL, SETTINGS_OPEN_CHANNEL, WORK_AREA_UPDATED_CHANNEL } from './window-manager.mjs';
 
 contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
   getBootstrap: () => ipcRenderer.invoke(BOOTSTRAP_CHANNEL),
@@ -41,4 +41,5 @@ contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
     return () => ipcRenderer.removeListener(MENU_CLOSE_CHANNEL, wrapper);
   },
   isPointerOverAppUi: () => ipcRenderer.invoke(IS_POINTER_OVER_APP_UI_CHANNEL),
+  openSettings: () => ipcRenderer.invoke(SETTINGS_OPEN_CHANNEL),
 }));

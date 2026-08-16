@@ -1,3 +1,5 @@
+import { DEFAULT_CONFIG } from './config.mjs';
+
 export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
 export const PROBE_REPORT_CHANNEL = 'wallpaper:report-probe';
 export const INFORMATION_CHANNEL = 'wallpaper:get-information';
@@ -22,6 +24,14 @@ export const MENU_CLOSE_CHANNEL = 'wallpaper:menu-close';
 // as a settings dialog) and reports whether the pointer is currently over
 // one of them, so the wallpaper does not dismiss its menu onto our own UI.
 export const IS_POINTER_OVER_APP_UI_CHANNEL = 'wallpaper:is-pointer-over-app-ui';
+// Settings window: opened by the wallpaper renderers through the context-menu
+// built-in action; state/save/credentials/import channels are used only by the
+// settings renderer (see settings-preload.cjs).
+export const SETTINGS_OPEN_CHANNEL = 'settings:open';
+export const SETTINGS_STATE_CHANNEL = 'settings:get-state';
+export const SETTINGS_SAVE_CONFIG_CHANNEL = 'settings:save-config';
+export const SETTINGS_SAVE_CREDENTIALS_CHANNEL = 'settings:save-credentials';
+export const SETTINGS_IMPORT_WALLPAPER_CHANNEL = 'settings:import-wallpaper';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -48,6 +58,17 @@ export function createWindowManager({
   appearance = null,
   menuCommandRunner = null,
   appVersion = null,
+  // Settings window wiring (all optional; the context-menu entry and the
+  // settings page are no-ops until these are provided by the main process).
+  settingsPath = null,
+  settingsPreloadPath = null,
+  dialog = null,
+  configPath = null,
+  weatherCredentialsPath = null,
+  settingsService = null,
+  importWallpaper = null,
+  wallpaperPath = null,
+  getSettingsState = () => ({}),
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
@@ -64,6 +85,8 @@ export function createWindowManager({
   let currentAppearance = appearance;
   let queue = Promise.resolve();
   let started = false;
+  // The single settings window (created lazily, reused until closed).
+  let settingsWindow = null;
 
   const enqueueReconcile = () => {
     queue = queue.then(reconcile);
@@ -149,6 +172,79 @@ export function createWindowManager({
     // never overflows into a neighbouring display.
     window.setContentSize?.(width, height);
     window.setTitle(formatDisplayTargetTitle(display));
+  }
+
+  function isSettingsSender(webContentsId) {
+    return settingsWindow !== null
+      && !settingsWindow.isDestroyed?.()
+      && settingsWindow.webContents.id === webContentsId;
+  }
+
+  // Snapshot for the settings UI: the validated config, its defaults (for the
+  // reset controls), appearance, accent, credentials presence (never the key),
+  // wallpaper mode/path, and the user config path. Extra state from the main
+  // process (credentials status, accent, wallpaper path) arrives through the
+  // getSettingsState callback.
+  function buildSettingsState() {
+    const extra = getSettingsState ? getSettingsState() : {};
+    const credentials = extra.credentials ?? { configured: false, apiHost: null };
+    const wallpaper = extra.wallpaper ?? { mode: currentConfig.wallpaper?.mode ?? 'kde', path: wallpaperPath };
+    return {
+      config: structuredClone(currentConfig),
+      defaults: structuredClone(DEFAULT_CONFIG),
+      ...(currentAppearance ? { appearance: structuredClone(currentAppearance) } : {}),
+      ...(extra.accent ? { accent: extra.accent } : {}),
+      credentials,
+      wallpaper,
+      configPath,
+      appVersion,
+    };
+  }
+
+  // Create (or focus) the single settings window. It is a normal framed window
+  // that renders above the wallpaper: the KWin window rule only matches the
+  // wallpaper display-target captions, and the coordinator ignores its caption,
+  // so neither fullscreen/below forcing nor geometry pinning applies. It is
+  // registered in the app-UI set so wallpaper context menus stay open while
+  // the pointer is over it.
+  async function createSettingsWindow() {
+    if (settingsWindow !== null && !settingsWindow.isDestroyed?.()) {
+      if (settingsWindow.isMinimized?.()) settingsWindow.restore();
+      settingsWindow.show();
+      settingsWindow.focus();
+      return settingsWindow;
+    }
+    const window = new BrowserWindow({
+      title: 'Mip-Paper 设置',
+      width: 880,
+      height: 640,
+      minWidth: 720,
+      minHeight: 520,
+      show: false,
+      backgroundColor: '#152229',
+      autoHideMenuBar: true,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+        preload: settingsPreloadPath,
+      },
+    });
+    secureWebContents(window.webContents);
+    window.once('ready-to-show', () => {
+      window.show();
+      // The wallpaper windows ignore focus, so the settings window must take
+      // keyboard focus itself to be usable immediately.
+      window.focus();
+    });
+    window.on('closed', () => {
+      if (settingsWindow === window) settingsWindow = null;
+    });
+    registerAppUiWindow(window);
+    settingsWindow = window;
+    await window.loadFile(settingsPath);
+    return window;
   }
 
   async function reconcile() {
@@ -264,6 +360,57 @@ export function createWindowManager({
         return { ok: true };
       });
     }
+    // Settings window: the open request comes from the wallpaper renderers
+    // (context-menu built-in action); everything else is the settings page.
+    ipcMain.handle(SETTINGS_OPEN_CHANNEL, (event) => {
+      if (!bootstrapByWebContents.has(event.sender.id)) throw new Error('Unknown wallpaper renderer');
+      return createSettingsWindow();
+    });
+    if (settingsPath) {
+      ipcMain.handle(SETTINGS_STATE_CHANNEL, (event) => {
+        if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+        return buildSettingsState();
+      });
+    }
+    if (settingsService && configPath) {
+      ipcMain.handle(SETTINGS_SAVE_CONFIG_CHANNEL, async (event, candidate) => {
+        if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+        // Validated + written atomically; the config watcher hot-reloads it.
+        return settingsService.saveConfigFile(configPath, candidate);
+      });
+    }
+    if (settingsService && weatherCredentialsPath) {
+      ipcMain.handle(SETTINGS_SAVE_CREDENTIALS_CHANNEL, async (event, payload) => {
+        if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+        const saved = await settingsService.saveWeatherCredentialsFile(weatherCredentialsPath, payload);
+        return { configured: true, apiHost: saved.apiHost };
+      });
+    }
+    if (dialog && importWallpaper && wallpaperPath && settingsService && configPath) {
+      ipcMain.handle(SETTINGS_IMPORT_WALLPAPER_CHANNEL, async (event) => {
+        if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+        const options = {
+          title: '选择壁纸图片',
+          properties: ['openFile'],
+          filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+        };
+        const result = settingsWindow && !settingsWindow.isDestroyed?.()
+          ? await dialog.showOpenDialog(settingsWindow, options)
+          : await dialog.showOpenDialog(options);
+        if (result.canceled || result.filePaths.length === 0) {
+          return { ok: false, canceled: true };
+        }
+        const source = result.filePaths[0];
+        const imported = await importWallpaper(source, wallpaperPath);
+        if (currentConfig.wallpaper.mode !== 'manual') {
+          await settingsService.saveConfigFile(configPath, {
+            ...currentConfig,
+            wallpaper: { mode: 'manual' },
+          });
+        }
+        return { ok: true, mode: 'manual', path: wallpaperPath, imported: { ...imported } };
+      });
+    }
     screen.on('display-added', onDisplayAdded);
     screen.on('display-removed', onDisplayRemoved);
     screen.on('display-metrics-changed', onDisplayMetricsChanged);
@@ -281,11 +428,18 @@ export function createWindowManager({
     ipcMain.removeHandler(BOOTSTRAP_CHANNEL);
     ipcMain.removeHandler(GET_WORK_AREA_CHANNEL);
     ipcMain.removeHandler(IS_POINTER_OVER_APP_UI_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_OPEN_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_STATE_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_SAVE_CONFIG_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_SAVE_CREDENTIALS_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_IMPORT_WALLPAPER_CHANNEL);
     ipcMain.removeAllListeners(NOTIFY_MENU_OPENED_CHANNEL);
     if (informationService) ipcMain.removeHandler(INFORMATION_CHANNEL);
     if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);
     if (colorService) ipcMain.removeHandler(COLOR_SUBMIT_CHANNEL);
     if (menuCommandRunner) ipcMain.removeHandler(MENU_COMMAND_CHANNEL);
+    settingsWindow?.close();
+    settingsWindow = null;
     for (const window of [...windows.values()]) {
       window.close();
     }
@@ -312,6 +466,11 @@ export function createWindowManager({
       }
       window.setIgnoreMouseEvents(!currentConfig.interactionEnabled);
       window.webContents.send(CONFIG_UPDATED_CHANNEL, runtimePayload());
+    }
+    // The settings window subscribes to the same runtime broadcast so an open
+    // settings page reflects config/appearance changes made by any writer.
+    if (settingsWindow !== null && !settingsWindow.isDestroyed?.()) {
+      settingsWindow.webContents.send(CONFIG_UPDATED_CHANNEL, runtimePayload());
     }
   }
 
@@ -457,6 +616,7 @@ export function createWindowManager({
     closeMenus,
     registerAppUiWindow,
     unregisterAppUiWindow,
+    openSettings: () => createSettingsWindow(),
     whenIdle: () => queue,
   };
 }

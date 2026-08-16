@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   screen,
   session,
@@ -25,7 +26,8 @@ import { createRuntimeConfigCoordinator } from './runtime-config-coordinator.mjs
 import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
-import { wallpaperPath } from './wallpaper-image.mjs';
+import { importWallpaper, wallpaperPath } from './wallpaper-image.mjs';
+import { saveConfigFile, saveWeatherCredentialsFile } from './settings-service.mjs';
 import { createKdeWallpaperSync } from './kde-wallpaper-sync.mjs';
 import { createKdeAccentWatcher } from './kde-accent.mjs';
 import { createColorService, colorCacheDirectory } from './color-service.mjs';
@@ -200,6 +202,11 @@ async function run() {
     homedir: os.homedir(),
     log: (message) => console.error(message),
   });
+  // Settings-window paths and helpers. The credentials file path and the
+  // credentials state are needed by getSettingsState before the watchers are
+  // wired up later in run(), so both are computed here.
+  const credentialsPathname = weatherCredentialsPath(process.env, os.homedir());
+  let credentials = null;
   manager = createWindowManager({
     BrowserWindow,
     screen,
@@ -214,6 +221,30 @@ async function run() {
     colorService,
     rendererPath: path.join(sourceDirectory, 'renderer', 'index.html'),
     preloadPath: path.join(sourceDirectory, 'preload.cjs'),
+    settingsPath: path.join(sourceDirectory, 'renderer', 'settings.html'),
+    settingsPreloadPath: path.join(sourceDirectory, 'settings-preload.cjs'),
+    dialog,
+    configPath: pathname,
+    weatherCredentialsPath: credentialsPathname,
+    settingsService: { saveConfigFile, saveWeatherCredentialsFile },
+    importWallpaper,
+    wallpaperPath: wallpaperPathname,
+    getSettingsState: () => {
+      let accent = null;
+      try {
+        const primary = screen.getPrimaryDisplay();
+        accent = colorService.getState(primary.id)?.rgb ?? null;
+      } catch {
+        accent = null;
+      }
+      return {
+        credentials: credentials
+          ? { configured: true, apiHost: credentials.apiHost }
+          : { configured: false, apiHost: null },
+        ...(accent ? { accent } : {}),
+        wallpaper: { mode: currentConfig.wallpaper.mode, path: wallpaperPathname },
+      };
+    },
     wallpaperUrl,
     getWallpaperTransaction: (display) => {
       const active = wallpaperTransactions.get(display.id);
@@ -254,13 +285,13 @@ async function run() {
   await fullscreenWatcher.start();
   informationService.start();
   await audioSpectrumService.start();
-  const credentialsPathname = weatherCredentialsPath(process.env, os.homedir());
+  // credentialsPathname and credentials are declared above (settings wiring);
+  // load the credentials file here, once, before the watchers are set up.
   const cachePathname = informationCachePath(process.env, os.homedir());
   const cache = {
     read: () => readInformationCache(cachePathname),
     write: (snapshot) => writeInformationCache(cachePathname, snapshot),
   };
-  let credentials = null;
   try { credentials = await loadWeatherCredentials(credentialsPathname); } catch {}
   runtimeCoordinator = createRuntimeConfigCoordinator({
     config,

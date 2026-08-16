@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 
-function normalizeHost(value) {
+export function normalizeWeatherHost(value) {
   if (typeof value !== 'string' || value.trim() === '') throw new TypeError('apiHost is required');
   const raw = value.trim();
   let url;
@@ -17,7 +17,7 @@ export async function loadWeatherCredentials(pathname) {
   if ((fileStat.mode & 0o077) !== 0) throw new Error('weather credentials permissions must be 0600');
   let value;
   try { value = JSON.parse(await readFile(pathname, 'utf8')); } catch { throw new Error('weather credentials JSON is invalid'); }
-  const apiHost = normalizeHost(value?.apiHost);
+  const apiHost = normalizeWeatherHost(value?.apiHost);
   if (typeof value?.apiKey !== 'string' || value.apiKey.trim() === '') throw new TypeError('apiKey is required');
   return Object.freeze({ apiHost, apiKey: value.apiKey.trim() });
 }
