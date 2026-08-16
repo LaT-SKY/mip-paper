@@ -8,6 +8,12 @@ export const FULLSCREEN_INTERFACE = 'org.mip.Paper.Fullscreen';
 export const FULLSCREEN_METHOD = 'SetOutputFullscreen';
 export const WORK_AREA_INTERFACE = 'org.mip.Paper.WorkArea';
 export const WORK_AREA_METHOD = 'SetOutputWorkArea';
+// The KWin coordinator notifies the service whenever a non-wallpaper window
+// is activated so open context menus can dismiss themselves (the wallpaper
+// windows ignore focus, so they never fire this).
+export const MENU_PATH = '/Menu';
+export const MENU_INTERFACE = 'org.mip.Paper.Menu';
+export const MENU_METHOD = 'WindowActivated';
 
 const SCRIPTING_XML = [
   '<node>',
@@ -91,6 +97,7 @@ export function createFullscreenWatcher({
   getDisplays,
   onStateChange = () => {},
   onWorkAreaChange = () => {},
+  onWindowActivated = () => {},
   enabled = () => true,
   log = () => {},
   scriptPath = null,
@@ -122,7 +129,17 @@ export function createFullscreenWatcher({
     const isWorkArea = msg.path === FULLSCREEN_PATH
       && msg.interface === WORK_AREA_INTERFACE
       && msg.member === WORK_AREA_METHOD;
-    if (!isFullscreen && !isWorkArea) return false;
+    const isMenuActivated = msg.path === MENU_PATH
+      && msg.interface === MENU_INTERFACE
+      && msg.member === MENU_METHOD;
+    if (!isFullscreen && !isWorkArea && !isMenuActivated) return false;
+    if (isMenuActivated) {
+      // Focus changed to a non-wallpaper window: acknowledge and let the
+      // caller dismiss any open context menu.
+      bus?.send(dbusModule.Message.newMethodReturn(msg, '', []));
+      onWindowActivated();
+      return true;
+    }
     const body = msg.body;
     if (!Array.isArray(body)) return false;
     if (isFullscreen) {

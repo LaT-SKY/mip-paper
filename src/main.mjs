@@ -244,6 +244,9 @@ async function run() {
     getDisplays: () => screen.getAllDisplays(),
     onStateChange: (displayId, paused) => manager?.updateFullscreen(displayId, paused),
     onWorkAreaChange: (displayId, rect) => manager?.updateWorkArea(displayId, rect),
+    onWindowActivated: () => {
+      if (currentConfig.menu?.closeOnFocusChange) manager?.closeMenus();
+    },
     enabled: () => currentConfig.motion.pauseWhenFullscreen,
     log: (message) => console.error(message),
     scriptPath: coordinatorScriptPath(),

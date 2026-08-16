@@ -246,7 +246,12 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
     },
     "tideStationId": "P2352"
   },
-  "menu": { "customCommands": [], "avoidObstacles": true }
+  "menu": {
+    "customCommands": [],
+    "avoidObstacles": true,
+    "closeOnFocusChange": true,
+    "autoCloseMs": 0
+  }
 }
 ```
 
@@ -309,6 +314,8 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 
 当某台显示器被全屏或最大化窗口（视频、游戏等）覆盖时，该屏壁纸的渲染循环会完全停止，相机、面板与音频一并冻结，节省 GPU/CPU；其他显示器不受影响。窗口恢复普通大小或移出该屏后，壁纸从冻结位置继续漂移。壁纸自身的窗口不会触发暂停。该功能通过显示协调器（KWin Script）经会话总线 `org.mip.Paper` 上报，仅当前桌面会话可见。
 
+**多工作区感知**：覆盖判定只考虑该显示器**当前虚拟桌面**上的窗口——只有当前工作区存在全屏/最大化应用时才暂停。某个工作区开着全屏视频，切到没有覆盖窗口的工作区时，壁纸会继续漂移，不会误冻结；窗口跨工作区移动或切换工作区时状态实时更新。固定在所有桌面上的窗口（“所有桌面”/on all desktops）在任何工作区都视为覆盖。
+
 ### 悬浮信息面板
 
 | 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
@@ -359,10 +366,14 @@ Host 只填写 HTTPS 域名，不包含协议、路径、查询参数或用户�
 | `menu.customCommands[].mode` | `background` 或 `terminal` | `background` | 后台执行，或打开终端模拟器运行 | 实时热加载 |
 | `menu.customCommands[].icon` | 非空字符串（内置图标名） | 无 | `folder`、`terminal`、`update`、`app`、`info`、`settings` 等；未知则只显示文字 | 实时热加载 |
 | `menu.avoidObstacles` | boolean | `true` | 开启避障：菜单按 KWin 工作区（扣除 Plasma 面板/应用栏）钳制，避免被遮挡 | 实时热加载 |
+| `menu.closeOnFocusChange` | boolean | `true` | 聚焦到其他应用时自动关闭菜单 | 实时热加载 |
+| `menu.autoCloseMs` | 有限数值，`>= 0` ms | `0` | 打开后无人操作超过该时长自动关闭；`0` 关闭此兜底 | 实时热加载 |
 
 `background` 模式通过 `sh -c` 后台执行且不弹出窗口，适合 `xdg-open` 或启动图形应用；`terminal` 模式在终端模拟器中运行并保持窗口打开，适合 `sudo pacman -Syu` 这类需要交互或查看输出的命令。终端按 `konsole` → `kitty` → `gnome-terminal` → `x-terminal-emulator` → `xdg-terminal-exec` 顺序探测，全部缺失时回退为后台执行。命令来自你自己的配置文件，失败仅记录日志；渲染进程只发送命令 id，无法注入任意命令。
 
 `menu.avoidObstacles`（默认 `true`）开启避障：KWin 协调器持续上报每块屏幕的工作区（输出几何减去 Plasma 面板/应用栏占用的区域），菜单在底部等有面板的区域打开时会钳制在工作区内，不会被应用栏遮挡。工作区跟随面板增删与跨显示器热插拔实时更新；无面板时菜单按整屏钳制。
+
+**聚焦自动消失**：`menu.closeOnFocusChange`（默认 `true`）开启后，KWin 协调器在任意非壁纸窗口获得焦点（例如点击了其他应用）时通知主进程，各显示器上的菜单自动收起。壁纸窗口本身忽略焦点，因此右键打开菜单不会误触关闭。作为兜底，`menu.autoCloseMs` 可设置菜单打开后无人操作自动关闭的毫秒数（`0` 表示关闭该兜底），适合协调器不可用或希望菜单绝不残留的场景；两个机制独立生效。
 
 ## 诊断与常见问题
 

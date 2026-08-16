@@ -48,12 +48,23 @@ function appWindow(id, currentOutput, fullScreen = false) {
     clientGeometry: null,
     fullScreen,
     maximizeMode: 0,
+    // Virtual desktop model (Plasma 6): null means "unmodeled", which the
+    // coordinator treats as being on the current desktop, so the original
+    // single-desktop tests keep their behavior.
+    desktops: null,
+    onAllDesktops: false,
+    desktop: undefined,
     fullScreenChanged: new Signal(),
     maximizedChanged: new Signal(),
     frameGeometryChanged: new Signal(),
     outputChanged: new Signal(),
     closed: new Signal(),
   };
+}
+
+// VirtualDesktop stand-in carrying an id like Plasma 6's VirtualDesktop.
+function desktop(id) {
+  return { id, name: 'Desktop ' + id };
 }
 
 async function runCoordinator({ outputs, windows, clientArea = null, currentDesktop = 1 }) {
@@ -373,9 +384,122 @@ test('pushes on window activation changes without using timers', async () => {
   video.fullScreen = true;
   result.workspace.windowActivated.emit(video);
 
-  assert.equal(result.dbusCalls.length, 1);
+  // Activation re-evaluates covering state and notifies the wallpaper
+  // service so open context menus can dismiss themselves.
+  assert.equal(result.dbusCalls.length, 2);
   assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, true);
+  const menuCall = result.dbusCalls[1];
+  assert.equal(menuCall[0], 'org.mip.Paper');
+  assert.equal(menuCall[1], '/Menu');
+  assert.equal(menuCall[2], 'org.mip.Paper.Menu');
+  assert.equal(menuCall[3], 'WindowActivated');
   assert.equal(result.intervals.length, 0);
+});
+
+test('does not notify menu dismissal when a wallpaper window is activated', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const own = wallpaper('own', 'mip-paper|display=11|bounds=0,0,1536,960', primary);
+  const result = await runCoordinator({ outputs: [primary], windows: [own] });
+  result.dbusCalls.length = 0;
+
+  result.workspace.windowActivated.emit(own);
+
+  assert.equal(result.dbusCalls.length, 0);
+});
+
+function menuCalls(result) {
+  return result.dbusCalls.filter((call) => call[1] === '/Menu' && call[3] === 'WindowActivated');
+}
+
+test('fullscreen window on another workspace does not pause the wallpaper', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const first = desktop('1');
+  const second = desktop('2');
+  const video = appWindow('video', primary, true);
+  video.desktops = [first];
+
+  const result = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: second,
+  });
+
+  const push = result.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen');
+  assert.equal(push.fullscreen, false);
+});
+
+test('fullscreen window on the current workspace pauses the wallpaper', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const first = desktop('1');
+  const video = appWindow('video', primary, true);
+  video.desktops = [first];
+
+  const result = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: first,
+  });
+
+  const push = result.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen');
+  assert.equal(push.fullscreen, true);
+});
+
+test('window pinned to all desktops still pauses on every workspace', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const second = desktop('2');
+  const video = appWindow('video', primary, true);
+  video.onAllDesktops = true;
+
+  const result = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: second,
+  });
+
+  const push = result.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen');
+  assert.equal(push.fullscreen, true);
+});
+
+test('switching workspaces re-evaluates the covering state', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const first = desktop('1');
+  const second = desktop('2');
+  const video = appWindow('video', primary, true);
+  video.desktops = [first];
+  const result = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: second,
+  });
+  result.dbusCalls.length = 0;
+
+  result.workspace.currentDesktop = first;
+  result.workspace.currentDesktopChanged.emit(first, second);
+
+  assert.equal(menuCalls(result).length, 0);
+  const push = result.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen');
+  assert.equal(push.fullscreen, true);
+});
+
+test('legacy numeric desktop model only covers the current workspace', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const video = appWindow('video', primary, true);
+  video.desktops = null;
+  video.desktop = 2;
+
+  const other = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: 1,
+  });
+  assert.equal(other.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen').fullscreen, false);
+
+  const same = await runCoordinator({
+    outputs: [primary],
+    windows: [video],
+    currentDesktop: 2,
+  });
+  assert.equal(same.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputFullscreen').fullscreen, true);
 });
 
 function workAreaPush(result) {

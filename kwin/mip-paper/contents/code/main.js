@@ -6,6 +6,12 @@ const FULLSCREEN_PATH = '/Fullscreen';
 const FULLSCREEN_INTERFACE = 'org.mip.Paper.Fullscreen';
 const WORK_AREA_INTERFACE = 'org.mip.Paper.WorkArea';
 const WORK_AREA_METHOD = 'SetOutputWorkArea';
+// Context-menu dismissal: whenever a non-wallpaper window is activated, KWin
+// notifies the wallpaper service so every open menu can close. The wallpaper
+// windows ignore focus (acceptfocus=false), so they never fire this signal.
+const MENU_PATH = '/Menu';
+const MENU_INTERFACE = 'org.mip.Paper.Menu';
+const MENU_METHOD = 'WindowActivated';
 const tracked = new Map();
 const fullscreenByOutput = new Map();
 const workAreaByOutput = new Map();
@@ -96,15 +102,48 @@ function reconcile(reason) {
   }
 }
 
+// Virtual desktops (workspaces): a covering window only hides the wallpaper
+// on the desktop it actually lives on. A fullscreen/maximized window on
+// another workspace must not pause the wallpaper, otherwise switching
+// desktops with a video running elsewhere would freeze the wallpaper
+// forever. The wallpaper windows themselves are visible on all workspaces,
+// so this never affects them.
+function windowOnCurrentDesktop(window) {
+  if (window.onAllDesktops === true) return true;
+  const current = workspace.currentDesktop;
+  if (Array.isArray(window.desktops)) {
+    // Plasma 6: window.desktops lists the VirtualDesktop objects the window
+    // is on (empty when on all desktops) and currentDesktop is a
+    // VirtualDesktop; compare by identity or by id.
+    if (current && typeof current === 'object') {
+      return window.desktops.includes(current)
+        || window.desktops.some((desktop) => desktop && current.id != null && desktop.id === current.id);
+    }
+    return true;
+  }
+  if (typeof window.desktop === 'number') {
+    // Plasma 5 fallback: the window carries a 1-based desktop number.
+    const currentNumber = typeof current === 'number'
+      ? current
+      : Number.parseInt(current && current.id, 10);
+    return currentNumber == null || window.desktop === currentNumber;
+  }
+  // No desktop API available (or an unmodeled window): assume the window is
+  // on the current desktop so single-desktop setups keep working unchanged.
+  return true;
+}
+
 // Report whether a non-wallpaper window hides the wallpaper on the output:
-// explicitly fullscreen or fully maximized (MaximizeFull = 3). Geometry is
-// deliberately NOT used: desktop-layer windows such as plasmashell also cover
-// the output, so a geometric test would false-positive on them. The mip-paper
-// windows are excluded because the KWin rule forces them fullscreen; they must
-// never pause the wallpaper themselves.
+// explicitly fullscreen or fully maximized (MaximizeFull = 3) on the current
+// virtual desktop. Geometry is deliberately NOT used: desktop-layer windows
+// such as plasmashell also cover the output, so a geometric test would
+// false-positive on them. The mip-paper windows are excluded because the KWin
+// rule forces them fullscreen; they must never pause the wallpaper
+// themselves.
 function windowCoversOutput(window, output) {
   if (window.resourceClass === APP_ID) return false;
   if (!window.output || window.output.name !== output.name) return false;
+  if (!windowOnCurrentDesktop(window)) return false;
   return window.fullScreen === true || window.maximizeMode === 3;
 }
 
@@ -236,7 +275,24 @@ workspace.windowAdded.connect((window) => {
   pushState();
 });
 workspace.windowRemoved.connect(() => pushState());
-workspace.windowActivated.connect(() => pushState());
+// Activation changes re-evaluate covering state and dismiss open context
+// menus. The wallpaper's own windows ignore focus and are never activated,
+// so they are skipped (their resourceClass also cannot appear here).
+workspace.windowActivated.connect((window) => {
+  pushState();
+  if (!window || window.resourceClass === APP_ID) return;
+  callDBus(
+    FULLSCREEN_SERVICE,
+    MENU_PATH,
+    MENU_INTERFACE,
+    MENU_METHOD,
+    (error) => {
+      if (error) {
+        console.info(`${LOG_PREFIX} menu-activate-error error=${error}`);
+      }
+    },
+  );
+});
 workspace.screensChanged.connect(() => {
   reconcile('screens-changed');
   pushState();

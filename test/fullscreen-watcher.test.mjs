@@ -6,6 +6,9 @@ import {
   FULLSCREEN_METHOD,
   FULLSCREEN_PATH,
   FULLSCREEN_SERVICE,
+  MENU_INTERFACE,
+  MENU_METHOD,
+  MENU_PATH,
   WORK_AREA_INTERFACE,
   WORK_AREA_METHOD,
   coordinatorScriptPath,
@@ -226,6 +229,64 @@ test('ignores unrelated messages and malformed bodies', async () => {
   assert.equal(handle(fakeMessage({ path: FULLSCREEN_PATH, interface: FULLSCREEN_INTERFACE, member: FULLSCREEN_METHOD, body: ['only-one'] })), false);
   assert.equal(handle(fakeMessage({ path: FULLSCREEN_PATH, interface: FULLSCREEN_INTERFACE, member: FULLSCREEN_METHOD, body: null })), false);
   assert.deepEqual(changes, []);
+  await watcher.stop();
+});
+
+test('forwards menu window-activation messages to the callback', async () => {
+  const { bus, handlers, state } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const activations = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onWindowActivated: () => activations.push(1),
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  const message = fakeMessage({
+    path: MENU_PATH,
+    interface: MENU_INTERFACE,
+    member: MENU_METHOD,
+    body: [],
+  });
+  assert.equal(handle(message), true);
+  assert.deepEqual(activations, [1]);
+  assert.equal(state.sent.length, 1);
+  assert.equal(state.sent[0].__reply, true);
+
+  // Repeated activations (e.g. focus moves between two apps) notify each time.
+  assert.equal(handle(message), true);
+  assert.deepEqual(activations, [1, 1]);
+
+  // A menu message on the wrong path/interface/member is not an activation.
+  assert.equal(handle(fakeMessage({ path: '/Menu', interface: MENU_INTERFACE, member: 'Other', body: [] })), false);
+  assert.equal(handle(fakeMessage({ path: '/Elsewhere', interface: MENU_INTERFACE, member: MENU_METHOD, body: [] })), false);
+  assert.equal(handle(fakeMessage({ path: MENU_PATH, interface: 'org.example.Other', member: MENU_METHOD, body: [] })), false);
+  assert.deepEqual(activations, [1, 1]);
+  await watcher.stop();
+});
+
+test('menu activation is never gated by the fullscreen-pause feature', async () => {
+  const { bus, handlers } = createFakeBus();
+  const dbusModule = createFakeDbus(bus);
+  const activations = [];
+  const watcher = createFullscreenWatcher({
+    dbusModule,
+    getDisplays: () => DISPLAYS,
+    onWindowActivated: () => activations.push(1),
+    enabled: () => false,
+  });
+  await watcher.start();
+  const handle = handlers[0];
+
+  assert.equal(handle(fakeMessage({
+    path: MENU_PATH,
+    interface: MENU_INTERFACE,
+    member: MENU_METHOD,
+    body: [],
+  })), true);
+  assert.deepEqual(activations, [1]);
   await watcher.stop();
 });
 

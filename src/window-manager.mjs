@@ -13,6 +13,10 @@ export const WORK_AREA_UPDATED_CHANNEL = 'wallpaper:work-area-updated';
 export const GET_WORK_AREA_CHANNEL = 'wallpaper:get-work-area';
 export const MENU_OPENED_CHANNEL = 'wallpaper:menu-opened';
 export const NOTIFY_MENU_OPENED_CHANNEL = 'wallpaper:notify-menu-opened';
+// Broadcast by closeMenus() when a non-wallpaper window is activated, so
+// every renderer dismisses its context menu. Distinct from MENU_OPENED_CHANNEL,
+// which only fires when another display actually opened a menu.
+export const MENU_CLOSE_CHANNEL = 'wallpaper:menu-close';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -373,6 +377,15 @@ export function createWindowManager({
     return true;
   }
 
+  // Ask every renderer to dismiss its context menu (e.g. because a
+  // non-wallpaper window was just activated). Unlike the global-uniqueness
+  // broadcast on NOTIFY_MENU_OPENED_CHANNEL, this also reaches the sender.
+  function closeMenus() {
+    for (const window of windows.values()) {
+      window.webContents.send(MENU_CLOSE_CHANNEL, {});
+    }
+  }
+
   return {
     start,
     stop,
@@ -383,6 +396,7 @@ export function createWindowManager({
     updateColor,
     updateFullscreen,
     updateWorkArea,
+    closeMenus,
     whenIdle: () => queue,
   };
 }

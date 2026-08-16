@@ -115,7 +115,17 @@ export function pickAnchorCorner({ cursorX, cursorY, x, y, width, height }) {
   return vertical + '-' + horizontal;
 }
 
-export function createContextMenu({ root, version, reducedMotion = false, onAction = () => {}, viewport = null }) {
+export function createContextMenu({
+  root,
+  version,
+  reducedMotion = false,
+  onAction = () => {},
+  viewport = null,
+  // Auto-close safety net (ms, 0 disables). May be a number or a getter so a
+  // hot-reloaded config value is read when the menu opens. Used when focus
+  // change is not observable (e.g. the KWin coordinator is unavailable).
+  autoCloseMs = 0,
+}) {
   const win = root.ownerDocument.defaultView;
   let state = MENU_STATES.CLOSED;
   let token = 0;
@@ -123,6 +133,7 @@ export function createContextMenu({ root, version, reducedMotion = false, onActi
   let rows = [];
   let highlightIndex = -1;
   let motionFrame = null;
+  let closeTimer = null;
 
   function setState(next) {
     state = next;
@@ -197,6 +208,26 @@ export function createContextMenu({ root, version, reducedMotion = false, onActi
       win.cancelAnimationFrame(motionFrame);
       motionFrame = null;
     }
+  }
+
+  function cancelAutoClose() {
+    if (closeTimer !== null) {
+      win.clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+  }
+
+  // Read the (possibly live) auto-close delay and arm a one-shot timer. The
+  // menu stays dismissible by any existing path; this is purely a safety net
+  // so a menu cannot linger forever when focus is not observable.
+  function scheduleAutoClose() {
+    cancelAutoClose();
+    const delay = typeof autoCloseMs === 'function' ? autoCloseMs() : autoCloseMs;
+    if (!Number.isFinite(delay) || delay <= 0) return;
+    closeTimer = win.setTimeout(() => {
+      closeTimer = null;
+      close();
+    }, delay);
   }
 
   function resetRowsForOpen() {
@@ -285,6 +316,7 @@ export function createContextMenu({ root, version, reducedMotion = false, onActi
     token += 1;
     const myToken = token;
     cancelMotion();
+    cancelAutoClose();
     setState(MENU_STATES.OPENING);
     root.style.opacity = '0';
     root.style.transform = '';
@@ -315,6 +347,7 @@ export function createContextMenu({ root, version, reducedMotion = false, onActi
       height,
     });
     resetRowsForOpen();
+    scheduleAutoClose();
     if (reducedMotion) {
       root.style.opacity = '1';
       root.style.transform = 'scale(1)';
@@ -330,6 +363,7 @@ export function createContextMenu({ root, version, reducedMotion = false, onActi
     token += 1;
     const myToken = token;
     cancelMotion();
+    cancelAutoClose();
     if (reducedMotion) {
       finishClose();
       return;
@@ -387,6 +421,7 @@ export function createContextMenu({ root, version, reducedMotion = false, onActi
   function destroy() {
     token += 1;
     cancelMotion();
+    cancelAutoClose();
     win.removeEventListener('keydown', handleKeyDown);
     win.removeEventListener('pointerdown', handlePointerDown, true);
     root.removeEventListener('contextmenu', handleRootContextMenu);

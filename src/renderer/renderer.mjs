@@ -171,6 +171,8 @@ async function start() {
     reducedMotion: reducedMotion.matches,
     onAction: handleMenuAction,
     viewport,
+    // Read live so a hot-reloaded auto-close delay applies on the next open.
+    autoCloseMs: () => currentConfig.menu.autoCloseMs,
   });
 
   function buildBuiltins() {
@@ -251,6 +253,12 @@ async function start() {
   const unsubscribeMenuOpened = window.wallpaper.onMenuOpened(() => {
     if (menu.isOpen()) menu.close();
   });
+  // Dismiss the menu when a non-wallpaper window is activated (focus moved
+  // to another app) or when the KWin coordinator is unavailable to a timed
+  // auto-close delay. Both paths are gated by menu config on their own side.
+  const unsubscribeMenuClose = window.wallpaper.onMenuCloseRequest(() => {
+    if (menu.isOpen()) menu.close();
+  });
   // The KWin coordinator may push the work area before this renderer finished
   // subscribing; re-query once now that the listener is live.
   void window.wallpaper.getWorkArea().then((rect) => {
@@ -275,6 +283,7 @@ async function start() {
     unsubscribeFullscreen();
     unsubscribeWorkArea();
     unsubscribeMenuOpened();
+    unsubscribeMenuClose();
     reducedMotion.removeEventListener('change', onReducedMotionChanged);
     window.removeEventListener('pointerdown', handleAnyPointerDown);
     menu.destroy();

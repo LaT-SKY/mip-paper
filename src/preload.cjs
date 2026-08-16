@@ -15,6 +15,7 @@ const WORK_AREA_UPDATED_CHANNEL = 'wallpaper:work-area-updated';
 const GET_WORK_AREA_CHANNEL = 'wallpaper:get-work-area';
 const MENU_OPENED_CHANNEL = 'wallpaper:menu-opened';
 const NOTIFY_MENU_OPENED_CHANNEL = 'wallpaper:notify-menu-opened';
+const MENU_CLOSE_CHANNEL = 'wallpaper:menu-close';
 
 contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
   getBootstrap: () => ipcRenderer.invoke(BOOTSTRAP_CHANNEL),
@@ -63,5 +64,10 @@ contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
     const wrapper = (_event, rect) => listener(rect);
     ipcRenderer.on(WORK_AREA_UPDATED_CHANNEL, wrapper);
     return () => ipcRenderer.removeListener(WORK_AREA_UPDATED_CHANNEL, wrapper);
+  },
+  onMenuCloseRequest: (listener) => {
+    const wrapper = () => listener();
+    ipcRenderer.on(MENU_CLOSE_CHANNEL, wrapper);
+    return () => ipcRenderer.removeListener(MENU_CLOSE_CHANNEL, wrapper);
   },
 }));

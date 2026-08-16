@@ -47,7 +47,12 @@ export const DEFAULT_CONFIG = Object.freeze({
     }),
     tideStationId: 'P2352',
   }),
-  menu: Object.freeze({ customCommands: Object.freeze([]), avoidObstacles: true }),
+  menu: Object.freeze({
+    customCommands: Object.freeze([]),
+    avoidObstacles: true,
+    closeOnFocusChange: true,
+    autoCloseMs: 0,
+  }),
 });
 
 const SCHEMA = {
@@ -99,7 +104,12 @@ const SCHEMA = {
     },
     tideStationId: 'nonEmptyString',
   },
-  menu: { customCommands: 'menuCommandList', avoidObstacles: 'boolean' },
+  menu: {
+    customCommands: 'menuCommandList',
+    avoidObstacles: 'boolean',
+    closeOnFocusChange: 'boolean',
+    autoCloseMs: 'nonNegative',
+  },
 };
 
 function isObject(value) {
@@ -160,20 +170,34 @@ function normalizeMenuConfig(value) {
     return {
       customCommands: [...DEFAULT_CONFIG.menu.customCommands],
       avoidObstacles: DEFAULT_CONFIG.menu.avoidObstacles,
+      closeOnFocusChange: DEFAULT_CONFIG.menu.closeOnFocusChange,
+      autoCloseMs: DEFAULT_CONFIG.menu.autoCloseMs,
     };
   }
   if (!isObject(value)) throw new TypeError('menu must be an object');
   for (const key of Object.keys(value)) {
-    if (key !== 'customCommands' && key !== 'avoidObstacles') {
+    if (key !== 'customCommands'
+      && key !== 'avoidObstacles'
+      && key !== 'closeOnFocusChange'
+      && key !== 'autoCloseMs') {
       throw new TypeError('Unknown configuration field: menu.' + key);
     }
   }
   if (value.avoidObstacles !== undefined && typeof value.avoidObstacles !== 'boolean') {
     throw new TypeError('menu.avoidObstacles must be a boolean');
   }
+  if (value.closeOnFocusChange !== undefined && typeof value.closeOnFocusChange !== 'boolean') {
+    throw new TypeError('menu.closeOnFocusChange must be a boolean');
+  }
+  if (value.autoCloseMs !== undefined
+    && (!Number.isFinite(value.autoCloseMs) || value.autoCloseMs < 0)) {
+    throw new RangeError('menu.autoCloseMs must be a finite number at least 0');
+  }
   return {
     customCommands: normalizeMenuCommands(value.customCommands),
     avoidObstacles: value.avoidObstacles ?? DEFAULT_CONFIG.menu.avoidObstacles,
+    closeOnFocusChange: value.closeOnFocusChange ?? DEFAULT_CONFIG.menu.closeOnFocusChange,
+    autoCloseMs: value.autoCloseMs ?? DEFAULT_CONFIG.menu.autoCloseMs,
   };
 }
 
