@@ -17,6 +17,8 @@ test('sandboxed BrowserWindow uses a CommonJS preload exposing bootstrap IPC', a
   assert.match(preload, /onColorUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /onFullscreenUpdated\s*:\s*\(listener\)/);
   assert.match(preload, /submitWallpaperAccent\s*:\s*\(submission\)\s*=>\s*ipcRenderer\.invoke/);
+  assert.match(preload, /runMenuCommand\s*:\s*\(request\)\s*=>\s*ipcRenderer\.invoke/);
+  assert.match(preload, /MENU_COMMAND_CHANNEL/);
   assert.match(preload, /removeListener/);
   assert.doesNotMatch(preload, /getAudioSpectrum|pw-cat|pw-metadata|spawn|rawPcm|selectAudioDevice/i);
 
@@ -31,6 +33,31 @@ test('both preload variants expose removable fullscreen updates', async () => {
     assert.match(preload, /removeListener\(FULLSCREEN_UPDATED_CHANNEL,\s*wrapper\)/);
   }
 });
+});
+
+test('both preload variants expose global menu singleton signals', async () => {
+  const [commonJs, module] = await Promise.all([
+    readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/preload.mjs', import.meta.url), 'utf8'),
+  ]);
+  for (const preload of [commonJs, module]) {
+    assert.match(preload, /notifyMenuOpened\s*:\s*\(\)\s*=>\s*ipcRenderer\.send/);
+    assert.match(preload, /onMenuOpened\s*:\s*\(listener\)/);
+    assert.match(preload, /MENU_OPENED_CHANNEL/);
+    assert.match(preload, /NOTIFY_MENU_OPENED_CHANNEL/);
+  }
+});
+
+test('both preload variants expose removable work-area updates', async () => {
+  const [commonJs, module] = await Promise.all([
+    readFile(new URL('../src/preload.cjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/preload.mjs', import.meta.url), 'utf8'),
+  ]);
+  for (const preload of [commonJs, module]) {
+    assert.match(preload, /onWorkAreaUpdated\s*:\s*\(listener\)/);
+    assert.match(preload, /WORK_AREA_UPDATED_CHANNEL/);
+    assert.match(preload, /removeListener\(WORK_AREA_UPDATED_CHANNEL,\s*wrapper\)/);
+  }
 });
 
 test('both preload variants expose removable complete runtime updates', async () => {

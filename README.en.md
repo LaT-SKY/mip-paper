@@ -54,7 +54,7 @@ A failed replacement preserves the previous valid image. A successful replacemen
 
 `setup` (or `install` for source installs) installs two KWin integrations for Mip-Paper windows:
 
-- **Window rule**: matches the window class `mip-paper` and forces fullscreen, no border, below other windows, and exclusion from the taskbar, pager, and Alt+Tab switcher, on all virtual desktops. Since 0.3.2 the rule no longer forces the window to ignore focus; the window follows KWin's default focus policy, and upgrades automatically clean the legacy `acceptfocus` keys.
+- **Window rule**: matches the window class `mip-paper` and forces fullscreen, no border, below other windows, **no keyboard focus** (the context menu is pure mouse interaction and needs no focus; avoiding focus prevents KWin from re-laying-out the window on focus changes, which could overflow into neighbouring displays), and exclusion from the taskbar, pager, and Alt+Tab switcher, on all virtual desktops.
 - **Display coordinator** (KWin Script): reads each window's declared target display from its caption, moves the window to that output, pins its geometry, reacts to display hot-plug and screen-order changes, and reports fullscreen window state per output over the session bus `org.mip.Paper`.
 
 Removal (`teardown` / `uninstall`) removes both integrations.
@@ -233,7 +233,8 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
       "fallbackLocationId": "101281601"
     },
     "tideStationId": "P2352"
-  }
+  },
+  "menu": { "customCommands": [], "avoidObstacles": true }
 }
 ```
 
@@ -321,6 +322,35 @@ An expanded panel or an in-flight panel animation renders at the interactive fra
 | `weather.tideStationId` | non-empty string | `P2352` | Tide observation station ID | Live reload |
 
 Auto mode tries the Portal, then cached coordinates, then the fallback LocationID. Fixed mode requires numeric latitude and longitude and does not request the Portal.
+
+### Right-click Context Menu
+
+Right-click on the wallpaper to open the menu: three built-in actions are provided — **Refresh Wallpaper**, **Toggle Information Panels** (disables auto expand/collapse and pins the target state), and **Pause/Resume Wallpaper** — scoped to the display you right-clicked. The menu follows the light/dark appearance. With `interactionEnabled: false` the window passes the mouse through entirely, so the menu is unavailable.
+
+Custom commands are added through the `menu.customCommands` array and hot reload as soon as the file is saved; `id` must not collide with the built-in actions:
+
+```json
+"menu": {
+  "customCommands": [
+    { "id": "downloads", "label": "Open Downloads", "command": "xdg-open ~/Downloads", "mode": "background", "icon": "folder" },
+    { "id": "update", "label": "System Update", "command": "sudo pacman -Syu", "mode": "terminal", "icon": "update" }
+  ]
+}
+```
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `menu.customCommands` | array | `[]` | Custom right-click menu commands | Live reload |
+| `menu.customCommands[].id` | non-empty string, unique | — | Command id; `refresh`, `toggle-panel`, `toggle-pause` are reserved | Live reload |
+| `menu.customCommands[].label` | non-empty string | — | Label shown in the menu | Live reload |
+| `menu.customCommands[].command` | non-empty string | — | Shell command to run | Live reload |
+| `menu.customCommands[].mode` | `background` or `terminal` | `background` | Run in the background or in a terminal emulator | Live reload |
+| `menu.customCommands[].icon` | non-empty string (built-in icon name) | none | `folder`, `terminal`, `update`, `app`, `info`, `settings`, etc.; unknown names render text only | Live reload |
+| `menu.avoidObstacles` | boolean | `true` | Avoid obstacles: clamp the menu inside the KWin work area (excluding Plasma panels/app bars) so it cannot be occluded | Live reload |
+
+`background` runs the command via `sh -c` without a window, suitable for `xdg-open` or launching GUI apps; `terminal` runs it inside a terminal emulator that stays open, suitable for interactive commands such as `sudo pacman -Syu`. Terminals are probed in the order `konsole` → `kitty` → `gnome-terminal` → `x-terminal-emulator` → `xdg-terminal-exec`, falling back to background execution when none exists. Commands come from your own configuration file; failures only write to the log, and the renderer only sends command ids, so it cannot inject arbitrary commands.
+
+`menu.avoidObstacles` (default `true`) enables obstacle avoidance: the KWin coordinator continuously reports each output's work area (output geometry minus the space occupied by Plasma panels/app bars), and the menu clamps inside it near docks so it is never occluded. Work areas track panel changes and display hot-plugs in real time; without panels the menu clamps to the full screen.
 
 ## Diagnostics and Common Problems
 

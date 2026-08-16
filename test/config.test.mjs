@@ -50,6 +50,7 @@ test('defaults match the approved v1 design', () => {
       location: { mode: 'auto', latitude: null, longitude: null, fallbackLocationId: '101281601' },
       tideStationId: 'P2352',
     },
+    menu: { customCommands: [], avoidObstacles: true },
   });
 });
 
@@ -244,6 +245,76 @@ test('loads and validates JSON from disk', async () => {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('validates menu custom command entries', () => {
+  const customCommands = [
+    { id: 'downloads', label: 'Open Downloads', command: 'xdg-open ~/Downloads' },
+    { id: 'update', label: 'System Update', command: 'pacman -Syu', mode: 'terminal', icon: 'update' },
+  ];
+  const value = validateConfig({ menu: { customCommands } });
+  assert.deepEqual(value.menu.customCommands, [
+    { id: 'downloads', label: 'Open Downloads', command: 'xdg-open ~/Downloads', mode: 'background' },
+    { id: 'update', label: 'System Update', command: 'pacman -Syu', mode: 'terminal', icon: 'update' },
+  ]);
+});
+
+test('rejects malformed menu command entries', () => {
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: 'not-an-array' } }),
+    /menu\.customCommands must be an array/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: 'echo a' }, { id: 'a', label: 'A2', command: 'echo a2' }] } }),
+    /Duplicate menu command id: a/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: '', label: 'A', command: 'echo a' }] } }),
+    /customCommands\[0\]\.id must be a non-empty string/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'a', label: '', command: 'echo a' }] } }),
+    /customCommands\[0\]\.label must be a non-empty string/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: '  ' }] } }),
+    /customCommands\[0\]\.command must be a non-empty string/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: 'echo a', mode: 'window' }] } }),
+    /customCommands\[0\]\.mode must be background or terminal/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: 'echo a', icon: '' }] } }),
+    /customCommands\[0\]\.icon must be a non-empty string/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'a', label: 'A', command: 'echo a', script: 'x' }] } }),
+    /Unknown configuration field: menu\.customCommands\[0\]\.script/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { customCommands: [{ id: 'refresh', label: 'Shadow', command: 'echo shadow' }] } }),
+    /Menu command id is reserved: refresh/,
+  );
+  assert.throws(
+    () => validateConfig({ menu: { items: [] } }),
+    /Unknown configuration field: menu\.items/,
+  );
+});
+
+test('packaged config ships the menu defaults', async () => {
+  const packaged = JSON.parse(await readFile('config/default.json', 'utf8'));
+  assert.deepEqual(packaged.menu, { customCommands: [], avoidObstacles: true });
+  assert.deepEqual(validateConfig(packaged).menu, { customCommands: [], avoidObstacles: true });
+});
+
+test('validates the menu obstacle avoidance toggle', () => {
+  assert.equal(validateConfig({ menu: { avoidObstacles: false } }).menu.avoidObstacles, false);
+  assert.equal(validateConfig({}).menu.avoidObstacles, true);
+  assert.throws(
+    () => validateConfig({ menu: { avoidObstacles: 'yes' } }),
+    /menu\.avoidObstacles must be a boolean/,
+  );
 });
 
 test('reports malformed JSON with the configuration path', async () => {

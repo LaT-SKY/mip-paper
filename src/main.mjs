@@ -32,6 +32,7 @@ import { createColorService, colorCacheDirectory } from './color-service.mjs';
 import { createKdeAppearanceWatcher } from './kde-appearance.mjs';
 import { createAppearanceCoordinator } from './appearance.mjs';
 import { coordinatorScriptPath, createFullscreenWatcher } from './fullscreen-watcher.mjs';
+import { createMenuCommandRunner } from './menu-command.mjs';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 let manager;
@@ -195,6 +196,10 @@ async function run() {
   wallpaperSync.start();
   await wallpaperSync.whenIdle();
 
+  const menuCommandRunner = createMenuCommandRunner({
+    homedir: os.homedir(),
+    log: (message) => console.error(message),
+  });
   manager = createWindowManager({
     BrowserWindow,
     screen,
@@ -202,6 +207,8 @@ async function run() {
     defaultSession: session.defaultSession,
     config,
     appearance: appearanceCoordinator.getState(),
+    appVersion: app.getVersion(),
+    menuCommandRunner,
     informationService,
     audioSpectrumService,
     colorService,
@@ -236,6 +243,7 @@ async function run() {
   fullscreenWatcher = createFullscreenWatcher({
     getDisplays: () => screen.getAllDisplays(),
     onStateChange: (displayId, paused) => manager?.updateFullscreen(displayId, paused),
+    onWorkAreaChange: (displayId, rect) => manager?.updateWorkArea(displayId, rect),
     enabled: () => currentConfig.motion.pauseWhenFullscreen,
     log: (message) => console.error(message),
     scriptPath: coordinatorScriptPath(),

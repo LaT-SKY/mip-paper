@@ -8,6 +8,11 @@ export const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
 export const COLOR_UPDATED_CHANNEL = 'wallpaper:color-updated';
 export const COLOR_SUBMIT_CHANNEL = 'wallpaper:submit-color';
 export const FULLSCREEN_UPDATED_CHANNEL = 'wallpaper:fullscreen-updated';
+export const MENU_COMMAND_CHANNEL = 'wallpaper:menu-command';
+export const WORK_AREA_UPDATED_CHANNEL = 'wallpaper:work-area-updated';
+export const GET_WORK_AREA_CHANNEL = 'wallpaper:get-work-area';
+export const MENU_OPENED_CHANNEL = 'wallpaper:menu-opened';
+export const NOTIFY_MENU_OPENED_CHANNEL = 'wallpaper:notify-menu-opened';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -32,12 +37,15 @@ export function createWindowManager({
   colorService = null,
   onDisplaysChanged = () => {},
   appearance = null,
+  menuCommandRunner = null,
+  appVersion = null,
 }) {
   const windows = new Map();
   const bootstrapByWebContents = new Map();
   const informationUnsubscribers = new Map();
   const audioUnsubscribers = new Map();
   const pausedByDisplay = new Map();
+  const workAreaByDisplay = new Map();
   let currentConfig = config;
   let currentAppearance = appearance;
   let queue = Promise.resolve();
@@ -92,9 +100,11 @@ export function createWindowManager({
     windows.set(display.id, window);
     bootstrapByWebContents.set(webContentsId, {
       config: currentConfig,
+      ...(appVersion != null ? { appVersion } : {}),
       ...(currentAppearance ? { appearance: currentAppearance } : {}),
       display,
       paused: pausedByDisplay.get(display.id) ?? false,
+      ...(workAreaByDisplay.has(display.id) ? { workArea: workAreaByDisplay.get(display.id) } : {}),
       wallpaper: getWallpaperTransaction(display),
       ...(informationService ? { information: informationService.getSnapshot() } : {}),
       ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
@@ -120,6 +130,10 @@ export function createWindowManager({
       bootstrapByWebContents.delete(webContentsId);
     });
     await window.loadFile(rendererPath);
+    // Chromium's Wayland viewport can drift from the requested bounds under
+    // fractional scaling; re-assert the exact content size so the wallpaper
+    // never overflows into a neighbouring display.
+    window.setContentSize?.(width, height);
     window.setTitle(formatDisplayTargetTitle(display));
   }
 
@@ -147,9 +161,11 @@ export function createWindowManager({
       window.setBounds(display.bounds);
       bootstrapByWebContents.set(window.webContents.id, {
         config: currentConfig,
+        ...(appVersion != null ? { appVersion } : {}),
         ...(currentAppearance ? { appearance: currentAppearance } : {}),
         display,
         paused: pausedByDisplay.get(display.id) ?? false,
+        ...(workAreaByDisplay.has(display.id) ? { workArea: workAreaByDisplay.get(display.id) } : {}),
         wallpaper: getWallpaperTransaction(display),
         ...(informationService ? { information: informationService.getSnapshot() } : {}),
         ...(audioSpectrumService ? { audioSpectrum: audioSpectrumService.getSnapshot() } : {}),
@@ -200,6 +216,33 @@ export function createWindowManager({
         return colorService.submitWallpaperAccent(displayId, submission);
       });
     }
+    ipcMain.handle(GET_WORK_AREA_CHANNEL, (event) => {
+      const displayId = [...windows.entries()].find(([, window]) => window.webContents.id === event.sender.id)?.[0];
+      if (displayId === undefined) throw new Error('Unknown wallpaper renderer');
+      return workAreaByDisplay.get(displayId) ?? null;
+    });
+    // Only one context menu may be open across all displays: when a renderer
+    // opens its menu it tells every other window to close theirs.
+    ipcMain.on(NOTIFY_MENU_OPENED_CHANNEL, (event) => {
+      for (const window of windows.values()) {
+        if (window.webContents.id !== event.sender.id) {
+          window.webContents.send(MENU_OPENED_CHANNEL, {});
+        }
+      }
+    });
+    if (menuCommandRunner) {
+      ipcMain.handle(MENU_COMMAND_CHANNEL, async (event, request) => {
+        if (!bootstrapByWebContents.has(event.sender.id)) throw new Error('Unknown wallpaper renderer');
+        const id = request?.id;
+        if (typeof id !== 'string' || id.trim() === '') {
+          throw new TypeError('Menu command id must be a non-empty string');
+        }
+        const entry = (currentConfig.menu?.customCommands ?? []).find((command) => command.id === id);
+        if (!entry) throw new Error('Unknown menu command: ' + id);
+        await menuCommandRunner.run({ command: entry.command, mode: entry.mode ?? 'background' });
+        return { ok: true };
+      });
+    }
     screen.on('display-added', onDisplayAdded);
     screen.on('display-removed', onDisplayRemoved);
     screen.on('display-metrics-changed', onDisplayMetricsChanged);
@@ -215,9 +258,12 @@ export function createWindowManager({
     screen.off('display-removed', onDisplayRemoved);
     screen.off('display-metrics-changed', onDisplayMetricsChanged);
     ipcMain.removeHandler(BOOTSTRAP_CHANNEL);
+    ipcMain.removeHandler(GET_WORK_AREA_CHANNEL);
+    ipcMain.removeAllListeners(NOTIFY_MENU_OPENED_CHANNEL);
     if (informationService) ipcMain.removeHandler(INFORMATION_CHANNEL);
     if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);
     if (colorService) ipcMain.removeHandler(COLOR_SUBMIT_CHANNEL);
+    if (menuCommandRunner) ipcMain.removeHandler(MENU_COMMAND_CHANNEL);
     for (const window of [...windows.values()]) {
       window.close();
     }
@@ -286,6 +332,34 @@ export function createWindowManager({
     return true;
   }
 
+  function updateWorkArea(displayId, rect) {
+    const display = screen.getAllDisplays().find((candidate) => candidate.id === displayId);
+    if (!display || !rect) return false;
+    const normalized = {
+      x: rect.x - display.bounds.x,
+      y: rect.y - display.bounds.y,
+      width: rect.width,
+      height: rect.height,
+    };
+    const previous = workAreaByDisplay.get(displayId);
+    if (previous
+      && previous.x === normalized.x && previous.y === normalized.y
+      && previous.width === normalized.width && previous.height === normalized.height) {
+      return false;
+    }
+    // Store even when the window does not exist yet, so a later bootstrap
+    // carries the current work area regardless of push/boot ordering.
+    workAreaByDisplay.set(displayId, normalized);
+    const window = windows.get(displayId);
+    if (!window) return true;
+    const bootstrap = bootstrapByWebContents.get(window.webContents.id);
+    if (bootstrap) {
+      bootstrapByWebContents.set(window.webContents.id, { ...bootstrap, workArea: normalized });
+    }
+    window.webContents.send(WORK_AREA_UPDATED_CHANNEL, normalized);
+    return true;
+  }
+
   function updateFullscreen(displayId, paused) {
     const active = Boolean(paused);
     pausedByDisplay.set(displayId, active);
@@ -308,6 +382,7 @@ export function createWindowManager({
     updateWallpaper,
     updateColor,
     updateFullscreen,
+    updateWorkArea,
     whenIdle: () => queue,
   };
 }

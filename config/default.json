@@ -53,5 +53,9 @@
       "fallbackLocationId": "101281601"
     },
     "tideStationId": "P2352"
+  },
+  "menu": {
+    "customCommands": [],
+    "avoidObstacles": true
   }
 }

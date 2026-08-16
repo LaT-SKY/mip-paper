@@ -93,9 +93,12 @@ install_rule() {
   write_key "$RULE_ID" wmclassmatch 1
   delete_key "$RULE_ID" title
   delete_key "$RULE_ID" titlematch
-  # 0.3.2: the ignore-focus rule is removed; delete legacy keys on upgrade.
-  delete_key "$RULE_ID" acceptfocus
-  delete_key "$RULE_ID" acceptfocusrule
+  # The wallpaper window must never take keyboard focus: the context menu is
+  # mouse-driven and other windows must keep focus. Accepting focus caused the
+  # window to be resized on focus changes, overflowing into neighbouring
+  # displays.
+  write_key "$RULE_ID" acceptfocus false --type bool
+  write_key "$RULE_ID" acceptfocusrule 2
   write_key "$RULE_ID" types 1
   write_key "$RULE_ID" noborder true --type bool
   write_key "$RULE_ID" noborderrule 2

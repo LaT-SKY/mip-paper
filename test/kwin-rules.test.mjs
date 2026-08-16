@@ -62,8 +62,8 @@ test('install adds an exact project rule without replacing existing rules', asyn
     assert.equal(await readKey(file, 'mip-paper', 'skiptaskbar'), 'true');
     assert.equal(await readKey(file, 'mip-paper', 'skippager'), 'true');
     assert.equal(await readKey(file, 'mip-paper', 'skipswitcher'), 'true');
-    assert.equal(await readKey(file, 'mip-paper', 'acceptfocus', 'missing'), 'missing');
-    assert.equal(await readKey(file, 'mip-paper', 'acceptfocusrule', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'acceptfocus'), 'false');
+    assert.equal(await readKey(file, 'mip-paper', 'acceptfocusrule'), '2');
     assert.equal(await readKey(file, 'mip-paper', 'noborder'), 'true');
     assert.equal(await readKey(file, 'mip-paper', 'fullscreen', 'missing'), 'true');
     assert.equal(await readKey(file, 'mip-paper', 'fullscreenrule', 'missing'), '2');
@@ -107,7 +107,7 @@ test('install removes legacy exact-title matching keys', async () => {
   }
 });
 
-test('install removes legacy acceptfocus keys from an older rule', async () => {
+test('install rewrites the ignore-focus keys even on an older rule', async () => {
   const { directory, file } = await fixture();
   try {
     await writeFile(file, [
@@ -120,8 +120,8 @@ test('install removes legacy acceptfocus keys from an older rule', async () => {
 
     await runHelper('install', file);
 
-    assert.equal(await readKey(file, 'mip-paper', 'acceptfocus', 'missing'), 'missing');
-    assert.equal(await readKey(file, 'mip-paper', 'acceptfocusrule', 'missing'), 'missing');
+    assert.equal(await readKey(file, 'mip-paper', 'acceptfocus'), 'false');
+    assert.equal(await readKey(file, 'mip-paper', 'acceptfocusrule'), '2');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

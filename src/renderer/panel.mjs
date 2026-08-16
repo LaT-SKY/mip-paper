@@ -55,6 +55,14 @@ export function createPanelController({ root, cards, config, viewport }) {
 
   return {
     setConfig(nextConfig) { updatePanelConfig(state, nextConfig); },
+    expanded() { return state.expanded; },
+    toggleExpanded() {
+      const config = state.config;
+      config.autoExpandHide = false;
+      config.expanded = !state.expanded;
+      updatePanelConfig(state, config);
+      return config.expanded;
+    },
     attention() { return panelRequestsInteractiveFps(state); },
     recordPointer(x, y, nowMs) { recordPointer(state, x, y, nowMs); },
     resize(width, height) {

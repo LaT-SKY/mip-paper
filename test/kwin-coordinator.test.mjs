@@ -48,7 +48,7 @@ function appWindow(id, currentOutput, fullScreen = false) {
   };
 }
 
-async function runCoordinator({ outputs, windows }) {
+async function runCoordinator({ outputs, windows, clientArea = null, currentDesktop = 1 }) {
   const moves = [];
   const raises = [];
   const logs = [];
@@ -60,6 +60,9 @@ async function runCoordinator({ outputs, windows }) {
     windowActivated: new Signal(),
     screensChanged: new Signal(),
     screenOrderChanged: new Signal(),
+    currentDesktopChanged: new Signal(),
+    currentDesktop,
+    ...(clientArea ? { clientArea } : {}),
     sendClientToScreen(window, target) {
       moves.push([window, target]);
       window.output = target;
@@ -72,6 +75,7 @@ async function runCoordinator({ outputs, windows }) {
   const intervals = [];
   const context = {
     workspace,
+    KWin: { WorkArea: 3 },
     console: { info: (line) => logs.push(line) },
     callDBus(...args) {
       dbusCalls.push(args);
@@ -364,6 +368,74 @@ test('pushes on window activation changes without using timers', async () => {
   assert.equal(result.dbusCalls.length, 1);
   assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, true);
   assert.equal(result.intervals.length, 0);
+});
+
+function workAreaPush(result) {
+  const push = result.dbusCalls.map(pushArgs).find((call) => call.method === 'SetOutputWorkArea');
+  assert.ok(push, 'expected a SetOutputWorkArea push');
+  return push;
+}
+
+test('pushes per-output work areas that exclude Plasma panels', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const clientArea = (area, target) => (target === primary
+    ? { x: 0, y: 0, width: 1536, height: 900 }
+    : { x: 0, y: 0, width: 1536, height: 960 });
+  const result = await runCoordinator({ outputs: [primary], windows: [], clientArea });
+
+  const push = workAreaPush(result);
+  assert.equal(push.service, 'org.mip.Paper');
+  assert.equal(push.path, '/Fullscreen');
+  assert.equal(push.interface, 'org.mip.Paper.WorkArea');
+  assert.equal(push.method, 'SetOutputWorkArea');
+  assert.equal(push.output, 'eDP-1');
+  assert.equal(push.x, 0);
+  assert.equal(push.y, 0);
+  assert.equal(push.width, 1536);
+  assert.equal(push.height, 900);
+});
+
+test('skips work-area pushes on a panel-free desktop', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const result = await runCoordinator({ outputs: [primary], windows: [] });
+
+  assert.equal(result.dbusCalls.length, 1);
+  assert.equal(pushArgs(result.dbusCalls[0]).method, 'SetOutputFullscreen');
+});
+
+test('clears a previously shrunk work area when the panel is removed', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  let panelHeight = 900;
+  const clientArea = () => ({ x: 0, y: 0, width: 1536, height: panelHeight });
+  const { workspace, dbusCalls } = await runCoordinator({ outputs: [primary], windows: [], clientArea });
+  assert.equal(workAreaPush({ dbusCalls }).height, 900);
+
+  dbusCalls.length = 0;
+  panelHeight = 960;
+  workspace.screensChanged.emit();
+
+  assert.equal(workAreaPush({ dbusCalls }).height, 960);
+});
+
+test('dedupes unchanged work areas and re-pushes when a desktop changes it', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const holder = { desktop: 1 };
+  const clientArea = () => ({ x: 0, y: 0, width: 1536, height: holder.desktop === 1 ? 880 : 840 });
+  const { workspace, dbusCalls } = await runCoordinator({
+    outputs: [primary],
+    windows: [],
+    clientArea,
+    currentDesktop: 1,
+  });
+  dbusCalls.length = 0;
+
+  workspace.windowActivated.emit();
+  assert.equal(dbusCalls.filter((call) => call[3] === 'SetOutputWorkArea').length, 0);
+
+  holder.desktop = 2;
+  workspace.currentDesktop = 2;
+  workspace.currentDesktopChanged.emit();
+  assert.equal(workAreaPush({ dbusCalls }).height, 840);
 });
 
 test('logs callDBus failures only for change-driven pushes', async () => {

@@ -128,6 +128,7 @@ class FakeScreen extends EventEmitter {
 class FakeIpcMain {
   constructor() {
     this.handlers = new Map();
+    this.listeners = new Map();
   }
 
   handle(channel, handler) {
@@ -136,6 +137,16 @@ class FakeIpcMain {
 
   removeHandler(channel) {
     this.handlers.delete(channel);
+  }
+
+  on(channel, handler) {
+    const set = this.listeners.get(channel) ?? new Set();
+    set.add(handler);
+    this.listeners.set(channel, set);
+  }
+
+  removeAllListeners(channel) {
+    this.listeners.delete(channel);
   }
 }
 

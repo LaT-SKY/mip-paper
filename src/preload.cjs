@@ -10,6 +10,11 @@ const WALLPAPER_UPDATED_CHANNEL = 'wallpaper:wallpaper-updated';
 const COLOR_UPDATED_CHANNEL = 'wallpaper:color-updated';
 const COLOR_SUBMIT_CHANNEL = 'wallpaper:submit-color';
 const FULLSCREEN_UPDATED_CHANNEL = 'wallpaper:fullscreen-updated';
+const MENU_COMMAND_CHANNEL = 'wallpaper:menu-command';
+const WORK_AREA_UPDATED_CHANNEL = 'wallpaper:work-area-updated';
+const GET_WORK_AREA_CHANNEL = 'wallpaper:get-work-area';
+const MENU_OPENED_CHANNEL = 'wallpaper:menu-opened';
+const NOTIFY_MENU_OPENED_CHANNEL = 'wallpaper:notify-menu-opened';
 
 contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
   getBootstrap: () => ipcRenderer.invoke(BOOTSTRAP_CHANNEL),
@@ -45,5 +50,18 @@ contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
     const wrapper = (_event, payload) => listener(payload);
     ipcRenderer.on(FULLSCREEN_UPDATED_CHANNEL, wrapper);
     return () => ipcRenderer.removeListener(FULLSCREEN_UPDATED_CHANNEL, wrapper);
+  },
+  runMenuCommand: (request) => ipcRenderer.invoke(MENU_COMMAND_CHANNEL, request),
+  getWorkArea: () => ipcRenderer.invoke(GET_WORK_AREA_CHANNEL),
+  notifyMenuOpened: () => ipcRenderer.send(NOTIFY_MENU_OPENED_CHANNEL),
+  onMenuOpened: (listener) => {
+    const wrapper = () => listener();
+    ipcRenderer.on(MENU_OPENED_CHANNEL, wrapper);
+    return () => ipcRenderer.removeListener(MENU_OPENED_CHANNEL, wrapper);
+  },
+  onWorkAreaUpdated: (listener) => {
+    const wrapper = (_event, rect) => listener(rect);
+    ipcRenderer.on(WORK_AREA_UPDATED_CHANNEL, wrapper);
+    return () => ipcRenderer.removeListener(WORK_AREA_UPDATED_CHANNEL, wrapper);
   },
 }));
