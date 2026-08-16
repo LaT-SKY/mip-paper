@@ -5,7 +5,47 @@ All notable changes to Mip-Paper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — 0.3.2 (in development)
+## [Unreleased] — 0.3.3 (in development)
+
+### Added
+
+- Visual settings window, opened from a new built-in 设置 entry in the
+  wallpaper context menu: every config.json field is editable through
+  switches, selects, and number/text inputs and persists atomically with the
+  same validation as config.mjs, then applies through the existing config
+  watcher without restarting Electron or wallpaper windows. The window also
+  manages QWeather credentials (masked API key, written to
+  weather-credentials.json with 0600 permissions), edits menu.customCommands
+  in a list editor, and imports JPEG/PNG/WebP wallpapers through a file dialog
+  (switching to manual mode). The UI mirrors the context menu's design
+  language — white surface in light mode, large rounded corners, SVG icons,
+  and the same spring animation (with reduced-motion fallback) — and is
+  registered as an app-UI window so wallpaper context menus stay open while
+  interacting with it.
+- The settings menu command id is reserved so a user custom command cannot
+  shadow the settings entry.
+
+### Changed
+
+- The KWin window rule now also matches the wallpaper display-target caption
+  (mip-paper|display=, substring match), scoping its forced
+  fullscreen/below/no-focus properties to the wallpaper windows so the
+  settings window renders as a normal framed, taskbar-visible window above the
+  wallpaper.
+- README decoupling: the landing README (中文/English) is now a concise page
+  with the wallpaper introduction, promotional showcase material, and an
+  index; the rest of the user guide moved to docs/guides/ as three bilingual
+  documents — 快速开始 (Quick Start), 配置 (Configuration), and 隐私与许可证
+  (Privacy and Licenses). Content assertions migrated from test/readme.test.mjs
+  to the new test/docs-guides.test.mjs.
+
+### Docs
+
+- Add the user-guide index to docs/README.md and document the settings
+  window, the scoped KWin rule, and the menu/settings unavailability while
+  interactionEnabled is false.
+
+## [0.3.2] - 2026-08-16
 
 ### Added
 
