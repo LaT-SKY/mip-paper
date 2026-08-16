@@ -293,9 +293,9 @@ After effective pointer input stops for `0.95` seconds, the scene returns smooth
 | `motion.horizontalPanPercent` | finite number, `>= 0` % | `4.6` | Maximum horizontal pan as viewport percentage | Live reload |
 | `motion.verticalPanPercent` | finite number, `>= 0` % | `4.5` | Maximum vertical pan as viewport percentage | Live reload |
 | `motion.maxRotationDegrees` | finite number, `>= 0` degrees | `0.7` | Maximum image rotation | Live reload |
-| `motion.pauseWhenFullscreen` | boolean | `true` | Pause that display's wallpaper motion and rendering while a fullscreen window covers it; resume automatically when it closes | Live reload |
+| `motion.pauseWhenFullscreen` | boolean | `true` | Pause that display's wallpaper motion and rendering while a fullscreen or maximized window covers it; resume automatically when it is restored | Live reload |
 
-When a fullscreen window (video, game, etc.) covers a display, that display's render loop stops completely and the camera, panels, and audio ribbon freeze, saving GPU/CPU; other displays are unaffected. When the fullscreen window closes or moves away, the wallpaper continues drifting from the frozen position. The wallpaper's own windows never trigger the pause. The display coordinator (KWin Script) reports fullscreen state over the session bus `org.mip.Paper`, visible only to the current desktop session.
+When a fullscreen or maximized window (video, game, etc.) covers a display, that display's render loop stops completely and the camera, panels, and audio ribbon freeze, saving GPU/CPU; other displays are unaffected. When the window returns to normal size or moves away, the wallpaper continues drifting from the frozen position. The wallpaper's own windows never trigger the pause. The display coordinator (KWin Script) reports covering-window state over the session bus `org.mip.Paper`, visible only to the current desktop session.
 
 ### Floating Information Panels
 

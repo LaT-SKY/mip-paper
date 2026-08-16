@@ -29,7 +29,7 @@ function createFakeBus() {
   };
   const handlers = [];
   const bus = {
-    async requestName(name) { state.requestNames.push(name); return 1; },
+    async requestName(name, flags) { state.requestNames.push(name, flags); return 1; },
     releaseName(name) { state.releases.push(name); },
     disconnect() { state.disconnectCount += 1; },
     addMethodHandler(fn) { handlers.push(fn); state.addedHandlers.push(fn); },
@@ -42,6 +42,7 @@ function createFakeBus() {
 function createFakeDbus(bus) {
   return {
     sessionBus: () => bus,
+    NameFlag: { REPLACE_EXISTING: 2, ALLOW_REPLACEMENT: 1 },
     Message: {
       newMethodReturn: (msg, signature, body) => ({ __reply: true, to: msg, signature, body }),
     },
@@ -93,7 +94,7 @@ test('watcher owns the service name and registers a method handler on start', as
     onStateChange: (displayId, paused) => changes.push([displayId, paused]),
   });
   await watcher.start();
-  assert.deepEqual(state.requestNames, [FULLSCREEN_SERVICE]);
+  assert.deepEqual(state.requestNames, [FULLSCREEN_SERVICE, 2]);
   assert.equal(state.addedHandlers.length, 1);
   await watcher.stop();
   assert.equal(state.removedHandlers.length, 1);

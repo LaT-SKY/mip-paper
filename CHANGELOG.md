@@ -15,13 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fire-and-forget or terminal-emulator mode). The menu follows the light/dark
   appearance, is scoped to the right-clicked display, and stays extensible for
   a future settings page.
-- Pause a display's wallpaper while a fullscreen window covers it
-  (`motion.pauseWhenFullscreen`, default `true`): the render loop stops and
-  the camera, panels, and audio ribbon freeze until the window closes or moves
-  away; other displays are unaffected. The KWin display coordinator reports
-  per-output fullscreen state over the session bus `org.mip.Paper`, and a
-  5-second heartbeat converges after app or KWin restarts. The wallpaper's own
-  windows never trigger the pause.
+- Pause a display's wallpaper while a fullscreen or maximized window covers
+  it (`motion.pauseWhenFullscreen`, default `true`): the render loop stops
+  and the camera, panels, and audio ribbon freeze until the window returns to
+  normal size or moves away; other displays are unaffected. The KWin display
+  coordinator detects covering windows (fullscreen property or geometry
+  matching the output's maximize area) and reports them over the session bus
+  `org.mip.Paper`; the service restarts the coordinator on startup to
+  re-sync state after app or KWin restarts. The wallpaper's own windows never
+  trigger the pause.
 
 ### Changed
 

@@ -26,10 +26,14 @@ function wallpaper(id, title, currentOutput) {
     caption: title,
     output: currentOutput,
     frameGeometry: null,
+    clientGeometry: null,
     noBorder: false,
     fullScreen: false,
+    maximizeMode: 0,
     captionChanged: new Signal(),
     fullScreenChanged: new Signal(),
+    maximizedChanged: new Signal(),
+    frameGeometryChanged: new Signal(),
     outputChanged: new Signal(),
     closed: new Signal(),
   };
@@ -41,8 +45,12 @@ function appWindow(id, currentOutput, fullScreen = false) {
     resourceClass: 'unrelated-application',
     caption: 'Some App',
     output: currentOutput,
+    clientGeometry: null,
     fullScreen,
+    maximizeMode: 0,
     fullScreenChanged: new Signal(),
+    maximizedChanged: new Signal(),
+    frameGeometryChanged: new Signal(),
     outputChanged: new Signal(),
     closed: new Signal(),
   };
@@ -75,7 +83,7 @@ async function runCoordinator({ outputs, windows, clientArea = null, currentDesk
   const intervals = [];
   const context = {
     workspace,
-    KWin: { WorkArea: 3 },
+    KWin: { WorkArea: 3, MaximizeArea: 4 },
     console: { info: (line) => logs.push(line) },
     callDBus(...args) {
       dbusCalls.push(args);
@@ -445,5 +453,75 @@ test('logs callDBus failures only for change-driven pushes', async () => {
 
   result.dbusCallbacks[0]('No such service');
 
-  assert.match(result.logs.join('\n'), /fullscreen-push-error output=eDP-1 fullscreen=true error=No such service/);
+  assert.match(result.logs.join('\n'), /fullscreen-push-error output=eDP-1 covering=true error=No such service/);
+});
+
+test('treats a maximized window as covering the output', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const app = appWindow('app', primary, false);
+  app.maximizeMode = 3;
+
+  const result = await runCoordinator({ outputs: [primary], windows: [app] });
+
+  const push = singlePush(result);
+  assert.equal(push.method, 'SetOutputFullscreen');
+  assert.equal(push.fullscreen, true);
+});
+
+test('does not pause for a large non-maximized window', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const app = appWindow('app', primary, false);
+  app.clientGeometry = { x: 0, y: 0, width: 1500, height: 830 };
+
+  const result = await runCoordinator({ outputs: [primary], windows: [app] });
+
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, false);
+});
+
+test('re-evaluates covering state when the maximize mode settles', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const app = appWindow('app', primary, false);
+  const result = await runCoordinator({ outputs: [primary], windows: [app] });
+  result.dbusCalls.length = 0;
+
+  app.maximizeMode = 3;
+  app.frameGeometryChanged.emit();
+
+  assert.equal(result.dbusCalls.length, 1);
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, true);
+});
+
+test('pushes when a window becomes maximized via maximizedChanged', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const app = appWindow('app', primary, false);
+  const result = await runCoordinator({ outputs: [primary], windows: [app] });
+  result.dbusCalls.length = 0;
+
+  app.maximizeMode = 3;
+  app.maximizedChanged.emit();
+
+  assert.equal(result.dbusCalls.length, 1);
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, true);
+});
+
+test('does not pause for desktop-layer windows such as plasmashell', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const shell = appWindow('shell', primary, false);
+  shell.resourceClass = 'plasmashell';
+  shell.clientGeometry = { x: 0, y: 0, width: 1536, height: 960 };
+
+  const result = await runCoordinator({ outputs: [primary], windows: [shell] });
+
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, false);
+});
+
+test('never treats mip-paper windows as covering', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const own = wallpaper('own', 'mip-paper|display=11|bounds=0,0,1536,960', primary);
+  own.fullScreen = true;
+  own.maximizeMode = 3;
+
+  const result = await runCoordinator({ outputs: [primary], windows: [own] });
+
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, false);
 });
