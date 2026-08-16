@@ -71,7 +71,7 @@ async function fixture({
   const credentialsPath = path.join(configHome, 'mip-paper', 'weather-credentials.json');
   await writeFile(credentialsPath, invalidCredentials ? '{}' : JSON.stringify({ apiHost: 'weather.example.com', apiKey: 'private' }), { mode: 0o600 });
   await writeFile(path.join(configHome, 'systemd', 'user', 'mip-paper.service'), '[Service]\n');
-  await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nmip-paperEnabled=${coordinator === 'valid'}\n`);
+  await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nmip-paperEnabled=${coordinator !== 'missing'}\n`);
   await mkdir(path.join(home, '.local', 'share', 'mip-paper'), { recursive: true });
   await writeFile(path.join(home, '.local', 'share', 'mip-paper', 'wallpaper'), png);
   await executable(path.join(home, '.local', 'bin', 'mip-paper'), '#!/usr/bin/env bash\n');
@@ -80,6 +80,11 @@ async function fixture({
 
   await executable(path.join(fakeBin, 'plasmashell'), '#!/usr/bin/env bash\nprintf "plasmashell 6.7.4\\n"\n');
   await executable(path.join(fakeBin, 'kwin_wayland'), `#!/usr/bin/env bash\nprintf "kwin ${kwinVersion}\\n"\n`);
+  await executable(path.join(fakeBin, 'qdbus6'), `#!/usr/bin/env bash
+if [[ "$*" == *Scripting.isScriptLoaded* ]]; then
+  printf '${coordinator === 'unloaded' ? 'false' : 'true'}\\n'
+fi
+`);
   await executable(path.join(fakeBin, 'electron43'), '#!/usr/bin/env bash\nexit 0\n');
   await executable(path.join(fakeBin, 'pw-metadata'), `#!/bin/bash
 printf '%s\n' "update: id:0 key:'default.audio.sink' value:'{\\\"name\\\":\\\"sink.test\\\"}' type:'Spa:String:JSON'"
@@ -227,6 +232,19 @@ test('doctor reports a missing or disabled KWin coordinator', async () => {
     await assert.rejects(execFileAsync(cli, ['doctor'], { env: fixtureData.env }), (error) => {
       assert.equal(error.code, 1);
       assert.match(error.stdout, /FAIL .*KWin coordinator/);
+      return true;
+    });
+  } finally {
+    await rm(fixtureData.home, { recursive: true, force: true });
+  }
+});
+
+test('doctor reports an enabled but unloaded KWin coordinator', async () => {
+  const fixtureData = await fixture({ coordinator: 'unloaded' });
+  try {
+    await assert.rejects(execFileAsync(cli, ['doctor'], { env: fixtureData.env }), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout, /FAIL .*KWin coordinator.*enabled but not loaded/);
       return true;
     });
   } finally {
