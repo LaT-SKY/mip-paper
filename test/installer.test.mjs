@@ -482,9 +482,10 @@ test('packaged teardown preserves user data and purge removes exact app director
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=false/);
 
     await runCli(['setup'], fixture);
-    await runCli(['teardown', '--purge'], fixture);
+    const teardown = await runCli(['teardown', '--purge'], fixture);
     assert.equal(await exists(path.dirname(fixture.config)), false);
     assert.equal(await exists(fixture.dataDirectory), false);
+    assert.match(teardown.stdout, /system KWin script remains package-owned/);
   } finally {
     await cleanup(fixture);
   }

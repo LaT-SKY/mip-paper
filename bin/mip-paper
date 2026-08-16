@@ -433,6 +433,9 @@ teardown_app() {
     rm -rf -- "$CONFIG_DIRECTORY" "$DATA_DIRECTORY" "$CACHE_DIRECTORY"
   fi
   printf 'Teardown complete.\n'
+  if [[ "$INSTALL_MODE" == packaged ]]; then
+    printf 'The system KWin script remains package-owned; remove it with: sudo pacman -R mip-paper\n'
+  fi
 }
 
 service_command() {

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Enabling the packaged KWin coordinator now performs the complete plugin
+  manager transition that Plasma's checkbox applies, so a fresh setup does not
+  require manually unchecking and rechecking the script.
+- Packaged teardown now explains that the system KWin script is pacman-owned
+  and must be removed with `sudo pacman -R mip-paper`.
+
 ## [0.3.4] - 2026-08-16
 
 ### Fixed
