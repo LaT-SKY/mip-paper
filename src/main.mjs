@@ -180,6 +180,7 @@ async function run() {
         ...source,
         generation: color.generation,
         wallpaperLuminance: color.wallpaperLuminance ?? null,
+        audioNeutral: color.audioNeutral ?? null,
         color,
       };
       wallpaperTransactions.set(source.displayId, wallpaper);
@@ -215,6 +216,7 @@ async function run() {
         contentKey: null,
         generation: 0,
         wallpaperLuminance: color?.wallpaperLuminance ?? null,
+        audioNeutral: color?.audioNeutral ?? null,
         color,
       };
     },

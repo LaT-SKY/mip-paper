@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   analyzeWallpaperPixels,
+  selectAudioNeutral,
   complementaryRgb,
   contrastingNeutral,
   DEFAULT_ACCENT_RGB,
@@ -70,9 +71,23 @@ test('derives complementary and contrast-neutral audio colors', () => {
   assert.deepEqual(contrastingNeutral(0.18), [0, 0, 0]);
 });
 
+test('selects white for textured mixed audio backgrounds and black for uniform bright ones', () => {
+  const bright = pixels([{ rgb: [242, 242, 242], count: 32 }]);
+  assert.deepEqual(selectAudioNeutral(bright, 8), [0, 0, 0]);
+
+  const mixed = new Uint8ClampedArray(8 * 4 * 4);
+  for (let index = 0; index < mixed.length; index += 4) {
+    const x = (index / 4) % 8;
+    const rgb = x % 3 === 0 ? [18, 22, 32] : [236, 128, 194];
+    mixed.set([...rgb, 255], index);
+  }
+  assert.deepEqual(selectAudioNeutral(mixed, 8), [255, 255, 255]);
+});
+
 test('analyzes accent and luminance from the same opaque wallpaper sample', () => {
   const analysis = analyzeWallpaperPixels(pixels([{ rgb: [20, 180, 160], count: 4 }]));
   assert.deepEqual(analysis.rgb, [22, 182, 166]);
   assert.ok(Number.isFinite(analysis.luminance));
   assert.ok(analysis.luminance > 0 && analysis.luminance < 1);
+  assert.deepEqual(analysis.audioNeutral, [255, 255, 255]);
 });
