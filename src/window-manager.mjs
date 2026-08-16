@@ -17,6 +17,11 @@ export const NOTIFY_MENU_OPENED_CHANNEL = 'wallpaper:notify-menu-opened';
 // every renderer dismisses its context menu. Distinct from MENU_OPENED_CHANNEL,
 // which only fires when another display actually opened a menu.
 export const MENU_CLOSE_CHANNEL = 'wallpaper:menu-close';
+// Renderer -> main query used when the pointer leaves a wallpaper surface:
+// the main process owns the app-UI window registry (future GUI windows such
+// as a settings dialog) and reports whether the pointer is currently over
+// one of them, so the wallpaper does not dismiss its menu onto our own UI.
+export const IS_POINTER_OVER_APP_UI_CHANNEL = 'wallpaper:is-pointer-over-app-ui';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -50,6 +55,11 @@ export function createWindowManager({
   const audioUnsubscribers = new Map();
   const pausedByDisplay = new Map();
   const workAreaByDisplay = new Map();
+  // Non-wallpaper app UI windows (e.g. a future settings dialog). Their
+  // renderers are part of our own interface, so the wallpaper must not
+  // dismiss its context menu when the pointer moves onto them. The display
+  // wallpaper windows are deliberately NOT registered here.
+  const appUiWindows = new Set();
   let currentConfig = config;
   let currentAppearance = appearance;
   let queue = Promise.resolve();
@@ -225,6 +235,13 @@ export function createWindowManager({
       if (displayId === undefined) throw new Error('Unknown wallpaper renderer');
       return workAreaByDisplay.get(displayId) ?? null;
     });
+    // Wallpaper renderers ask whether the pointer is over one of our own app
+    // UI windows (future settings dialog etc.) so the context menu is not
+    // dismissed when the pointer moves onto our own interface.
+    ipcMain.handle(IS_POINTER_OVER_APP_UI_CHANNEL, (event) => {
+      if (!bootstrapByWebContents.has(event.sender.id)) throw new Error('Unknown wallpaper renderer');
+      return isPointerOverAppUi();
+    });
     // Only one context menu may be open across all displays: when a renderer
     // opens its menu it tells every other window to close theirs.
     ipcMain.on(NOTIFY_MENU_OPENED_CHANNEL, (event) => {
@@ -263,6 +280,7 @@ export function createWindowManager({
     screen.off('display-metrics-changed', onDisplayMetricsChanged);
     ipcMain.removeHandler(BOOTSTRAP_CHANNEL);
     ipcMain.removeHandler(GET_WORK_AREA_CHANNEL);
+    ipcMain.removeHandler(IS_POINTER_OVER_APP_UI_CHANNEL);
     ipcMain.removeAllListeners(NOTIFY_MENU_OPENED_CHANNEL);
     if (informationService) ipcMain.removeHandler(INFORMATION_CHANNEL);
     if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);
@@ -272,6 +290,7 @@ export function createWindowManager({
       window.close();
     }
     windows.clear();
+    appUiWindows.clear();
     bootstrapByWebContents.clear();
     informationUnsubscribers.clear();
     audioUnsubscribers.clear();
@@ -386,6 +405,45 @@ export function createWindowManager({
     }
   }
 
+  // Registry for non-wallpaper app UI windows (a future settings dialog,
+  // etc.). While the pointer is over one of them, wallpaper context menus
+  // must stay open — interacting with our own interface is not "focusing
+  // another app". The window is unregistered automatically when it closes.
+  function registerAppUiWindow(window) {
+    appUiWindows.add(window);
+    window.once?.('closed', () => appUiWindows.delete(window));
+  }
+
+  function unregisterAppUiWindow(window) {
+    appUiWindows.delete(window);
+  }
+
+  // Whether the current cursor position is inside any registered app UI
+  // window. Used by the wallpaper renderers on pointer-leave to decide
+  // whether dismissing the context menu would move the pointer onto our own
+  // interface (then keep the menu open).
+  function isPointerOverAppUi() {
+    if (appUiWindows.size === 0) return false;
+    let point;
+    try {
+      point = screen.getCursorScreenPoint();
+    } catch {
+      return false;
+    }
+    for (const window of [...appUiWindows]) {
+      if (window.isDestroyed?.()) {
+        appUiWindows.delete(window);
+        continue;
+      }
+      const [x, y] = window.getPosition();
+      const [width, height] = window.getSize();
+      if (point.x >= x && point.x < x + width && point.y >= y && point.y < y + height) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   return {
     start,
     stop,
@@ -397,6 +455,8 @@ export function createWindowManager({
     updateFullscreen,
     updateWorkArea,
     closeMenus,
+    registerAppUiWindow,
+    unregisterAppUiWindow,
     whenIdle: () => queue,
   };
 }

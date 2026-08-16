@@ -29,12 +29,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   desktop** (windows pinned to all desktops still count everywhere). Switching
   workspaces or moving windows across desktops re-evaluates each display live,
   so a video running on another workspace no longer freezes the wallpaper.
+  KWin exposes `window.desktops` as an array-like object for which
+  `Array.isArray()` is false, so the coordinator normalizes it before
+  comparing desktop identity or id.
 - Dismiss open context menus when another application is activated
   (`menu.closeOnFocusChange`, default `true`): the KWin coordinator reports
   non-wallpaper window activations over the session bus and every renderer
-  closes its menu. A timed fallback (`menu.autoCloseMs`, default `0` =
-  disabled) auto-closes a menu after the configured idle delay, independent of
-  the focus signal.
+  closes its menu. Moving the pointer off the wallpaper also dismisses the
+  menu, covering clicks on the window that is already focused (no activation
+  change fires for it). The context menu itself and future app UI windows
+  (e.g. a settings dialog) are excluded from dismissal: the menu is a
+  pointer-events surface above the canvas, and app windows are identified by
+  the `mip-paper` window class in the coordinator plus an app-UI window
+  registry in the main process consulted on pointer-leave. A timed fallback
+  (`menu.autoCloseMs`, default `0` = disabled) auto-closes a menu after the
+  configured idle delay, independent of the focus signal.
 
 ### Changed
 

@@ -34,10 +34,10 @@
   - **渲染边界修复**：renderer 按 display.bounds（DIP）渲染并裁剪，画布超出的边缘填背景色——Chromium Wayland 把窗口算大（如 1568×1002 vs 1536×960）时壁纸不再溢出到相邻显示器。
 
 - **多工作区感知的全屏暂停**（续 motion.pauseWhenFullscreen）：
-  - 覆盖判定只考虑该显示器**当前虚拟桌面**上的窗口：KWin 6.7 脚本用 window.desktops（VirtualDesktop 数组）+ window.onAllDesktops 判定窗口所在桌面，workspace.currentDesktop 为当前桌面；其他工作区的全屏/最大化窗口不再冻结壁纸（切到无覆盖的工作区时继续漂移）；切换工作区（currentDesktopChanged）实时重推覆盖状态；固定在所有桌面的窗口任何工作区都视为覆盖。兼容 Plasma 5 数字桌面兜底（window.desktop）。
+  - 覆盖判定只考虑该显示器**当前虚拟桌面**上的窗口：KWin 6.7 脚本用 window.desktops（VirtualDesktop 列表）+ window.onAllDesktops 判定窗口所在桌面，workspace.currentDesktop 为当前桌面；其他工作区的全屏/最大化窗口不再冻结壁纸（切到无覆盖的工作区时继续漂移）；切换工作区（currentDesktopChanged）实时重推覆盖状态；固定在所有桌面的窗口任何工作区都视为覆盖。兼容 Plasma 5 数字桌面兜底（window.desktop）。**实测修复**：KWin 6.7 的 window.desktops 是**类数组对象**（有 length/索引/map/includes）但 `Array.isArray()` 返回 **false**——最初的 `Array.isArray` 判断对真实窗口恒为假，落到最后的兜底 `return true`，导致任何工作区都算覆盖（工作区 1 时副屏仍暂停）；改为循环归一化（`for (let i = 0; i < desktops.length; i++)`）后按对象身份或 id 比较，探针（PROBE3）与实机切换 1→4→1 验证推送正确：HDMI 在 4 工作区 covering=true、在 1 工作区 covering=false。
 
 - **右键菜单聚焦自动消失 + 自动关闭兜底**（menu.* 配置，实时热加载）：
-  - menu.closeOnFocusChange（默认 true）：KWin 协调器在 windowActivated 时（非壁纸窗口）经会话总线 org.mip.Paper 的 /Menu·org.mip.Paper.Menu·WindowActivated 通知主进程，window-manager 新增 closeMenus() 向所有 renderer 广播 MENU_CLOSE_CHANNEL，各屏菜单自动收起；壁纸窗口忽略焦点，右键打开菜单不会误触关闭。
+  - menu.closeOnFocusChange（默认 true）：KWin 协调器在 windowActivated 时（非壁纸窗口）经会话总线 org.mip.Paper 的 /Menu·org.mip.Paper.Menu·WindowActivated 通知主进程，window-manager 新增 closeMenus() 向所有 renderer 广播 MENU_CLOSE_CHANNEL，各屏菜单自动收起；壁纸窗口忽略焦点，右键打开菜单不会误触关闭。**实测修复**：激活信号只在焦点**变化**时触发——点击已聚焦的窗口（A）不再产生信号，菜单关不掉；新增 renderer 侧 pointerleave 收起：指针移出壁纸窗口（点击任何其他窗口/面板前必然离开壁纸）即收起菜单，覆盖该场景。**自身界面排除**：菜单是叠在 canvas 上的独立表面，pointerleave 时用 elementFromPoint/relatedTarget 判定指针仍在菜单上则不收起；后续 GUI 窗口（mip-paper 窗口类，如设置对话框）经主进程 appUiWindows 注册表 + getCursorScreenPoint 判定指针在其上不收起（isPointerOverAppUi IPC），KWin 协调器以 isAppWindow（mip-paper 或 mip-paper-* 前缀）排除激活通知。
   - menu.autoCloseMs（默认 0 = 关闭）：renderer 侧兜底——菜单打开后启动一次性定时器，超时未操作自动关闭；createContextMenu 支持 getter 实时读取热加载值，open/close/destroy 正确取消定时器。
 
 ### 仓库整理

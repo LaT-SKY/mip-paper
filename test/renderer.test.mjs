@@ -241,6 +241,16 @@ test('context menu is mounted with its stylesheet and wired to the canvas', asyn
   assert.match(script, /onMenuCloseRequest/);
   assert.match(script, /unsubscribeMenuClose\(\);/);
   assert.match(script, /autoCloseMs: \(\) => currentConfig\.menu\.autoCloseMs/);
+  // Dismissing by pointer leave covers clicking a window that is already
+  // focused (no activation change fires for it).
+  assert.match(script, /canvas\.addEventListener\('pointerleave'/);
+  // The menu itself and our own app UI windows are excluded from the
+  // pointer-leave dismissal.
+  assert.match(script, /menuRoot\.contains\(target\)/);
+  assert.match(script, /document\.elementFromPoint\(event\.clientX, event\.clientY\)/);
+  assert.match(script, /window\.wallpaper\.isPointerOverAppUi\(\)/);
+  assert.match(script, /if \(overAppUi\) return;/);
+  assert.match(script, /if \(menu\.isOpen\(\)\) menu\.close\(\);/);
   assert.match(script, /bootstrap\.workArea/);
   assert.match(script, /currentConfig\.menu\.avoidObstacles && workArea/);
   assert.match(script, /menu\.open\(event\.clientX, event\.clientY, bounds\)/);

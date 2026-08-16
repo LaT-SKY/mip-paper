@@ -16,6 +16,7 @@ const GET_WORK_AREA_CHANNEL = 'wallpaper:get-work-area';
 const MENU_OPENED_CHANNEL = 'wallpaper:menu-opened';
 const NOTIFY_MENU_OPENED_CHANNEL = 'wallpaper:notify-menu-opened';
 const MENU_CLOSE_CHANNEL = 'wallpaper:menu-close';
+const IS_POINTER_OVER_APP_UI_CHANNEL = 'wallpaper:is-pointer-over-app-ui';
 
 contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
   getBootstrap: () => ipcRenderer.invoke(BOOTSTRAP_CHANNEL),
@@ -70,4 +71,5 @@ contextBridge.exposeInMainWorld('wallpaper', Object.freeze({
     ipcRenderer.on(MENU_CLOSE_CHANNEL, wrapper);
     return () => ipcRenderer.removeListener(MENU_CLOSE_CHANNEL, wrapper);
   },
+  isPointerOverAppUi: () => ipcRenderer.invoke(IS_POINTER_OVER_APP_UI_CHANNEL),
 }));
