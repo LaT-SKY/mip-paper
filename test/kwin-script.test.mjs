@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,23 +23,40 @@ async function fixture() {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'wallpaper-kwin-script-'));
   const configHome = path.join(directory, '.config');
   const dataHome = path.join(directory, '.local', 'share');
+  const fakeBin = path.join(directory, 'fake-bin');
+  const qdbusLog = path.join(directory, 'qdbus.log');
   const kwinrc = path.join(configHome, 'kwinrc');
   await mkdir(configHome, { recursive: true });
   await mkdir(dataHome, { recursive: true });
+  await mkdir(fakeBin, { recursive: true });
   await writeFile(kwinrc, '[Plugins]\nother-scriptEnabled=true\n');
+  const qdbus = path.join(fakeBin, 'qdbus6');
+  await writeFile(qdbus, `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$FAKE_QDBUS_LOG"
+if [[ "\${FAKE_QDBUS_FAIL_LOAD:-0}" == 1 && "$*" == *Scripting.loadScript* ]]; then
+  exit 9
+fi
+if [[ "$*" == *Scripting.isScriptLoaded* ]]; then
+  printf 'true\\n'
+fi
+`);
+  await chmod(qdbus, 0o755);
   return {
     directory,
     env: {
       ...process.env,
       HOME: directory,
+      PATH: `${fakeBin}:${process.env.PATH}`,
       XDG_CONFIG_HOME: configHome,
       XDG_DATA_HOME: dataHome,
       KWIN_CONFIG_FILE: kwinrc,
       KWIN_SCRIPT_SOURCE: path.join(repositoryRoot, 'kwin', 'mip-paper'),
       KWIN_SCRIPT_NO_RELOAD: '1',
+      FAKE_QDBUS_LOG: qdbusLog,
     },
     destination: path.join(dataHome, 'kwin', 'scripts', 'mip-paper'),
     kwinrc,
+    qdbusLog,
   };
 }
 
@@ -92,6 +109,42 @@ test('enables and disables an existing system package without copying it', async
     await runHelper('disable', env);
     assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=false/);
     assert.equal(await readFile(unrelated, 'utf8'), 'keep');
+  } finally {
+    await rm(data.directory, { recursive: true, force: true });
+  }
+});
+
+test('enabling a system package loads the coordinator from its system source', async () => {
+  const data = await fixture();
+  try {
+    const systemSource = path.join(data.directory, 'usr', 'share', 'kwin', 'scripts', 'mip-paper');
+    await mkdir(path.join(systemSource, 'contents', 'code'), { recursive: true });
+    await writeFile(path.join(systemSource, 'metadata.json'), '{}');
+    await writeFile(path.join(systemSource, 'contents', 'code', 'main.js'), '{}');
+    const env = {
+      ...data.env,
+      KWIN_SCRIPT_SOURCE: systemSource,
+      KWIN_SCRIPT_NO_RELOAD: '0',
+    };
+
+    await runHelper('enable', env);
+
+    const qdbusCalls = await readFile(data.qdbusLog, 'utf8');
+    assert.match(qdbusCalls, new RegExp(`Scripting\\.loadScript ${systemSource}/contents/code/main\\.js mip-paper`));
+    assert.doesNotMatch(qdbusCalls, new RegExp(`${data.destination}/contents/code/main\\.js`));
+  } finally {
+    await rm(data.directory, { recursive: true, force: true });
+  }
+});
+
+test('enabling a coordinator fails when KWin rejects loadScript', async () => {
+  const data = await fixture();
+  try {
+    await assert.rejects(runHelper('enable', {
+      ...data.env,
+      KWIN_SCRIPT_NO_RELOAD: '0',
+      FAKE_QDBUS_FAIL_LOAD: '1',
+    }));
   } finally {
     await rm(data.directory, { recursive: true, force: true });
   }
