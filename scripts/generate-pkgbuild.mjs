@@ -48,15 +48,12 @@ package() {
   cd "$srcdir/$pkgname-$pkgver"
 
   install -d "$pkgdir/usr/lib/mip-paper"
-  cp -a bin config resources scripts src assets node_modules package.json \
+  cp -a bin config kwin resources scripts src assets node_modules package.json \
     "$pkgdir/usr/lib/mip-paper/"
 
   install -Dm755 packaging/mip-paper "$pkgdir/usr/bin/mip-paper"
   install -Dm644 resources/mip-paper-packaged.service \
     "$pkgdir/usr/lib/systemd/user/mip-paper.service"
-
-  install -d "$pkgdir/usr/share/kwin/scripts/mip-paper"
-  cp -a kwin/mip-paper/. "$pkgdir/usr/share/kwin/scripts/mip-paper/"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/mip-paper/LICENSE"
   install -Dm644 assets/ATTRIBUTION.md \

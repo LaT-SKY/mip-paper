@@ -77,38 +77,13 @@ check_script() {
   [[ "$(kreadconfig6 --file "$KWINRC" --group Plugins --key "${APP_ID}Enabled" --default false)" == true ]]
 }
 
-enable_script() {
-  [[ -f "$SOURCE/metadata.json" ]] || exit 1
-  [[ -f "$SOURCE/contents/code/main.js" ]] || exit 1
-  mkdir -p "$(dirname -- "$KWINRC")"
-  kwriteconfig6 --file "$KWINRC" --group Plugins \
-    --key "${APP_ID}Enabled" --type bool true
-  load_script
-}
-
-disable_script() {
-  kwriteconfig6 --file "$KWINRC" --group Plugins \
-    --key "${APP_ID}Enabled" --type bool false
-  unload_script
-}
-
-check_enabled_script() {
-  [[ -f "$SOURCE/metadata.json" ]]
-  [[ -f "$SOURCE/contents/code/main.js" ]]
-  [[ "$(kreadconfig6 --file "$KWINRC" --group Plugins \
-    --key "${APP_ID}Enabled" --default false)" == true ]]
-}
-
 case "${1:-}" in
   install) install_script ;;
   remove) remove_script ;;
   check) check_script ;;
-  enable) enable_script ;;
-  disable) disable_script ;;
-  check-enabled) check_enabled_script ;;
   check-loaded) check_loaded_script ;;
   *)
-    printf 'Usage: %s {install|remove|check|enable|disable|check-enabled|check-loaded}\n' "$0" >&2
+    printf 'Usage: %s {install|remove|check|check-loaded}\n' "$0" >&2
     exit 2
     ;;
 esac

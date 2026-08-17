@@ -33,12 +33,6 @@ async function fixture() {
   const qdbus = path.join(fakeBin, 'qdbus6');
   await writeFile(qdbus, `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$FAKE_QDBUS_LOG"
-if [[ "\${FAKE_QDBUS_FAIL_LOAD:-0}" == 1 && "$*" == *Scripting.loadScript* ]]; then
-  exit 9
-fi
-if [[ "\${FAKE_QDBUS_FAIL_RECONFIGURE:-0}" == 1 && "$*" == */KWin\\ reconfigure* ]]; then
-  exit 9
-fi
 if [[ "$*" == *Scripting.isScriptLoaded* ]]; then
   printf 'true\\n'
 fi
@@ -92,62 +86,23 @@ test('installs, checks, idempotently reinstalls, and removes only the project pa
   }
 });
 
-test('enables and disables an existing system package without copying it', async () => {
+test('installing a coordinator fails when KWin rejects plugin reconfiguration', async () => {
   const data = await fixture();
   try {
-    const systemSource = path.join(data.directory, 'usr', 'share', 'kwin', 'scripts', 'mip-paper');
-    await mkdir(path.join(systemSource, 'contents', 'code'), { recursive: true });
-    await writeFile(path.join(systemSource, 'metadata.json'), '{}');
-    await writeFile(path.join(systemSource, 'contents', 'code', 'main.js'), '{}');
-    const unrelated = path.join(data.directory, '.local', 'share', 'kwin', 'scripts', 'unrelated', 'keep');
-    await mkdir(path.dirname(unrelated), { recursive: true });
-    await writeFile(unrelated, 'keep');
-    const env = { ...data.env, KWIN_SCRIPT_SOURCE: systemSource };
-
-    await runHelper('enable', env);
-    assert.equal(await exists(data.destination), false);
-    assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=true/);
-    await runHelper('check-enabled', env);
-
-    await runHelper('disable', env);
-    assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=false/);
-    assert.equal(await readFile(unrelated, 'utf8'), 'keep');
-  } finally {
-    await rm(data.directory, { recursive: true, force: true });
-  }
-});
-
-test('enabling a system package cycles the plugin manager state', async () => {
-  const data = await fixture();
-  try {
-    const systemSource = path.join(data.directory, 'usr', 'share', 'kwin', 'scripts', 'mip-paper');
-    await mkdir(path.join(systemSource, 'contents', 'code'), { recursive: true });
-    await writeFile(path.join(systemSource, 'metadata.json'), '{}');
-    await writeFile(path.join(systemSource, 'contents', 'code', 'main.js'), '{}');
-    const env = {
-      ...data.env,
-      KWIN_SCRIPT_SOURCE: systemSource,
-      KWIN_SCRIPT_NO_RELOAD: '0',
-    };
-
-    await runHelper('enable', env);
-
-    const qdbusCalls = await readFile(data.qdbusLog, 'utf8');
-    assert.equal((qdbusCalls.match(/org\.kde\.KWin \/KWin reconfigure/g) ?? []).length, 2);
-    assert.doesNotMatch(qdbusCalls, /Scripting\.loadScript/);
-    assert.doesNotMatch(qdbusCalls, new RegExp(`${data.destination}/contents/code/main\\.js`));
-  } finally {
-    await rm(data.directory, { recursive: true, force: true });
-  }
-});
-
-test('enabling a coordinator fails when KWin rejects plugin reconfiguration', async () => {
-  const data = await fixture();
-  try {
-    await assert.rejects(runHelper('enable', {
+    const qdbus = path.join(data.directory, 'fake-bin', 'qdbus6');
+    await writeFile(qdbus, `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$FAKE_QDBUS_LOG"
+if [[ "$*" == */KWin\\ reconfigure* ]]; then
+  exit 9
+fi
+if [[ "$*" == *Scripting.isScriptLoaded* ]]; then
+  printf 'true\\n'
+fi
+`);
+    await chmod(qdbus, 0o755);
+    await assert.rejects(runHelper('install', {
       ...data.env,
       KWIN_SCRIPT_NO_RELOAD: '0',
-      FAKE_QDBUS_FAIL_RECONFIGURE: '1',
     }));
     assert.match(await readFile(data.kwinrc, 'utf8'), /mip-paperEnabled=true/);
   } finally {
