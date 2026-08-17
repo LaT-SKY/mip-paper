@@ -74,6 +74,12 @@ async function fixture({
   await writeFile(path.join(configHome, 'kwinrc'), `[Plugins]\nmip-paperEnabled=${coordinator !== 'missing'}\n`);
   await mkdir(path.join(home, '.local', 'share', 'mip-paper'), { recursive: true });
   await writeFile(path.join(home, '.local', 'share', 'mip-paper', 'wallpaper'), png);
+  const desktopEntry = path.join(home, '.local', 'share', 'applications', 'mip-paper.desktop');
+  const icon = path.join(home, '.local', 'share', 'icons', 'hicolor', '512x512', 'apps', 'mip-paper.png');
+  await mkdir(path.dirname(desktopEntry), { recursive: true });
+  await mkdir(path.dirname(icon), { recursive: true });
+  await cp(path.join(repositoryRoot, 'resources', 'mip-paper.desktop'), desktopEntry);
+  await cp(path.join(repositoryRoot, 'assets', 'logo.png'), icon);
   await executable(path.join(home, '.local', 'bin', 'mip-paper'), '#!/usr/bin/env bash\n');
   await mkdir(path.dirname(rulesFile), { recursive: true });
   await writeFile(rulesFile, '[General]\ncount=1\nrules=mip-paper\n\n[mip-paper]\nDescription=Mip-Paper\n');
@@ -125,6 +131,8 @@ exit 0
       KWIN_RULES_FILE: rulesFile,
       KWIN_RULES_NO_RELOAD: '1',
       XDG_DATA_HOME: path.join(home, '.local', 'share'),
+      MIP_PAPER_DESKTOP_ENTRY_PATH: desktopEntry,
+      MIP_PAPER_ICON_PATH: icon,
       KWIN_CONFIG_FILE: path.join(configHome, 'kwinrc'),
       KWIN_SCRIPT_NO_RELOAD: '1',
       AUDIO_PROBE_TIMEOUT_MS: '50',
@@ -139,7 +147,7 @@ test('doctor reports automated PASS checks and explicit manual checks', async ()
     for (const label of [
       'session', 'desktop', 'command:pw-cat', 'command:pw-metadata', 'snapshot', 'config',
       'weather-credentials', 'audio-output', 'service', 'KWin rule', 'KWin coordinator',
-      'image',
+      'image', 'desktop-entry', 'application-icon',
     ]) {
       assert.match(stdout, new RegExp(`PASS .*${label}`));
     }

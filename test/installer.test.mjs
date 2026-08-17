@@ -103,6 +103,8 @@ exit 0
     config: path.join(configHome, 'mip-paper', 'config.json'),
     credentials: path.join(configHome, 'mip-paper', 'weather-credentials.json'),
     service: path.join(configHome, 'systemd', 'user', 'mip-paper.service'),
+    desktopEntry: path.join(home, '.local', 'share', 'applications', 'mip-paper.desktop'),
+    icon: path.join(home, '.local', 'share', 'icons', 'hicolor', '512x512', 'apps', 'mip-paper.png'),
     kwinScript: path.join(home, '.local', 'share', 'kwin', 'scripts', 'mip-paper'),
     dataDirectory: path.join(home, '.local', 'share', 'mip-paper'),
     wallpaper: path.join(home, '.local', 'share', 'mip-paper', 'wallpaper'),
@@ -114,17 +116,27 @@ async function createPackagedFixture() {
   const fixture = await createFixture();
   const systemRoot = path.join(fixture.home, 'usr', 'lib', 'mip-paper');
   const systemService = path.join(fixture.home, 'usr', 'lib', 'systemd', 'user', 'mip-paper.service');
+  const systemDesktop = path.join(fixture.home, 'usr', 'share', 'applications', 'mip-paper.desktop');
+  const systemIcon = path.join(fixture.home, 'usr', 'share', 'icons', 'hicolor', '512x512', 'apps', 'mip-paper.png');
   await mkdir(path.dirname(systemService), { recursive: true });
+  await mkdir(path.dirname(systemDesktop), { recursive: true });
+  await mkdir(path.dirname(systemIcon), { recursive: true });
   await writeFile(systemService, '[Service]\nExecStart=/usr/bin/electron43 /usr/lib/mip-paper\n');
+  await writeFile(systemDesktop, await readFile(path.join(repositoryRoot, 'resources', 'mip-paper.desktop')));
+  await writeFile(systemIcon, await readFile(path.join(repositoryRoot, 'assets', 'logo.png')));
   return {
     ...fixture,
     systemRoot,
     systemService,
+    systemDesktop,
+    systemIcon,
     env: {
       ...fixture.env,
       MIP_PAPER_MODE: 'packaged',
       MIP_PAPER_INSTALL_ROOT: systemRoot,
       MIP_PAPER_SERVICE_PATH: systemService,
+      MIP_PAPER_DESKTOP_ENTRY_PATH: systemDesktop,
+      MIP_PAPER_ICON_PATH: systemIcon,
     },
   };
 }
@@ -151,6 +163,14 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
     assert.equal(await exists(path.join(fixture.installRoot, 'assets', 'default-wallpaper.jpg')), true);
     assert.equal(await exists(path.join(fixture.installRoot, 'assets', 'ATTRIBUTION.md')), true);
     assert.equal(await exists(fixture.launcher), true);
+    assert.equal(
+      await readFile(fixture.desktopEntry, 'utf8'),
+      await readFile(path.join(repositoryRoot, 'resources', 'mip-paper.desktop'), 'utf8'),
+    );
+    assert.deepEqual(
+      await readFile(fixture.icon),
+      await readFile(path.join(repositoryRoot, 'assets', 'logo.png')),
+    );
     assert.equal(await exists(fixture.config), true);
     assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'kde');
     assert.equal(await exists(fixture.credentials), true);
@@ -207,6 +227,8 @@ test('uninstall removes only the project KWin package', async () => {
     await runCli(['install', '--no-start'], fixture);
     await runCli(['uninstall'], fixture);
     assert.equal(await exists(fixture.kwinScript), false);
+    assert.equal(await exists(fixture.desktopEntry), false);
+    assert.equal(await exists(fixture.icon), false);
     assert.equal(await readFile(unrelated, 'utf8'), 'keep');
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=false/);
   } finally {
@@ -220,6 +242,10 @@ test('failed KWin activation restores the prior package and enabled state', asyn
     await mkdir(path.join(fixture.kwinScript, 'contents', 'code'), { recursive: true });
     await writeFile(path.join(fixture.kwinScript, 'metadata.json'), 'old-package');
     await writeFile(path.join(fixture.kwinScript, 'contents', 'code', 'main.js'), 'old-script');
+    await mkdir(path.dirname(fixture.desktopEntry), { recursive: true });
+    await mkdir(path.dirname(fixture.icon), { recursive: true });
+    await writeFile(fixture.desktopEntry, 'old-desktop-entry');
+    await writeFile(fixture.icon, 'old-icon');
     await writeFile(fixture.kwinrc, '[Plugins]\nmip-paperEnabled=false\nother-scriptEnabled=true\n');
 
     await assert.rejects(
@@ -228,6 +254,8 @@ test('failed KWin activation restores the prior package and enabled state', asyn
     );
     assert.equal(await readFile(path.join(fixture.kwinScript, 'metadata.json'), 'utf8'), 'old-package');
     assert.equal(await readFile(path.join(fixture.kwinScript, 'contents', 'code', 'main.js'), 'utf8'), 'old-script');
+    assert.equal(await readFile(fixture.desktopEntry, 'utf8'), 'old-desktop-entry');
+    assert.equal(await readFile(fixture.icon, 'utf8'), 'old-icon');
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=false/);
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /other-scriptEnabled=true/);
   } finally {

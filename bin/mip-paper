@@ -24,6 +24,15 @@ readonly SERVICE_PATH="${MIP_PAPER_SERVICE_PATH:-$SERVICE_DIRECTORY/$SERVICE_NAM
 readonly KWIN_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 readonly KWIN_SCRIPT_PATH="$KWIN_DATA_HOME/kwin/scripts/$APP_ID"
 readonly KWIN_CONFIG_PATH="${KWIN_CONFIG_FILE:-$CONFIG_HOME/kwinrc}"
+if [[ "$INSTALL_MODE" == packaged ]]; then
+  readonly DEFAULT_DESKTOP_ENTRY_PATH="/usr/share/applications/$APP_ID.desktop"
+  readonly DEFAULT_ICON_PATH="/usr/share/icons/hicolor/512x512/apps/$APP_ID.png"
+else
+  readonly DEFAULT_DESKTOP_ENTRY_PATH="$DATA_HOME/applications/$APP_ID.desktop"
+  readonly DEFAULT_ICON_PATH="$DATA_HOME/icons/hicolor/512x512/apps/$APP_ID.png"
+fi
+readonly DESKTOP_ENTRY_PATH="${MIP_PAPER_DESKTOP_ENTRY_PATH:-$DEFAULT_DESKTOP_ENTRY_PATH}"
+readonly ICON_PATH="${MIP_PAPER_ICON_PATH:-$DEFAULT_ICON_PATH}"
 
 if [[ -n "${MIP_PAPER_SOURCE_ROOT:-}" ]]; then
   SOURCE_ROOT=$MIP_PAPER_SOURCE_ROOT
@@ -152,9 +161,17 @@ validate_source() {
     src/kde-wallpaper-sync.mjs assets/default-wallpaper.jpg assets/ATTRIBUTION.md \
     scripts/kwin-script.sh kwin/$APP_ID/metadata.json \
     kwin/$APP_ID/contents/code/main.js bin/mip-paper \
-    resources/mip-paper.service.in; do
+    resources/mip-paper.service.in resources/mip-paper.desktop assets/logo.png; do
     [[ -e "$SOURCE_ROOT/$required_path" ]] || fail "Source file is missing: $required_path"
   done
+}
+
+install_desktop_resources() {
+  local root=$1
+  install -Dm644 "$root/resources/$APP_ID.desktop" "$DESKTOP_ENTRY_PATH.tmp.$$"
+  mv -f -- "$DESKTOP_ENTRY_PATH.tmp.$$" "$DESKTOP_ENTRY_PATH"
+  install -Dm644 "$root/assets/logo.png" "$ICON_PATH.tmp.$$"
+  mv -f -- "$ICON_PATH.tmp.$$" "$ICON_PATH"
 }
 
 render_service() {
@@ -212,15 +229,19 @@ install_app() {
 
   library_parent=''
   launcher_directory=''
+  desktop_directory=''
+  icon_directory=''
   stage=''
   backup=''
   library_parent=$(dirname -- "$INSTALL_ROOT")
   launcher_directory=$(dirname -- "$LAUNCHER_PATH")
-  mkdir -p "$library_parent" "$launcher_directory" "$SERVICE_DIRECTORY" "$CONFIG_DIRECTORY"
+  desktop_directory=$(dirname -- "$DESKTOP_ENTRY_PATH")
+  icon_directory=$(dirname -- "$ICON_PATH")
+  mkdir -p "$library_parent" "$launcher_directory" "$desktop_directory" "$icon_directory" "$SERVICE_DIRECTORY" "$CONFIG_DIRECTORY"
   stage=$(mktemp -d "$library_parent/.${APP_ID}-stage.XXXXXX")
   backup=$(mktemp -d "$library_parent/.${APP_ID}-backup.XXXXXX")
 
-  committed=0 mutated=0 kwin_mutated=0 config_created=0 credentials_created=0 had_install=0 had_launcher=0 had_service=0 had_rule=0
+  committed=0 mutated=0 kwin_mutated=0 config_created=0 credentials_created=0 had_install=0 had_launcher=0 had_service=0 had_desktop=0 had_icon=0 had_rule=0
   had_kwin_package=0 prior_kwin_enabled=false
   cleanup_install() {
     local exit_code=$?
@@ -231,6 +252,9 @@ install_app() {
       rm -f -- "$LAUNCHER_PATH" "$SERVICE_PATH"
       [[ -e "$backup/launcher" ]] && mv -- "$backup/launcher" "$LAUNCHER_PATH"
       [[ -e "$backup/service" ]] && mv -- "$backup/service" "$SERVICE_PATH"
+      rm -f -- "$DESKTOP_ENTRY_PATH" "$ICON_PATH"
+      [[ -e "$backup/desktop" ]] && mv -- "$backup/desktop" "$DESKTOP_ENTRY_PATH"
+      [[ -e "$backup/icon" ]] && mv -- "$backup/icon" "$ICON_PATH"
       if ((${config_created:-0} == 1)); then rm -f -- "$CONFIG_PATH"; fi
       if ((${credentials_created:-0} == 1)); then rm -f -- "$WEATHER_CREDENTIALS_PATH"; fi
       if ((${had_rule:-0} == 1)); then
@@ -261,6 +285,8 @@ install_app() {
   if [[ -e "$INSTALL_ROOT" ]]; then mv -- "$INSTALL_ROOT" "$backup/app"; had_install=1; fi
   if [[ -e "$LAUNCHER_PATH" ]]; then cp -a -- "$LAUNCHER_PATH" "$backup/launcher"; had_launcher=1; fi
   if [[ -e "$SERVICE_PATH" ]]; then cp -a -- "$SERVICE_PATH" "$backup/service"; had_service=1; fi
+  if [[ -e "$DESKTOP_ENTRY_PATH" ]]; then cp -a -- "$DESKTOP_ENTRY_PATH" "$backup/desktop"; had_desktop=1; fi
+  if [[ -e "$ICON_PATH" ]]; then cp -a -- "$ICON_PATH" "$backup/icon"; had_icon=1; fi
   kwin_mutated=1
   if [[ -e "$KWIN_SCRIPT_PATH" ]]; then
     mv -- "$KWIN_SCRIPT_PATH" "$backup/kwin-script"
@@ -277,6 +303,7 @@ install_app() {
   render_service "$INSTALL_ROOT/resources/$SERVICE_NAME.in" "$SERVICE_PATH.tmp.$$"
   chmod 644 "$SERVICE_PATH.tmp.$$"
   mv -f -- "$SERVICE_PATH.tmp.$$" "$SERVICE_PATH"
+  install_desktop_resources "$INSTALL_ROOT"
 
   if [[ ! -e "$CONFIG_PATH" ]]; then
     install -m 644 "$INSTALL_ROOT/config/default.json" "$CONFIG_PATH"
@@ -344,7 +371,10 @@ uninstall_app() {
   fi
   rm -rf -- "$KWIN_SCRIPT_PATH"
 
-  rm -f -- "$SERVICE_PATH" "$LAUNCHER_PATH"
+  rm -f -- "$SERVICE_PATH" "$LAUNCHER_PATH" "$DESKTOP_ENTRY_PATH" "$ICON_PATH"
+  rmdir -- "$(dirname -- "$DESKTOP_ENTRY_PATH")" 2>/dev/null || true
+  rmdir -- "$(dirname -- "$ICON_PATH")" 2>/dev/null || true
+  rmdir -- "$(dirname -- "$(dirname -- "$ICON_PATH")")" 2>/dev/null || true
   rm -rf -- "$INSTALL_ROOT"
   systemctl --user daemon-reload
   if ((purge == 1)); then
@@ -367,6 +397,8 @@ setup_app() {
   require_safe_paths
   validate_setup_environment
   [[ -f "$SOURCE_ROOT/config/default.json" ]] || fail 'Packaged default configuration is missing'
+  [[ -f "$SOURCE_ROOT/resources/$APP_ID.desktop" ]] || fail 'Packaged desktop entry is missing'
+  [[ -f "$SOURCE_ROOT/assets/logo.png" ]] || fail 'Packaged application icon is missing'
   [[ -x "$SOURCE_ROOT/scripts/kwin-rules.sh" ]] || fail 'Packaged KWin rule helper is missing'
   [[ -x "$SOURCE_ROOT/scripts/kwin-script.sh" ]] || fail 'Packaged KWin script helper is missing'
   [[ -f "$SERVICE_PATH" ]] || fail 'Packaged systemd user unit is missing'
@@ -573,6 +605,16 @@ NODE
     check_pass service-file "$SERVICE_PATH"
   else
     check_fail service-file 'systemd user service file is missing'
+  fi
+  if [[ -f "$DESKTOP_ENTRY_PATH" ]]; then
+    check_pass desktop-entry "$DESKTOP_ENTRY_PATH"
+  else
+    check_fail desktop-entry 'application desktop entry is missing'
+  fi
+  if [[ -f "$ICON_PATH" ]]; then
+    check_pass application-icon "$ICON_PATH"
+  else
+    check_fail application-icon 'application icon is missing'
   fi
   if systemctl --user is-enabled "$SERVICE_NAME" >/dev/null 2>&1; then
     check_pass service-enabled 'user service is enabled'
