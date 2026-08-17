@@ -30,9 +30,11 @@ function wallpaper(id, title, currentOutput) {
     noBorder: false,
     fullScreen: false,
     maximizeMode: 0,
+    minimized: false,
     captionChanged: new Signal(),
     fullScreenChanged: new Signal(),
     maximizedChanged: new Signal(),
+    minimizedChanged: new Signal(),
     frameGeometryChanged: new Signal(),
     outputChanged: new Signal(),
     closed: new Signal(),
@@ -48,6 +50,7 @@ function appWindow(id, currentOutput, fullScreen = false) {
     clientGeometry: null,
     fullScreen,
     maximizeMode: 0,
+    minimized: false,
     // Virtual desktop model (Plasma 6): null means "unmodeled", which the
     // coordinator treats as being on the current desktop, so the original
     // single-desktop tests keep their behavior.
@@ -56,6 +59,7 @@ function appWindow(id, currentOutput, fullScreen = false) {
     desktop: undefined,
     fullScreenChanged: new Signal(),
     maximizedChanged: new Signal(),
+    minimizedChanged: new Signal(),
     frameGeometryChanged: new Signal(),
     outputChanged: new Signal(),
     closed: new Signal(),
@@ -313,6 +317,32 @@ test('pushes fullscreen state with output geometry on startup', async () => {
   assert.equal(push.width, 1536);
   assert.equal(push.height, 960);
   assert.equal(push.fullscreen, true);
+});
+
+test('does not pause for a fullscreen window that starts minimized', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const video = appWindow('video', primary, true);
+  video.minimized = true;
+
+  const result = await runCoordinator({ outputs: [primary], windows: [video] });
+
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, false);
+});
+
+test('re-evaluates a maximized window when it is minimized and restored', async () => {
+  const primary = output('eDP-1', { x: 0, y: 0, width: 1536, height: 960 });
+  const app = appWindow('app', primary, false);
+  app.maximizeMode = 3;
+  const result = await runCoordinator({ outputs: [primary], windows: [app] });
+  result.dbusCalls.length = 0;
+
+  app.minimized = true;
+  app.minimizedChanged.emit();
+  assert.equal(pushArgs(result.dbusCalls[0]).fullscreen, false);
+
+  app.minimized = false;
+  app.minimizedChanged.emit();
+  assert.equal(pushArgs(result.dbusCalls[1]).fullscreen, true);
 });
 
 test('never pauses for the mip-paper windows themselves', async () => {
