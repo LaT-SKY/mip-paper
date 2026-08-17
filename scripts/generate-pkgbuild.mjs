@@ -52,6 +52,10 @@ package() {
     "$pkgdir/usr/lib/mip-paper/"
 
   install -Dm755 packaging/mip-paper "$pkgdir/usr/bin/mip-paper"
+  install -Dm644 resources/mip-paper.desktop \
+    "$pkgdir/usr/share/applications/mip-paper.desktop"
+  install -Dm644 assets/logo.png \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/mip-paper.png"
   install -Dm644 resources/mip-paper-packaged.service \
     "$pkgdir/usr/lib/systemd/user/mip-paper.service"
 

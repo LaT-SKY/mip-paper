@@ -20,11 +20,12 @@ test('declares the 0.3.9 release version consistently', async () => {
 });
 
 test('uses system Electron for source and packaged installations', async () => {
-  const [packageJson, sourceUnit, packagedUnit, wrapper] = await Promise.all([
+  const [packageJson, sourceUnit, packagedUnit, wrapper, desktopEntry] = await Promise.all([
     readFile('package.json', 'utf8').then(JSON.parse),
     readFile('resources/mip-paper.service.in', 'utf8'),
     readFile('resources/mip-paper-packaged.service', 'utf8'),
     readFile('packaging/mip-paper', 'utf8'),
+    readFile('resources/mip-paper.desktop', 'utf8'),
   ]);
 
   assert.equal(packageJson.dependencies.electron, undefined);
@@ -43,6 +44,12 @@ test('uses system Electron for source and packaged installations', async () => {
   }
   assert.doesNotMatch(wrapper, /MIP_PAPER_KWIN_SOURCE|kwin\/scripts/);
   assert.match(wrapper, /exec \/usr\/lib\/mip-paper\/bin\/mip-paper "\$@"/);
+  assert.match(desktopEntry, /^\[Desktop Entry\]$/m);
+  assert.match(desktopEntry, /^Type=Application$/m);
+  assert.match(desktopEntry, /^Name=Mip-Paper$/m);
+  assert.match(desktopEntry, /^Exec=mip-paper start$/m);
+  assert.match(desktopEntry, /^Icon=mip-paper$/m);
+  assert.match(desktopEntry, /^Terminal=false$/m);
 });
 
 test('uses the maintained D-Bus fork without the vulnerable legacy dependency chain', async () => {
@@ -104,6 +111,10 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
     'npm ci --omit=dev --omit=optional --ignore-scripts --cache "$srcdir/npm-cache"',
     '"$pkgdir/usr/lib/mip-paper"',
     '"$pkgdir/usr/bin/mip-paper"',
+    'resources/mip-paper.desktop',
+    'usr/share/applications/mip-paper.desktop',
+    'assets/logo.png',
+    'usr/share/icons/hicolor/512x512/apps/mip-paper.png',
     '"$pkgdir/usr/lib/systemd/user/mip-paper.service"',
     '"$pkgdir/usr/share/licenses/mip-paper/LICENSE"',
     '"$pkgdir/usr/share/licenses/mip-paper/default-wallpaper-ATTRIBUTION"',

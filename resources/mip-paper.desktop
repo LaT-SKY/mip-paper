@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Mip-Paper
+Name[zh_CN]=Mip-Paper
+Comment=Dynamic wallpaper engine for KDE Plasma
+Comment[zh_CN]=KDE Plasma 动态壁纸引擎
+Exec=mip-paper start
+Icon=mip-paper
+Terminal=false
+Categories=Utility;DesktopSettings;
+X-KDE-StartupNotify=false
