@@ -5,6 +5,14 @@ All notable changes to Mip-Paper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-08-17
+
+### Fixed
+
+- Minimized fullscreen or maximized windows no longer pause the wallpaper;
+  minimizing a covering window resumes that display immediately, and restoring
+  it pauses the display again while it remains fullscreen or maximized.
+
 ## [0.3.8] - 2026-08-17
 
 ### Changed
