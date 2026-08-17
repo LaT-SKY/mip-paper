@@ -230,12 +230,17 @@ export function createContextMenu({
     }, delay);
   }
 
+  // Prepare the rows for the staggered reveal. The hidden state comes from
+  // the CSS rule for data-state="opening" (applied before any layout read),
+  // so clearing the inline styles here makes opacity 0 / translateY(2px) the
+  // rows' initial computed style — the reveal transitions 0 -> 1 with the
+  // stagger delay and nothing ever animates 1 -> 0.
   function resetRowsForOpen() {
     rows.forEach((row, index) => {
       const delay = Math.min(index * ROW_STAGGER_MS, OPEN_TRANSITION_MS);
       row.style.transitionDelay = '0ms, ' + delay + 'ms, ' + delay + 'ms';
-      row.style.opacity = '0';
-      row.style.transform = 'translateY(2px)';
+      row.style.opacity = '';
+      row.style.transform = '';
     });
   }
 
@@ -309,6 +314,14 @@ export function createContextMenu({
     root.style.opacity = '';
     root.style.transform = '';
     clearHighlight();
+    // Drop the reveal's inline row styles (opacity 1 / transform none) so the
+    // next open starts from the CSS opening state again; leftover inline
+    // opacity would otherwise beat the data-state="opening" rule and blink.
+    for (const row of rows) {
+      row.style.transitionDelay = '';
+      row.style.opacity = '';
+      row.style.transform = '';
+    }
     setState(MENU_STATES.CLOSED);
   }
 

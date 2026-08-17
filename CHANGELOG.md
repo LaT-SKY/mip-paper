@@ -5,7 +5,7 @@ All notable changes to Mip-Paper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.8] - 2026-08-17
 
 ### Changed
 
@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The context menu no longer blinks its built-in (wallpaper) entries on open:
+  the pre-reveal hidden row state is now a CSS rule on the opening state
+  instead of an inline style applied after a layout flush, so the staggered
+  row reveal only ever animates in (0 → 1) and the custom shell commands
+  behave the same.
 - The packaged wrapper no longer selects the removed system KWin path, and
   `doctor` checks the per-user coordinator for both install modes.
 

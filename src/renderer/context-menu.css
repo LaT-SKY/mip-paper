@@ -59,6 +59,18 @@
   pointer-events: auto;
 }
 
+/* Rows start hidden while the menu opens. The root flips to data-state="opening"
+   before any layout read in open(), so this rule is the rows' INITIAL computed
+   style — the later stagger reveal transitions 0 -> 1 without ever blinking.
+   (Setting opacity 0 inline after a layout flush instead triggered a 1 -> 0
+   transition: the top built-in rows were visibly mid-fade when the reveal
+   flipped them back, while later rows whose stagger had not started stayed
+   put — the wallpaper entries flickered, the custom commands did not.) */
+#context-menu[data-state="opening"] .context-menu-row {
+  opacity: 0;
+  transform: translateY(2px);
+}
+
 #context-menu[data-state="open"] {
   opacity: 1;
   pointer-events: auto;
