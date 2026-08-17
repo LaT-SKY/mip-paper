@@ -1,5 +1,9 @@
 # Packaged KWin Coordinator Loading
 
+> **Superseded.** See
+> `docs/research/packaged-kwin-coordinator-user-data-2026-08-17.md` for the
+> final approach.
+
 ## Problem
 
 After a clean AUR installation, `mip-paper setup` enables the packaged KWin
