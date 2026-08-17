@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimized fullscreen or maximized windows no longer pause the wallpaper;
   minimizing a covering window resumes that display immediately, and restoring
   it pauses the display again while it remains fullscreen or maximized.
+- Complete the Linux application identity: source and packaged installations
+  now register a Mip-Paper desktop entry and hicolor application icon, while
+  the settings window continues to use the same logo in its titlebar and taskbar.
 
 ## [0.3.8] - 2026-08-17
 
