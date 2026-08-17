@@ -141,16 +141,18 @@ function windowOnCurrentDesktop(window) {
   return true;
 }
 
-// Report whether a non-wallpaper window hides the wallpaper on the output:
-// explicitly fullscreen or fully maximized (MaximizeFull = 3) on the current
-// virtual desktop. Geometry is deliberately NOT used: desktop-layer windows
-// such as plasmashell also cover the output, so a geometric test would
-// false-positive on them. The mip-paper windows are excluded because the KWin
-// rule forces them fullscreen; they must never pause the wallpaper
-// themselves.
+// Report whether a visible, non-wallpaper window hides the wallpaper on the
+// output: explicitly fullscreen or fully maximized (MaximizeFull = 3) on the
+// current virtual desktop. Minimized windows retain their fullscreen/maximize
+// state in KWin but no longer cover the output. Geometry is deliberately NOT
+// used: desktop-layer windows such as plasmashell also cover the output, so a
+// geometric test would false-positive on them. The mip-paper windows are
+// excluded because the KWin rule forces them fullscreen; they must never pause
+// the wallpaper themselves.
 function windowCoversOutput(window, output) {
   if (window.resourceClass === APP_ID) return false;
   if (!window.output || window.output.name !== output.name) return false;
+  if (window.minimized === true) return false;
   if (!windowOnCurrentDesktop(window)) return false;
   return window.fullScreen === true || window.maximizeMode === 3;
 }
@@ -255,6 +257,9 @@ function track(window) {
   }
   if (window.maximizedChanged && typeof window.maximizedChanged.connect === 'function') {
     window.maximizedChanged.connect(() => pushState());
+  }
+  if (window.minimizedChanged && typeof window.minimizedChanged.connect === 'function') {
+    window.minimizedChanged.connect(() => pushState());
   }
   // Geometry changes settle after the maximize signal, so re-evaluate on the
   // final geometry as well; state changes are deduped before any D-Bus push.
