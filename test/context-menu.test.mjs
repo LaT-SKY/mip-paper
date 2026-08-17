@@ -161,6 +161,11 @@ test('context-menu.css keeps motion to transform/opacity and respects reduced mo
   assert.ok(css.includes('--menu-radius: 16px'));
   assert.ok(css.includes('[data-state="opening"]'));
   assert.ok(css.includes('[data-state="closing"]'));
+  // The pre-reveal hidden row state is a CSS rule on the opening state, not
+  // an inline style: it must be the rows' INITIAL computed style so the
+  // stagger reveal only animates 0 -> 1 (inline opacity after a layout flush
+  // used to fade the top built-in rows 1 -> 0 and blink them on open).
+  assert.ok(css.includes('[data-state="opening"] .context-menu-row'));
 });
 
 test('context-menu.mjs implements the state machine with a race-safe token', async () => {
@@ -178,6 +183,15 @@ test('context-menu.mjs implements the state machine with a race-safe token', asy
   assert.equal(source.split('root.style.top').length - 1, 1);
   assert.ok(source.includes("root.style.opacity = String("));
   assert.ok(source.includes("root.style.transform = 'scale('"));
+  // Regression: the pre-reveal hidden state must never be applied inline.
+  // Setting row.style.opacity to '0' after the menu's first layout flush
+  // triggered a 1 -> 0 CSS transition on rows whose previous computed opacity
+  // was 1; the stagger delay masked it for late rows, so only the top
+  // built-in (wallpaper) entries visibly blinked. The hidden state is the CSS
+  // data-state="opening" rule, and resetRowsForOpen clears the inline styles.
+  assert.ok(source.includes("row.style.opacity = ''"));
+  assert.ok(!source.includes("row.style.opacity = '0'"));
+  assert.ok(source.includes('row.style.transform = \'\''));
 });
 
 test('context-menu.mjs places the menu exactly at the cursor when avoidance is off', async () => {
