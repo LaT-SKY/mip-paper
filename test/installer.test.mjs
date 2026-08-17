@@ -3,7 +3,6 @@ import { execFile } from 'node:child_process';
 import {
   access,
   chmod,
-  cp,
   mkdtemp,
   mkdir,
   readFile,
@@ -115,22 +114,17 @@ async function createPackagedFixture() {
   const fixture = await createFixture();
   const systemRoot = path.join(fixture.home, 'usr', 'lib', 'mip-paper');
   const systemService = path.join(fixture.home, 'usr', 'lib', 'systemd', 'user', 'mip-paper.service');
-  const systemKwin = path.join(fixture.home, 'usr', 'share', 'kwin', 'scripts', 'mip-paper');
   await mkdir(path.dirname(systemService), { recursive: true });
   await writeFile(systemService, '[Service]\nExecStart=/usr/bin/electron43 /usr/lib/mip-paper\n');
-  await mkdir(path.dirname(systemKwin), { recursive: true });
-  await cp(path.join(repositoryRoot, 'kwin', 'mip-paper'), systemKwin, { recursive: true });
   return {
     ...fixture,
     systemRoot,
     systemService,
-    systemKwin,
     env: {
       ...fixture.env,
       MIP_PAPER_MODE: 'packaged',
       MIP_PAPER_INSTALL_ROOT: systemRoot,
       MIP_PAPER_SERVICE_PATH: systemService,
-      MIP_PAPER_KWIN_SOURCE: systemKwin,
     },
   };
 }
@@ -389,7 +383,7 @@ test('normal uninstall preserves config and purge removes it', async () => {
   }
 });
 
-test('packaged setup imports an image and enables per-user integration', async () => {
+test('packaged setup installs the coordinator into the user KWin data directory', async () => {
   const fixture = await createPackagedFixture();
   try {
     const { stdout } = await runCli(['setup', '--image', fixture.sourceImage], fixture);
@@ -398,7 +392,7 @@ test('packaged setup imports an image and enables per-user integration', async (
     assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'manual');
     assert.equal(await exists(fixture.credentials), true);
     assert.equal((await stat(fixture.credentials)).mode & 0o777, 0o600);
-    assert.equal(await exists(fixture.kwinScript), false);
+    assert.equal(await exists(path.join(fixture.kwinScript, 'contents', 'code', 'main.js')), true);
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
     assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user enable --now mip-paper\.service/);
     assert.match(stdout, /Imported custom wallpaper/);
@@ -479,13 +473,13 @@ test('packaged teardown preserves user data and purge removes exact app director
     assert.equal(await exists(fixture.config), true);
     assert.equal(await exists(fixture.credentials), true);
     assert.equal(await exists(fixture.wallpaper), true);
+    assert.equal(await exists(fixture.kwinScript), false);
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=false/);
 
     await runCli(['setup'], fixture);
-    const teardown = await runCli(['teardown', '--purge'], fixture);
+    await runCli(['teardown', '--purge'], fixture);
     assert.equal(await exists(path.dirname(fixture.config)), false);
     assert.equal(await exists(fixture.dataDirectory), false);
-    assert.match(teardown.stdout, /system KWin script remains package-owned/);
   } finally {
     await cleanup(fixture);
   }

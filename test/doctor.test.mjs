@@ -121,7 +121,6 @@ exit 0
         MIP_PAPER_MODE: 'packaged',
         MIP_PAPER_SOURCE_ROOT: installRoot,
         MIP_PAPER_SERVICE_PATH: servicePath,
-        MIP_PAPER_KWIN_SOURCE: path.join(installRoot, 'kwin', 'mip-paper'),
       } : {}),
       KWIN_RULES_FILE: rulesFile,
       KWIN_RULES_NO_RELOAD: '1',
@@ -167,7 +166,7 @@ test('doctor rejects KWin versions older than 6.7', async () => {
   }
 });
 
-test('packaged doctor uses system Electron and system KWin paths without npm', async () => {
+test('packaged doctor uses the system Electron runtime and per-user KWin paths without npm', async () => {
   const fixtureData = await fixture({ packaged: true });
   try {
     const npmPath = path.join(fixtureData.home, 'fake-bin', 'npm');

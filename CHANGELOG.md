@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Packaged setup now installs the KWin coordinator into the user's KWin script
+  directory — the same path source installs use — instead of enabling the
+  pacman-owned system script whose activation Plasma applies unreliably.
+- The Arch package now ships the coordinator under `/usr/lib/mip-paper/kwin`
+  and no longer installs `/usr/share/kwin/scripts/mip-paper`.
+- The post-upgrade hook now points at `mip-paper setup` to refresh the
+  per-user KWin coordinator after a package upgrade.
+
+### Fixed
+
+- The packaged wrapper no longer selects the removed system KWin path, and
+  `doctor` checks the per-user coordinator for both install modes.
+
 ## [0.3.7] - 2026-08-17
 
 ### Fixed

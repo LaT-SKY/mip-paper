@@ -36,6 +36,12 @@ export async function prepareAurRelease(version, aurDirectory, { fetchImpl = fet
   if (manifest.version !== version) {
     throw new Error(`package.json is ${manifest.version}, expected ${version}`);
   }
+  const kwinMetadata = JSON.parse(await readFile('kwin/mip-paper/metadata.json', 'utf8'));
+  if (kwinMetadata.KPlugin?.Version !== version) {
+    throw new Error(
+      `kwin/mip-paper/metadata.json KPlugin.Version is ${kwinMetadata.KPlugin?.Version ?? 'missing'}, expected ${version}`,
+    );
+  }
 
   const tag = `v${version}`;
   const { stdout: aurRoot } = await run('git', ['-C', aurDirectory, 'rev-parse', '--show-toplevel']);

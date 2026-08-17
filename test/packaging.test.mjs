@@ -36,10 +36,10 @@ test('uses system Electron for source and packaged installations', async () => {
     'MIP_PAPER_SOURCE_ROOT=/usr/lib/mip-paper',
     'MIP_PAPER_INSTALL_ROOT=/usr/lib/mip-paper',
     'MIP_PAPER_SERVICE_PATH=/usr/lib/systemd/user/mip-paper.service',
-    'MIP_PAPER_KWIN_SOURCE=/usr/share/kwin/scripts/mip-paper',
   ]) {
     assert.ok(wrapper.includes(required), `packaged wrapper is missing: ${required}`);
   }
+  assert.doesNotMatch(wrapper, /MIP_PAPER_KWIN_SOURCE|kwin\/scripts/);
   assert.match(wrapper, /exec \/usr\/lib\/mip-paper\/bin\/mip-paper "\$@"/);
 });
 
@@ -103,15 +103,14 @@ test('generates fixed-checksum Arch metadata and package ownership', async () =>
     '"$pkgdir/usr/lib/mip-paper"',
     '"$pkgdir/usr/bin/mip-paper"',
     '"$pkgdir/usr/lib/systemd/user/mip-paper.service"',
-    '"$pkgdir/usr/share/kwin/scripts/mip-paper"',
     '"$pkgdir/usr/share/licenses/mip-paper/LICENSE"',
     '"$pkgdir/usr/share/licenses/mip-paper/default-wallpaper-ATTRIBUTION"',
     checksum,
   ]) {
     assert.ok(pkgbuild.includes(required), `PKGBUILD is missing: ${required}`);
   }
-  assert.doesNotMatch(pkgbuild, /SKIP|node_modules\/electron|161-2\.jpeg/);
-  assert.match(pkgbuild, /cp -a bin config resources scripts src assets node_modules package\.json/);
+  assert.doesNotMatch(pkgbuild, /SKIP|node_modules\/electron|161-2\.jpeg|usr\/share\/kwin\/scripts/);
+  assert.match(pkgbuild, /cp -a bin config kwin resources scripts src assets node_modules package\.json/);
   assert.match(installHook, /Run: mip-paper setup/);
   assert.match(installHook, /setup \[--image/);
   assert.match(installHook, /QWeather/);

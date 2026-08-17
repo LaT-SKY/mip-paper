@@ -33,7 +33,6 @@ else
   SOURCE_ROOT=$INSTALL_ROOT
 fi
 readonly SOURCE_ROOT
-readonly KWIN_PACKAGE_SOURCE="${MIP_PAPER_KWIN_SOURCE:-$SOURCE_ROOT/kwin/$APP_ID}"
 readonly DEFAULT_WALLPAPER_PATH="${MIP_PAPER_DEFAULT_WALLPAPER_PATH:-$SOURCE_ROOT/assets/default-wallpaper.jpg}"
 
 usage() {
@@ -371,8 +370,8 @@ setup_app() {
   [[ -x "$SOURCE_ROOT/scripts/kwin-rules.sh" ]] || fail 'Packaged KWin rule helper is missing'
   [[ -x "$SOURCE_ROOT/scripts/kwin-script.sh" ]] || fail 'Packaged KWin script helper is missing'
   [[ -f "$SERVICE_PATH" ]] || fail 'Packaged systemd user unit is missing'
-  [[ -f "$KWIN_PACKAGE_SOURCE/metadata.json" ]] || fail 'Packaged KWin coordinator is missing'
-  [[ -f "$KWIN_PACKAGE_SOURCE/contents/code/main.js" ]] || fail 'Packaged KWin coordinator code is missing'
+  [[ -f "$SOURCE_ROOT/kwin/$APP_ID/metadata.json" ]] || fail 'Packaged KWin coordinator is missing'
+  [[ -f "$SOURCE_ROOT/kwin/$APP_ID/contents/code/main.js" ]] || fail 'Packaged KWin coordinator code is missing'
   [[ -f "$DEFAULT_WALLPAPER_PATH" ]] || fail 'Packaged default wallpaper is missing'
 
   local wallpaper_message
@@ -400,8 +399,8 @@ setup_app() {
   fi
 
   "$SOURCE_ROOT/scripts/kwin-rules.sh" install
-  KWIN_SCRIPT_SOURCE="$KWIN_PACKAGE_SOURCE" \
-    "$SOURCE_ROOT/scripts/kwin-script.sh" enable
+  KWIN_SCRIPT_SOURCE="$SOURCE_ROOT/kwin/$APP_ID" \
+    "$SOURCE_ROOT/scripts/kwin-script.sh" install
   systemctl --user daemon-reload
   systemctl --user enable --now "$SERVICE_NAME"
   printf 'Setup complete for %s.\n' "$APP_ID"
@@ -426,17 +425,14 @@ teardown_app() {
   require_command systemctl
   systemctl --user disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
   "$SOURCE_ROOT/scripts/kwin-rules.sh" remove || true
-  KWIN_SCRIPT_SOURCE="$KWIN_PACKAGE_SOURCE" \
-    "$SOURCE_ROOT/scripts/kwin-script.sh" disable || true
+  KWIN_SCRIPT_SOURCE="$SOURCE_ROOT/kwin/$APP_ID" \
+    "$SOURCE_ROOT/scripts/kwin-script.sh" remove || true
   systemctl --user daemon-reload
 
   if ((purge == 1)); then
     rm -rf -- "$CONFIG_DIRECTORY" "$DATA_DIRECTORY" "$CACHE_DIRECTORY"
   fi
   printf 'Teardown complete.\n'
-  if [[ "$INSTALL_MODE" == packaged ]]; then
-    printf 'The system KWin script remains package-owned; remove it with: sudo pacman -R mip-paper\n'
-  fi
 }
 
 service_command() {
@@ -597,10 +593,6 @@ NODE
   fi
   local coordinator_helper="$runtime_root/scripts/kwin-script.sh"
   local coordinator_command=check coordinator_source="$runtime_root/kwin/$APP_ID"
-  if [[ "$INSTALL_MODE" == packaged ]]; then
-    coordinator_command=check-enabled
-    coordinator_source=$KWIN_PACKAGE_SOURCE
-  fi
   if [[ -x "$coordinator_helper" ]] \
     && KWIN_SCRIPT_SOURCE="$coordinator_source" "$coordinator_helper" "$coordinator_command" >/dev/null 2>&1; then
     if KWIN_SCRIPT_SOURCE="$coordinator_source" "$coordinator_helper" check-loaded >/dev/null 2>&1; then

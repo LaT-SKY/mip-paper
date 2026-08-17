@@ -34,7 +34,7 @@ The package installs only system files and never changes a particular user's hom
 mip-paper setup
 ```
 
-Setup creates missing configuration and weather credentials, follows each display's KDE static wallpaper by default, installs the user's KWin rule, enables the system KWin coordinator, and starts `mip-paper.service`. Displays without a readable KDE static image use the bundled default. Existing configuration, credentials, and managed images are preserved. To switch directly to manual mode with your own image, run `mip-paper setup --image /path/to/image.png`.
+Setup creates missing configuration and weather credentials, follows each display's KDE static wallpaper by default, installs the user's KWin rule, installs and enables the KWin coordinator in the user's data directory, and starts `mip-paper.service`. Displays without a readable KDE static image use the bundled default. Existing configuration, credentials, and managed images are preserved. To switch directly to manual mode with your own image, run `mip-paper setup --image /path/to/image.png`.
 
 After completion, setup reports the active wallpaper file, the replacement command, and whether weather still needs configuration. The bundled photograph is only the initial value. Replace it at any time with:
 
