@@ -39,7 +39,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     collapseDelaySeconds: 8,
     expanded: true,
     collapsedOpacity: 0.08,
-    animation: Object.freeze({ staggerDelayMs: 60, durationMs: 950 }),
+    animation: Object.freeze({ staggerDelayMs: 48, durationMs: 820 }),
   }),
   weather: Object.freeze({
     location: Object.freeze({
