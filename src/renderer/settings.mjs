@@ -580,6 +580,16 @@ function appendAboutSection(card) {
 
 // --- Section rendering ------------------------------------------------------
 
+function coverInfoFor(entry) {
+  if (!entry || !state.displays || state.displays.length === 0) return `${entry.width}×${entry.height}`;
+  // Show cover scale for primary display as smart-crop hint
+  const d = state.displays[0];
+  const scale = Math.max(d.bounds.width / entry.width, d.bounds.height / entry.height);
+  const sw = Math.round(entry.width * scale);
+  const sh = Math.round(entry.height * scale);
+  return `${entry.width}×${entry.height} → ${sw}×${sh} cover`;
+}
+
 function appendWallpaperSection(card) {
   const preview = document.createElement('div');
   preview.className = 'wallpaper-preview';
@@ -593,8 +603,6 @@ function appendWallpaperSection(card) {
   placeholder.textContent = '尚未导入图片';
   const manualUrl = fileUrlFor(state.wallpaper && state.wallpaper.path);
   if (manualUrl) {
-    // The manual wallpaper file is replaced in place, so bust the URL to
-    // always show the latest bytes.
     image.src = manualUrl + '?v=' + Date.now();
     image.addEventListener('error', () => {
       image.hidden = true;
@@ -629,6 +637,121 @@ function appendWallpaperSection(card) {
   hintText.textContent = '导入 JPEG / PNG / WebP 并切换到手动模式（所有显示器）';
   actions.appendChild(hintText);
   card.appendChild(actions);
+
+  // Gallery grid
+  const gallery = state.gallery ?? [];
+  const grid = document.createElement('div');
+  grid.className = 'gallery-grid';
+  grid.id = 'gallery-grid';
+  if (gallery.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'hint';
+    empty.textContent = '画廊为空，导入图片后会保留历史，收藏的图片不会被自动清理';
+    grid.appendChild(empty);
+  } else {
+    const activeContentKey = gallery.find((e) => e.file === state.wallpaper.path)?.contentKey;
+    for (const entry of gallery) {
+      const item = document.createElement('div');
+      item.className = 'gallery-item' + (entry.contentKey === activeContentKey ? ' is-active' : '');
+      const thumb = document.createElement('img');
+      thumb.className = 'gallery-thumb';
+      thumb.alt = entry.id;
+      thumb.loading = 'lazy';
+      const url = fileUrlFor(entry.file);
+      if (url) thumb.src = url + '?v=' + (entry.mtimeMs || entry.size);
+      thumb.addEventListener('click', () => {
+        // Preview on click
+        const u = fileUrlFor(entry.file);
+        if (u) {
+          image.hidden = false;
+          placeholder.hidden = true;
+          image.src = u + '?v=' + Date.now();
+        }
+      });
+      const fav = document.createElement('button');
+      fav.type = 'button';
+      fav.className = 'gallery-fav' + (entry.favorite ? ' is-fav' : '');
+      fav.textContent = entry.favorite ? '★' : '☆';
+      fav.title = entry.favorite ? '已收藏' : '收藏';
+      fav.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await window.settings.toggleGalleryFavorite(entry.id);
+          await reloadState();
+          showStatus('ok', entry.favorite ? '已取消收藏' : '已收藏');
+        } catch (err) {
+          showStatus('error', '收藏失败：' + (err?.message || err));
+        }
+      });
+      const meta = document.createElement('div');
+      meta.className = 'gallery-meta';
+      const title = document.createElement('div');
+      title.className = 'gallery-title';
+      title.textContent = entry.id;
+      const sub = document.createElement('div');
+      sub.className = 'gallery-subtitle';
+      sub.textContent = coverInfoFor(entry) + (entry.favorite ? ' · 收藏' : '');
+      meta.append(title, sub);
+      const row = document.createElement('div');
+      row.className = 'gallery-actions';
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'button primary';
+      useBtn.textContent = '设为当前';
+      useBtn.disabled = entry.contentKey === activeContentKey;
+      useBtn.addEventListener('click', async () => {
+        try {
+          await window.settings.setGalleryActive(entry.id);
+          await reloadState();
+          showStatus('ok', '已设为当前壁纸');
+        } catch (err) {
+          showStatus('error', '切换失败：' + (err?.message || err));
+        }
+      });
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'button';
+      delBtn.textContent = '移除';
+      delBtn.addEventListener('click', async () => {
+        if (!window.confirm('移除该图片？收藏的图片也会被删除')) return;
+        try {
+          await window.settings.removeGalleryImage(entry.id);
+          await reloadState();
+          showStatus('ok', '已移除');
+        } catch (err) {
+          showStatus('error', '移除失败：' + (err?.message || err));
+        }
+      });
+      row.append(useBtn, delBtn);
+      item.append(thumb, fav, meta, row);
+      grid.appendChild(item);
+    }
+  }
+  card.appendChild(grid);
+
+  const drop = document.createElement('div');
+  drop.className = 'gallery-drop';
+  drop.textContent = '拖拽图片到此处导入（或点击上方“选择图片…”）';
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('is-dragover');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-dragover'));
+  drop.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    drop.classList.remove('is-dragover');
+    // Renderer cannot access file paths from drag; use dialog via gallery import
+    try {
+      const res = await window.settings.importGalleryImage();
+      if (res && res.ok) {
+        await reloadState();
+        showStatus('ok', '已导入并设为当前');
+      }
+    } catch (err) {
+      showStatus('error', '导入失败：' + (err?.message || err));
+    }
+  });
+  card.appendChild(drop);
 }
 
 // Keep the wallpaper section's interactive state in sync with the draft mode
