@@ -9,7 +9,7 @@ test('renderer is a control-free full-screen Canvas page', async () => {
   assert.match(html, /<canvas id="wallpaper"><\/canvas>/);
   assert.match(html, /<script type="module" src="\.\/renderer\.mjs"><\/script>/);
   assert.doesNotMatch(html, /<input|<button|type="range"|type="number"/);
-  for (const card of ['time', 'weather', 'tide', 'calendar']) {
+  for (const card of ['time', 'weather', 'tide', 'calendar', 'custom']) {
     assert.match(html, new RegExp(`data-panel-card="${card}"`));
   }
   assert.doesNotMatch(html, /switchBar|scanline|connector/);
@@ -42,8 +42,8 @@ test('separates frosted card surfaces from their animated 3D shells', async () =
   const shellRule = panelCss.match(/\.information-card\s*\{([^}]*)\}/)?.[1] ?? '';
   const surfaceRule = panelCss.match(/\.information-card-surface\s*\{([^}]*)\}/)?.[1] ?? '';
 
-  assert.equal(surfaces.length, 4);
-  for (const card of ['time', 'weather', 'tide', 'calendar']) {
+  assert.equal(surfaces.length, 5);
+  for (const card of ['time', 'weather', 'tide', 'calendar', 'custom']) {
     const cardBody = html.match(
       new RegExp(`<section\\b[^>]*data-panel-card="${card}"[^>]*>([\\s\\S]*?)</section>`),
     )?.[1] ?? '';
