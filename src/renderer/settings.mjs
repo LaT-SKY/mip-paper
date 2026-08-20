@@ -45,6 +45,8 @@ let statusTimer = null;
 let iconPicker = null;
 // Shared per-command "more" action menu.
 let commandMenu = null;
+// Gallery remove confirmation bubble
+let galleryConfirm = null;
 
 function iconMarkup(name) {
   const paths = SETTINGS_ICONS[name];
@@ -320,6 +322,62 @@ function closeCommandMenu() {
     commandMenu.popover.hidden = true;
     commandMenu.index = -1;
   }
+}
+
+function ensureGalleryConfirm() {
+  if (galleryConfirm) return galleryConfirm;
+  const popover = document.createElement('div');
+  popover.className = 'gallery-confirm-popover';
+  popover.hidden = true;
+  document.body.appendChild(popover);
+  galleryConfirm = { popover, entryId: null, anchor: null };
+  return galleryConfirm;
+}
+
+function closeGalleryConfirm() {
+  if (galleryConfirm) {
+    galleryConfirm.popover.hidden = true;
+    galleryConfirm.entryId = null;
+    galleryConfirm.anchor = null;
+  }
+}
+
+function openGalleryConfirm(anchor, entryId) {
+  const c = ensureGalleryConfirm();
+  c.entryId = entryId;
+  c.anchor = anchor;
+  c.popover.replaceChildren();
+  const text = document.createElement('div');
+  text.className = 'gallery-confirm-text';
+  text.textContent = '移除该图片？收藏的图片也会被删除';
+  const actions = document.createElement('div');
+  actions.className = 'gallery-confirm-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'button';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeGalleryConfirm);
+  const confirm = document.createElement('button');
+  confirm.type = 'button';
+  confirm.className = 'button primary';
+  confirm.textContent = '移除';
+  confirm.addEventListener('click', async () => {
+    const id = c.entryId;
+    closeGalleryConfirm();
+    try {
+      await window.settings.removeGalleryImage(id);
+      await reloadState();
+      showStatus('ok', '已移除');
+    } catch (err) {
+      showStatus('error', '移除失败：' + (err?.message || err));
+    }
+  });
+  actions.append(cancel, confirm);
+  c.popover.append(text, actions);
+  const rect = anchor.getBoundingClientRect();
+  c.popover.style.left = Math.min(rect.left, window.innerWidth - 220) + 'px';
+  c.popover.style.top = rect.bottom + 8 + 'px';
+  c.popover.hidden = false;
 }
 
 function openCommandMenu(anchor, index) {
@@ -684,15 +742,9 @@ function appendWallpaperSection(card) {
       delBtn.type = 'button';
       delBtn.className = 'button';
       delBtn.textContent = '移除';
-      delBtn.addEventListener('click', async () => {
-        if (!window.confirm('移除该图片？收藏的图片也会被删除')) return;
-        try {
-          await window.settings.removeGalleryImage(entry.id);
-          await reloadState();
-          showStatus('ok', '已移除');
-        } catch (err) {
-          showStatus('error', '移除失败：' + (err?.message || err));
-        }
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openGalleryConfirm(delBtn, entry.id);
       });
       row.append(useBtn, delBtn);
       item.append(thumb, fav, meta, row);
@@ -956,6 +1008,7 @@ function selectSection(groupId) {
   clearFieldErrors();
   closeIconPicker();
   closeCommandMenu();
+  closeGalleryConfirm();
   renderSection(groupId);
 }
 
@@ -1000,7 +1053,7 @@ contentRoot.addEventListener('click', (event) => {
   }
 });
 
-// The icon picker and the command "more" menu are floating popovers: close
+// The icon picker, command "more" and gallery confirm are floating popovers: close
 // them on outside clicks, Escape, or when the section scrolls under them.
 document.addEventListener('pointerdown', (event) => {
   if (iconPicker && !iconPicker.popover.hidden) {
@@ -1015,6 +1068,12 @@ document.addEventListener('pointerdown', (event) => {
     if (moreButton) return;
     closeCommandMenu();
   }
+  if (galleryConfirm && !galleryConfirm.popover.hidden) {
+    if (galleryConfirm.popover.contains(event.target)) return;
+    const delButton = event.target.closest && event.target.closest('.gallery-actions .button');
+    if (delButton && delButton.textContent === '移除') return;
+    closeGalleryConfirm();
+  }
 });
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
@@ -1024,11 +1083,15 @@ window.addEventListener('keydown', (event) => {
   } else if (commandMenu && !commandMenu.popover.hidden) {
     event.preventDefault();
     closeCommandMenu();
+  } else if (galleryConfirm && !galleryConfirm.popover.hidden) {
+    event.preventDefault();
+    closeGalleryConfirm();
   }
 });
 contentRoot.addEventListener('scroll', () => {
   closeIconPicker();
   closeCommandMenu();
+  closeGalleryConfirm();
 }, { passive: true });
 
 saveButton.addEventListener('click', saveConfig);
@@ -1036,6 +1099,7 @@ reloadButton.addEventListener('click', async () => {
   clearFieldErrors();
   closeIconPicker();
   closeCommandMenu();
+  closeGalleryConfirm();
   await reloadState();
   showStatus('ok', '已重新加载配置');
 });

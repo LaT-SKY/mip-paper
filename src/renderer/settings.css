@@ -832,6 +832,34 @@ body {
   pointer-events: none;
 }
 
+.gallery-confirm-popover {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+  max-width: 260px;
+  padding: 10px 12px;
+  background: var(--settings-surface-raised);
+  border: 1px solid var(--settings-border);
+  border-radius: 12px;
+  box-shadow: var(--settings-shadow);
+  font: 400 12.5px/1.4 system-ui, sans-serif;
+}
+
+.gallery-confirm-popover[hidden] { display: none; }
+
+.gallery-confirm-text {
+  color: var(--settings-text);
+}
+
+.gallery-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .gallery-drop.is-dragover {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   border-color: var(--accent);
