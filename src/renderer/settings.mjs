@@ -760,21 +760,81 @@ function appendWallpaperSection(card) {
   const drop = document.createElement('div');
   drop.className = 'gallery-drop';
   drop.textContent = '拖拽图片到此处导入（或点击上方“选择图片…”）';
-  drop.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    drop.classList.add('is-dragover');
-  });
-  drop.addEventListener('dragleave', () => drop.classList.remove('is-dragover'));
-  drop.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    drop.classList.remove('is-dragover');
-    // Renderer cannot access file paths from drag; use dialog via gallery import
-    try {
+  async function handleGalleryFiles(files) {
+    const list = Array.from(files || []);
+    const paths = list.map((f) => f.path || (window.webUtils && window.webUtils.getPathForFile ? window.webUtils.getPathForFile(f) : null)).filter(Boolean);
+    if (paths.length === 0) {
       const res = await window.settings.importGalleryImage();
       if (res && res.ok) {
         await reloadState();
         showStatus('ok', '已导入并设为当前');
       }
+      return;
+    }
+    let ok = 0;
+    let lastErr = null;
+    for (const p of paths) {
+      try {
+        const res = await window.settings.importGalleryImageFromPath(p);
+        if (res && res.ok) ok += 1;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (ok > 0) {
+      await reloadState();
+      showStatus('ok', `已导入 ${ok} 张并设为当前`);
+    } else if (lastErr) {
+      showStatus('error', '导入失败：' + (lastErr?.message || lastErr));
+    }
+  }
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    drop.classList.add('is-dragover');
+    card.classList.add('is-dragover');
+  });
+  drop.addEventListener('dragleave', () => {
+    drop.classList.remove('is-dragover');
+    card.classList.remove('is-dragover');
+  });
+  drop.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    drop.classList.remove('is-dragover');
+    card.classList.remove('is-dragover');
+    const kde = getPath(draft, 'wallpaper.mode') === 'kde';
+    if (kde) {
+      showStatus('error', '跟随 KDE 模式下不可导入，请先切换到手动模式');
+      return;
+    }
+    try {
+      await handleGalleryFiles(e.dataTransfer.files);
+    } catch (err) {
+      showStatus('error', '导入失败：' + (err?.message || err));
+    }
+  });
+  // Whole card also accepts drop for larger hit area (entire wallpaper component)
+  card.addEventListener('dragover', (e) => {
+    if (e.target.closest && e.target.closest('.gallery-drop')) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    drop.classList.add('is-dragover');
+  });
+  card.addEventListener('dragleave', (e) => {
+    if (e.target === card) drop.classList.remove('is-dragover');
+  });
+  card.addEventListener('drop', async (e) => {
+    if (e.target.closest && e.target.closest('.gallery-drop')) return;
+    e.preventDefault();
+    drop.classList.remove('is-dragover');
+    const kde = getPath(draft, 'wallpaper.mode') === 'kde';
+    if (kde) {
+      showStatus('error', '跟随 KDE 模式下不可导入，请先切换到手动模式');
+      return;
+    }
+    try {
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) await handleGalleryFiles(files);
     } catch (err) {
       showStatus('error', '导入失败：' + (err?.message || err));
     }

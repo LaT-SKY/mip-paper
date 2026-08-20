@@ -15,6 +15,7 @@ const SETTINGS_GALLERY_SET_ACTIVE_CHANNEL = 'settings:gallery-set-active';
 const SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL = 'settings:gallery-toggle-favorite';
 const SETTINGS_GALLERY_REMOVE_CHANNEL = 'settings:gallery-remove';
 const SETTINGS_GALLERY_IMPORT_CHANNEL = 'settings:gallery-import';
+const SETTINGS_GALLERY_IMPORT_PATH_CHANNEL = 'settings:gallery-import-path';
 // Reuse the runtime broadcast so the settings UI live-updates when the config
 // changes through any writer (its own save, the CLI, or an external editor).
 const CONFIG_UPDATED_CHANNEL = 'wallpaper:config-updated';
@@ -29,6 +30,7 @@ contextBridge.exposeInMainWorld('settings', Object.freeze({
   toggleGalleryFavorite: (id) => ipcRenderer.invoke(SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL, id),
   removeGalleryImage: (id) => ipcRenderer.invoke(SETTINGS_GALLERY_REMOVE_CHANNEL, id),
   importGalleryImage: () => ipcRenderer.invoke(SETTINGS_GALLERY_IMPORT_CHANNEL),
+  importGalleryImageFromPath: (path) => ipcRenderer.invoke(SETTINGS_GALLERY_IMPORT_PATH_CHANNEL, path),
   onConfigUpdated: (listener) => {
     const wrapper = (_event, payload) => listener(payload);
     ipcRenderer.on(CONFIG_UPDATED_CHANNEL, wrapper);

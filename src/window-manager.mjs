@@ -44,6 +44,7 @@ export const SETTINGS_GALLERY_SET_ACTIVE_CHANNEL = 'settings:gallery-set-active'
 export const SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL = 'settings:gallery-toggle-favorite';
 export const SETTINGS_GALLERY_REMOVE_CHANNEL = 'settings:gallery-remove';
 export const SETTINGS_GALLERY_IMPORT_CHANNEL = 'settings:gallery-import';
+export const SETTINGS_GALLERY_IMPORT_PATH_CHANNEL = 'settings:gallery-import-path';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -501,6 +502,20 @@ export function createWindowManager({
       if (onWallpaperImported) await onWallpaperImported();
       return { ok: true, entry };
     });
+    ipcMain.handle(SETTINGS_GALLERY_IMPORT_PATH_CHANNEL, async (event, source) => {
+      if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+      if (typeof source !== 'string' || source.trim() === '') throw new TypeError('source path is required');
+      const entry = await galleryImportToGallery(source.trim(), { env: process.env, homedir: undefined });
+      await gallerySetActive(entry.id, { env: process.env, homedir: undefined });
+      if (currentConfig.wallpaper.mode !== 'manual') {
+        await settingsService.saveConfigFile(configPath, {
+          ...currentConfig,
+          wallpaper: { mode: 'manual' },
+        });
+      }
+      if (onWallpaperImported) await onWallpaperImported();
+      return { ok: true, entry };
+    });
     screen.on('display-added', onDisplayAdded);
     screen.on('display-removed', onDisplayRemoved);
     screen.on('display-metrics-changed', onDisplayMetricsChanged);
@@ -528,6 +543,7 @@ export function createWindowManager({
     ipcMain.removeHandler(SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL);
     ipcMain.removeHandler(SETTINGS_GALLERY_REMOVE_CHANNEL);
     ipcMain.removeHandler(SETTINGS_GALLERY_IMPORT_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_GALLERY_IMPORT_PATH_CHANNEL);
     ipcMain.removeAllListeners(NOTIFY_MENU_OPENED_CHANNEL);
     if (informationService) ipcMain.removeHandler(INFORMATION_CHANNEL);
     if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);
