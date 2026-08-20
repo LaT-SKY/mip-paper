@@ -5,6 +5,30 @@ All notable changes to Mip-Paper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-20
+
+### Added
+
+- Wallpaper gallery under `${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery` with `index.json` (0600) and per-entry `wallpaper` (0644), deduplicated by `sha256:contentKey`, with favorite protection, 50-item non-favorite history limit, legacy single-file migration, and corrupted-index recovery (`src/wallpaper-gallery.mjs`).
+- Gallery CLI via `mip-paper wallpaper gallery {list|show|set|favorite|unfavorite|remove|prune}` and `mip-paper wallpaper set` now imports to the gallery and activates atomically (`scripts/wallpaper-gallery.mjs`, `bin/mip-paper`).
+- Settings gallery IPC (`settings:gallery-*`) and state exposure (gallery entries + display bounds for smart-crop preview) through `window-manager`, `main`, and `settings-preload` (`src/window-manager.mjs`, `src/main.mjs`, `src/settings-preload.cjs`).
+- Gallery grid in the settings wallpaper section with lazy thumbnails, cover-info hint computed from primary display bounds, set-active/favorite/remove actions, and drag-over drop zone (`src/renderer/settings.mjs`, `settings.css`).
+- `doctor` gallery-index check and `wallpaper status` gallery summary (`bin/mip-paper`).
+
+### Changed
+
+- `panel.animation` defaults refined to `staggerDelayMs 48` / `durationMs 820` and card surfaces now use 16 px rounded corners with softer shadows to align with the settings language (`src/config.mjs`, `src/renderer/panel.css`).
+- Wallpaper import via the settings window now routes through the gallery (with legacy direct import as fallback) and always ensures `wallpaper.mode` is `manual` before re-publishing (`src/window-manager.mjs`).
+- Documentation: quickstart and configuration guides describe the gallery location, CLI, and that the gallery does not live in `config.json` (`docs/guides/quickstart.md`, `configuration.md`), plus archived Hyprland discussion and new KDE scope (`docs/research/_archive`, `docs/research/0.4.0-kde-scope-2026-08-20.md`).
+
+### Fixed
+
+- Color service content cache is now bounded to 32 entries with FIFO eviction to avoid unbounded memory after large gallery imports (`src/color-service.mjs`).
+
+### Removed
+
+- Hyprland/GNOME/Niri roadmap from 0.4.0 mainline; the layer-shell native host is retained on `archive/hyprland-layer-shell-2026-08-20` for a future 0.5.0 merge (`0.4.0-compatibility-discussion.tmp.md` archived).
+
 ## [0.3.9] - 2026-08-17
 
 ### Fixed
