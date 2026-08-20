@@ -697,6 +697,8 @@ function appendWallpaperSection(card) {
           showStatus('error', '切换失败：' + (err?.message || err));
         }
       });
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'gallery-thumb-wrap';
       const fav = document.createElement('button');
       fav.type = 'button';
       fav.className = 'gallery-fav' + (entry.favorite ? ' is-fav' : '');
@@ -713,15 +715,6 @@ function appendWallpaperSection(card) {
           showStatus('error', '收藏失败：' + (err?.message || err));
         }
       });
-      const meta = document.createElement('div');
-      meta.className = 'gallery-meta';
-      const title = document.createElement('div');
-      title.className = 'gallery-title';
-      title.textContent = entry.id;
-      const sub = document.createElement('div');
-      sub.className = 'gallery-subtitle';
-      sub.textContent = coverInfoFor(entry) + (entry.favorite ? ' · 收藏' : '');
-      meta.append(title, sub);
       const row = document.createElement('div');
       row.className = 'gallery-actions';
       const useBtn = document.createElement('button');
@@ -729,7 +722,8 @@ function appendWallpaperSection(card) {
       useBtn.className = 'button primary';
       useBtn.textContent = '设为当前';
       useBtn.disabled = entry.contentKey === activeContentKey;
-      useBtn.addEventListener('click', async () => {
+      useBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         try {
           await window.settings.setGalleryActive(entry.id);
           await reloadState();
@@ -747,7 +741,17 @@ function appendWallpaperSection(card) {
         openGalleryConfirm(delBtn, entry.id);
       });
       row.append(useBtn, delBtn);
-      item.append(thumb, fav, meta, row);
+      thumbWrap.append(thumb, fav, row);
+      const meta = document.createElement('div');
+      meta.className = 'gallery-meta';
+      const title = document.createElement('div');
+      title.className = 'gallery-title';
+      title.textContent = entry.id;
+      const sub = document.createElement('div');
+      sub.className = 'gallery-subtitle';
+      sub.textContent = coverInfoFor(entry) + (entry.favorite ? ' · 收藏' : '');
+      meta.append(title, sub);
+      item.append(thumbWrap, meta);
       grid.appendChild(item);
     }
   }
