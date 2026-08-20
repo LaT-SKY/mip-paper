@@ -682,95 +682,138 @@ body {
   display: block;
 }
 
-/* Gallery grid */
+/* Gallery — A: canvas-first, 2-col large cards, hover overlay */
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
-  gap: 10px;
-  padding: 10px 0 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 0 8px;
+}
+
+@media (max-width: 720px) {
+  .gallery-grid { grid-template-columns: 1fr; }
 }
 
 .gallery-item {
   position: relative;
   border: 1px solid var(--settings-border);
-  border-radius: 10px;
+  border-radius: 14px;
   overflow: hidden;
   background: var(--settings-surface);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 1px 2px rgba(13,25,32,0.06);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .gallery-item:hover {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--settings-border));
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--settings-border));
+  box-shadow: 0 4px 16px rgba(13,25,32,0.10);
+  transform: translateY(-1px);
 }
 
 .gallery-item.is-active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent), 0 4px 16px rgba(13,25,32,0.10);
 }
 
 .gallery-thumb {
   width: 100%;
-  height: 84px;
+  height: 132px;
   object-fit: cover;
   display: block;
   background: color-mix(in srgb, var(--settings-text-muted) 10%, transparent);
 }
 
 .gallery-meta {
-  padding: 6px 8px;
+  padding: 8px 10px 36px; /* reserve for overlay */
   display: flex;
   flex-direction: column;
   gap: 2px;
+  background: var(--settings-surface);
 }
 
 .gallery-title {
-  font: 500 11px/1.2 system-ui, sans-serif;
+  font: 600 12px/1.2 system-ui, sans-serif;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .gallery-subtitle {
-  font: 400 10px/1 ui-monospace, monospace;
+  font: 400 10.5px/1 ui-monospace, monospace;
   color: var(--settings-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Hover overlay — actions appear on hover/focus */
 .gallery-actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  gap: 4px;
-  padding: 4px 6px 6px;
+  gap: 6px;
+  padding: 8px 8px 8px;
+  background: linear-gradient(to top, rgba(21,34,41,0.55), transparent);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.gallery-item:hover .gallery-actions,
+.gallery-item:focus-within .gallery-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .gallery-actions .button {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 11px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  border-radius: 8px;
 }
 
 .gallery-fav {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.9);
-  background: rgba(21,34,41,0.55);
+  border: 1px solid rgba(255,255,255,0.92);
+  background: rgba(21,34,41,0.52);
   color: #fff;
   display: grid;
   place-items: center;
-  font-size: 11px;
   line-height: 1;
   cursor: default;
+  padding: 0;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
+
+.gallery-fav:hover { transform: scale(1.06); }
 
 .gallery-fav.is-fav {
   background: var(--accent);
   border-color: var(--accent);
 }
+
+.gallery-fav svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+
+.gallery-fav.is-fav svg { fill: currentColor; stroke: currentColor; }
 
 .gallery-drop {
   margin-top: 8px;
@@ -781,6 +824,12 @@ body {
   font: 400 12px/1.4 system-ui, sans-serif;
   text-align: center;
   transition: background-color 90ms ease, border-color 90ms ease;
+}
+
+.gallery-grid.is-dimmed,
+.gallery-drop.is-dimmed {
+  opacity: 0.38;
+  pointer-events: none;
 }
 
 .gallery-drop.is-dragover {

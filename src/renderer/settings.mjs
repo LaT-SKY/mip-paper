@@ -591,50 +591,19 @@ function coverInfoFor(entry) {
 }
 
 function appendWallpaperSection(card) {
-  const preview = document.createElement('div');
-  preview.className = 'wallpaper-preview';
-  const frame = document.createElement('div');
-  frame.className = 'wallpaper-preview-frame';
-  const image = document.createElement('img');
-  image.className = 'wallpaper-preview-image';
-  image.alt = '壁纸预览';
-  const placeholder = document.createElement('span');
-  placeholder.className = 'wallpaper-preview-placeholder';
-  placeholder.textContent = '尚未导入图片';
-  const manualUrl = fileUrlFor(state.wallpaper && state.wallpaper.path);
-  if (manualUrl) {
-    image.src = manualUrl + '?v=' + Date.now();
-    image.addEventListener('error', () => {
-      image.hidden = true;
-      placeholder.hidden = false;
-    });
-    image.addEventListener('load', () => {
-      image.hidden = false;
-      placeholder.hidden = true;
-    });
-  } else {
-    image.hidden = true;
-  }
-  frame.append(image, placeholder);
-  preview.appendChild(frame);
-  const hint = document.createElement('span');
-  hint.className = 'wallpaper-preview-hint';
-  hint.textContent = '跟随 KDE 模式下不可用';
-  preview.appendChild(hint);
-  card.appendChild(preview);
-
   const actions = document.createElement('div');
   actions.className = 'wallpaper-actions';
   const pick = document.createElement('button');
   pick.type = 'button';
-  pick.className = 'button';
+  pick.className = 'button primary';
   pick.id = 'wallpaper-pick';
   pick.textContent = '选择图片…';
+  pick.title = '导入 JPEG / PNG / WebP 并切换到手动模式';
   pick.addEventListener('click', importWallpaper);
   actions.appendChild(pick);
   const hintText = document.createElement('span');
   hintText.className = 'hint';
-  hintText.textContent = '导入 JPEG / PNG / WebP 并切换到手动模式（所有显示器）';
+  hintText.textContent = '画廊按内容去重，收藏永久保留，历史自动清理';
   actions.appendChild(hintText);
   card.appendChild(actions);
 
@@ -659,26 +628,29 @@ function appendWallpaperSection(card) {
       thumb.loading = 'lazy';
       const url = fileUrlFor(entry.file);
       if (url) thumb.src = url + '?v=' + (entry.mtimeMs || entry.size);
-      thumb.addEventListener('click', () => {
-        // Preview on click
-        const u = fileUrlFor(entry.file);
-        if (u) {
-          image.hidden = false;
-          placeholder.hidden = true;
-          image.src = u + '?v=' + Date.now();
+      thumb.style.cursor = entry.contentKey === activeContentKey ? 'default' : 'pointer';
+      thumb.addEventListener('click', async () => {
+        if (entry.contentKey === activeContentKey) return;
+        try {
+          await window.settings.setGalleryActive(entry.id);
+          await reloadState();
+          showStatus('ok', '已设为当前壁纸');
+        } catch (err) {
+          showStatus('error', '切换失败：' + (err?.message || err));
         }
       });
       const fav = document.createElement('button');
       fav.type = 'button';
       fav.className = 'gallery-fav' + (entry.favorite ? ' is-fav' : '');
-      fav.textContent = entry.favorite ? '★' : '☆';
-      fav.title = entry.favorite ? '已收藏' : '收藏';
+      fav.title = entry.favorite ? '已收藏（永久保留）' : '收藏（永久保留）';
+      fav.setAttribute('aria-label', entry.favorite ? '已收藏' : '收藏');
+      fav.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8l2.1 4.3 4.7 0.7-3.4 3.3 0.8 4.7-4.2-2.2-4.2 2.2 0.8-4.7-3.4-3.3 4.7-0.7z"></path></svg>';
       fav.addEventListener('click', async (e) => {
         e.stopPropagation();
         try {
           await window.settings.toggleGalleryFavorite(entry.id);
           await reloadState();
-          showStatus('ok', entry.favorite ? '已取消收藏' : '已收藏');
+          showStatus('ok', entry.favorite ? '已取消收藏' : '已收藏 · 永久保留');
         } catch (err) {
           showStatus('error', '收藏失败：' + (err?.message || err));
         }
@@ -761,9 +733,14 @@ function updateWallpaperSectionControls() {
   if (!card) return;
   const kde = getPath(draft, 'wallpaper.mode') === 'kde';
   const pick = card.querySelector('#wallpaper-pick');
-  if (pick) pick.disabled = kde;
-  const preview = card.querySelector('.wallpaper-preview');
-  if (preview) preview.classList.toggle('is-dimmed', kde);
+  if (pick) {
+    pick.disabled = kde;
+    pick.title = kde ? '跟随 KDE 模式下不可用，切换到手动模式后可导入' : '导入 JPEG / PNG / WebP 并切换到手动模式';
+  }
+  const grid = card.querySelector('#gallery-grid');
+  if (grid) grid.classList.toggle('is-dimmed', kde);
+  const drop = card.querySelector('.gallery-drop');
+  if (drop) drop.classList.toggle('is-dimmed', kde);
 }
 
 function renderSection(groupId, { animate = true } = {}) {
