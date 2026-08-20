@@ -39,6 +39,7 @@ let state = null;
 let draft = null;
 let dirty = false;
 let currentSection = 'interaction';
+let selectedDisplayId = 'all';
 let animToken = 0;
 let statusTimer = null;
 // Shared visual icon picker for the custom-command rows.
@@ -794,9 +795,14 @@ function appendAboutSection(card) {
 function coverInfoFor(entry) {
   if (!entry || !state.displays || state.displays.length === 0) return `${entry.width}×${entry.height}`;
   const fit = getPath(draft, 'wallpaper.fit') || 'cover';
-  const primary = state.displays[0];
-  const primaryW = primary.bounds.width;
-  const primaryH = primary.bounds.height;
+  const perDisplay = getPath(draft, 'wallpaper.perDisplay');
+  let target = state.displays[0];
+  if (perDisplay && selectedDisplayId !== 'all') {
+    const found = state.displays.find((d) => String(d.id) === String(selectedDisplayId));
+    if (found) target = found;
+  }
+  const primaryW = target.bounds.width;
+  const primaryH = target.bounds.height;
   let scale;
   if (fit === 'contain') scale = Math.min(primaryW / entry.width, primaryH / entry.height);
   else if (fit === 'stretch') return `${entry.width}×${entry.height} → ${primaryW}×${primaryH} stretch`;
@@ -804,7 +810,7 @@ function coverInfoFor(entry) {
   else scale = Math.max(primaryW / entry.width, primaryH / entry.height);
   const sw = Math.round(entry.width * scale);
   const sh = Math.round(entry.height * scale);
-  const multi = state.displays.length > 1 ? ` · ${state.displays.length}屏` : '';
+  const multi = !perDisplay && state.displays.length > 1 ? ` · ${state.displays.length}屏` : (perDisplay ? ` · ${target.bounds.width}×${target.bounds.height}` : '');
   return `${entry.width}×${entry.height} → ${sw}×${sh} ${fit}${multi}`;
 }
 
@@ -831,6 +837,46 @@ function appendWallpaperSection(card) {
   modeHint.style.marginTop = '6px';
   card.appendChild(modeHint);
 
+  // Per-display scope selector (only when perDisplay enabled)
+  const perDisplayOn = Boolean(getPath(draft, 'wallpaper.perDisplay'));
+  if (perDisplayOn && state.displays && state.displays.length > 0) {
+    const selectorWrap = document.createElement('div');
+    selectorWrap.className = 'wallpaper-display-selector';
+    selectorWrap.style.display = 'flex';
+    selectorWrap.style.alignItems = 'center';
+    selectorWrap.style.gap = '8px';
+    selectorWrap.style.margin = '10px 0 6px';
+    const label = document.createElement('span');
+    label.className = 'hint';
+    label.textContent = '作用域：';
+    const select = document.createElement('select');
+    select.id = 'wallpaper-display-select';
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = '全部显示器 (fallback)';
+    select.appendChild(allOpt);
+    for (const d of state.displays) {
+      const opt = document.createElement('option');
+      opt.value = String(d.id);
+      opt.textContent = `${d.bounds.width}×${d.bounds.height} @${d.bounds.x},${d.bounds.y}${String(d.id) === String(state.displays[0].id) ? ' (主)' : ''}`;
+      select.appendChild(opt);
+    }
+    select.value = selectedDisplayId;
+    select.addEventListener('change', () => {
+      selectedDisplayId = select.value;
+      renderSection(currentSection, { animate: false });
+    });
+    selectorWrap.append(label, select);
+    if (state.assignments) {
+      const hint = document.createElement('span');
+      hint.className = 'hint';
+      const fallback = state.assignments.fallback ? state.assignments.fallback.slice(0, 12) : '无';
+      hint.textContent = `fallback: ${fallback}`;
+      selectorWrap.appendChild(hint);
+    }
+    card.appendChild(selectorWrap);
+  }
+
   // Gallery grid
   const gallery = state.gallery ?? [];
   const grid = document.createElement('div');
@@ -851,7 +897,12 @@ function appendWallpaperSection(card) {
     empty.textContent = '画廊为空，导入图片后会保留历史，收藏的图片不会被自动清理';
     grid.appendChild(empty);
   } else {
-    const activeContentKey = gallery.find((e) => e.file === state.wallpaper.path)?.contentKey;
+    const assignments = state.assignments ?? { fallback: null, assignments: {} };
+    const perDisplayActive = perDisplayOn;
+    const fallbackKey = assignments.fallback ?? gallery.find((e) => e.file === state.wallpaper.path)?.contentKey ?? null;
+    const activeContentKey = perDisplayActive
+      ? (assignments.assignments[String(selectedDisplayId)] ?? fallbackKey)
+      : gallery.find((e) => e.file === state.wallpaper.path)?.contentKey;
     for (const entry of gallery) {
       const item = document.createElement('div');
       item.className = 'gallery-item' + (entry.contentKey === activeContentKey ? ' is-active' : '');
@@ -868,9 +919,10 @@ function appendWallpaperSection(card) {
       const activate = async () => {
         if (entry.contentKey === activeContentKey) return;
         try {
-          await window.settings.setGalleryActive(entry.id);
+          if (perDisplayOn) await window.settings.setGalleryActive(entry.id, selectedDisplayId);
+          else await window.settings.setGalleryActive(entry.id);
           await reloadState();
-          showStatus('ok', '已设为当前壁纸');
+          showStatus('ok', perDisplayOn ? `已分配到 ${selectedDisplayId === 'all' ? '全部' : selectedDisplayId}` : '已设为当前壁纸');
         } catch (err) {
           showStatus('error', '切换失败：' + (err?.message || err));
         }
@@ -908,9 +960,10 @@ function appendWallpaperSection(card) {
       useBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         try {
-          await window.settings.setGalleryActive(entry.id);
+          if (perDisplayOn) await window.settings.setGalleryActive(entry.id, selectedDisplayId);
+          else await window.settings.setGalleryActive(entry.id);
           await reloadState();
-          showStatus('ok', '已设为当前壁纸');
+          showStatus('ok', perDisplayOn ? `已分配到 ${selectedDisplayId === 'all' ? '全部' : selectedDisplayId}` : '已设为当前壁纸');
         } catch (err) {
           showStatus('error', '切换失败：' + (err?.message || err));
         }
