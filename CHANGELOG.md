@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gallery sorting favorite-first → lastUsed → importedAt and keyboard accessibility (`role=list`/`listitem`, `Enter`/`Space` activation, `aria-pressed`/`aria-label`) (`src/wallpaper-gallery.mjs`, `src/renderer/settings.mjs`).
 - Hot-reload gallery activation without `systemctl restart`: settings and `gallery set` now publish through `wallpaperSync`/`colorService` atomically; CLI `wallpaper set`/`gallery set` print hot-reload hints and `list --json` (`src/main.mjs`, `scripts/wallpaper-gallery.mjs`, `bin/mip-paper`).
 - Gallery `import-only` CLI (`wallpaper gallery import`) and detailed `doctor` gallery report (total/favorite counts) (`scripts/wallpaper-gallery.mjs`, `bin/mip-paper`).
+- Settings form validation: every user-fillable value (`number`/`text`/`password`/`commands` subfields/credentials) shows a concise Chinese error (精简技术风) with live `field-error`/`data-invalid`/`aria-invalid`, save blocking with count, and backend English to Chinese mapping (`src/settings-fields.mjs:validateField/validateDraft/translateBackendError`, `src/renderer/settings.mjs|css`).
+- Settings subdivision via `SETTINGS_SECTIONS`: wallpaper (settings + gallery), appearance (accent + theme), audio (core + timing), motion (speed 4 + parallax 3 + frame 3), panel (behavior 4 + look 5 + animation 2), weather (location 4 + tide 1 + credentials 2), menu (behavior 3 + terminal 1 + commands 1) — rendered as stacked sub-cards with `display:flex; gap:14px` and shared spring animation (`src/settings-fields.mjs`, `src/renderer/settings.mjs|css`).
 
 ### Changed
 
@@ -29,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Color service content cache is now bounded to 32 entries with FIFO eviction to avoid unbounded memory after large gallery imports (`src/color-service.mjs`).
+- Menu terminal commands now respect `$SHELL` via `sh -c` so fish syntax is supported (`src/menu-command.mjs`).
+- Settings weather credentials `apiHost` no longer shows a false “不能为空” and multi-card spring animation no longer hides the first sub-cards due to token race (`src/renderer/settings.mjs`, `src/settings-fields.mjs`).
 
 ### Removed
 
