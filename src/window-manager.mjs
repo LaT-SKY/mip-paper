@@ -6,6 +6,7 @@ import {
   setActiveGalleryImage as gallerySetActive,
   toggleFavorite as galleryToggleFavorite,
 } from './wallpaper-gallery.mjs';
+import { getAssignments, setAssignment } from './wallpaper-assignments.mjs';
 
 export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
 export const PROBE_REPORT_CHANNEL = 'wallpaper:report-probe';
@@ -207,6 +208,8 @@ export function createWindowManager({
     const extra = raw && typeof raw.then === 'function' ? await raw : raw;
     const credentials = extra.credentials ?? { configured: false, apiHost: null };
     const wallpaper = extra.wallpaper ?? { mode: currentConfig.wallpaper?.mode ?? 'kde', path: wallpaperPath };
+    let assignments = null;
+    try { assignments = await getAssignments(process.env, undefined); } catch {}
     return {
       config: structuredClone(currentConfig),
       defaults: structuredClone(DEFAULT_CONFIG),
@@ -217,6 +220,7 @@ export function createWindowManager({
       ...(extra.gallery ? { gallery: structuredClone(extra.gallery) } : {}),
       ...(extra.displays ? { displays: structuredClone(extra.displays) } : {}),
       ...(extra.galleryError ? { galleryError: extra.galleryError } : {}),
+      ...(assignments ? { assignments: structuredClone(assignments) } : {}),
       configPath,
       appVersion,
     };
@@ -456,9 +460,39 @@ export function createWindowManager({
       if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
       return galleryListGallery(process.env, undefined);
     });
-    ipcMain.handle(SETTINGS_GALLERY_SET_ACTIVE_CHANNEL, async (event, id) => {
+    ipcMain.handle(SETTINGS_GALLERY_SET_ACTIVE_CHANNEL, async (event, payload) => {
       if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+      // payload can be string id (legacy) or {id, displayId}
+      let id = payload;
+      let displayId = 'all';
+      if (payload && typeof payload === 'object' && 'id' in payload) {
+        id = payload.id;
+        displayId = payload.displayId ?? 'all';
+      }
+      // Try per-display assignments path when displayId specified and perDisplay is enabled or payload is object
+      const isPerDisplayPayload = payload && typeof payload === 'object' && 'displayId' in payload;
+      if (isPerDisplayPayload) {
+        // Lookup entry to get contentKey
+        const gallery = await galleryListGallery(process.env, undefined);
+        const entry = gallery.find((e) => e.id === String(id) || e.contentKey === String(id) || e.contentKey === `sha256:${id}`);
+        if (!entry) throw new Error(`Gallery entry not found: ${id}`);
+        await setAssignment(displayId === 'all' ? 'fallback' : displayId, entry.contentKey, { env: process.env, homedir: undefined });
+        if (currentConfig.wallpaper.mode !== 'manual') {
+          await settingsService.saveConfigFile(configPath, {
+            ...currentConfig,
+            wallpaper: { mode: 'manual' },
+          });
+        }
+        if (onWallpaperImported) await onWallpaperImported();
+        return { ok: true, ...entry };
+      }
       const result = await gallerySetActive(id, { env: process.env, homedir: undefined });
+      // Also mirror to assignments fallback for future perDisplay use
+      try {
+        const gallery = await galleryListGallery(process.env, undefined);
+        const entry = gallery.find((e) => e.id === String(id) || e.contentKey === String(id));
+        if (entry) await setAssignment('fallback', entry.contentKey, { env: process.env, homedir: undefined }).catch(() => {});
+      } catch {}
       if (currentConfig.wallpaper.mode !== 'manual') {
         await settingsService.saveConfigFile(configPath, {
           ...currentConfig,
