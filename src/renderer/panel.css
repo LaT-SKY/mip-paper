@@ -11,6 +11,7 @@
   --panel-radius: 16px;
   --panel-surface-alpha: 0.77;
   --panel-shadow-size: 1;
+  --audio-height: 104px;
 }
 
 :root,
@@ -92,6 +93,52 @@
 .card-weather { --panel-z: 36px; --panel-rx: 2deg; --panel-ry: -5deg; --panel-rz: 1deg; --card-padding: 20px 22px; right: 10%; top: 13%; width: 24%; height: 22%; }
 .card-tide { --panel-z: 52px; --panel-rx: 2deg; --panel-ry: 7deg; --panel-rz: -1.4deg; --card-padding: 18px 20px; left: 3.5%; top: 48%; width: 22%; height: 21%; }
 .card-calendar { --panel-z: 52px; --panel-rx: 2deg; --panel-ry: -7deg; --panel-rz: 1.4deg; --card-padding: 18px 20px; right: 3.5%; top: 48%; width: 22%; height: 21%; }
+.card-custom { --panel-z: 42px; --panel-rx: 2deg; --panel-ry: 0deg; --panel-rz: 0deg; --card-padding: 18px 20px; left: 50%; top: 70%; width: 30%; height: 18%; transform: translateX(-50%); }
+
+/* Layout presets — trapezoid is default (existing absolute rules remain).
+   Grid / compact / stack switch the container to flex/grid and make cards relative. */
+.information-panel.panel-layout--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 18px;
+  padding: 10% 6%;
+  align-content: center;
+}
+.information-panel.panel-layout--grid .information-card {
+  position: relative;
+  left: auto; right: auto; top: auto;
+  width: auto; height: auto;
+  min-height: 140px;
+}
+.information-panel.panel-layout--compact {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 16px;
+  padding: 12% 4%;
+  align-items: center;
+  justify-content: center;
+}
+.information-panel.panel-layout--compact .information-card {
+  position: relative;
+  left: auto; right: auto; top: auto;
+  width: 18%; height: 26%;
+  flex: 1 1 auto;
+}
+.information-panel.panel-layout--stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6% 12%;
+  align-items: stretch;
+  justify-content: center;
+}
+.information-panel.panel-layout--stack .information-card {
+  position: relative;
+  left: auto; right: auto; top: auto;
+  width: auto; height: 18%;
+  min-height: 110px;
+}
 
 .card-kicker {
   color: var(--accent-label);
@@ -130,7 +177,7 @@
   top: 76%;
   left: 50%;
   width: min(64vw, 760px);
-  height: 104px;
+  height: var(--audio-height);
   box-sizing: border-box;
   overflow: hidden;
   pointer-events: none;

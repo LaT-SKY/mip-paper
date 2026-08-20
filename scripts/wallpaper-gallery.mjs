@@ -9,6 +9,7 @@ import {
   setActiveGalleryImage,
   toggleFavorite,
 } from '../src/wallpaper-gallery.mjs';
+import { setAssignment } from '../src/wallpaper-assignments.mjs';
 
 async function printList(env, homedir) {
   const entries = await listGallery(env, homedir);
@@ -63,7 +64,19 @@ async function main(args) {
     process.stdout.write(JSON.stringify(entry, null, 2) + '\n');
     return;
   }
-  if (command === 'set' && value && args.length === 2) {
+  if (command === 'set' && value) {
+    // Support: set ID [--display ID|all]
+    let displayId = null;
+    if (args.length === 4 && args[2] === '--display') displayId = args[3];
+    else if (args.length !== 2) throw new TypeError('Usage: wallpaper-gallery.mjs {import PATH|list|show ID|set ID [--display ID|all]|favorite ID|unfavorite ID|toggle-favorite ID|remove ID|prune}');
+    if (displayId !== null) {
+      const entries = await listGallery(env, homedir);
+      const entry = entries.find((e) => e.id === value || e.contentKey === value || e.contentKey === `sha256:${value}`);
+      if (!entry) throw new TypeError(`Gallery entry not found: ${value}`);
+      await setAssignment(displayId === 'all' ? 'fallback' : displayId, entry.contentKey, { env, homedir });
+      process.stdout.write(`Gallery assigned: ${entry.id} -> display ${displayId}\n`);
+      return;
+    }
     const result = await setActiveGalleryImage(value, { env, homedir });
     process.stdout.write(`Gallery activated: ${result.id} -> ${result.activePath}\n`);
     return;

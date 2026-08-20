@@ -6,7 +6,8 @@
   "wallpaper": {
     "mode": "kde",
     "fit": "cover",
-    "crossfadeMs": 420
+    "crossfadeMs": 420,
+    "perDisplay": false
   },
   "color": {
     "mode": "hybrid",
@@ -23,7 +24,17 @@
     "gain": 1,
     "silenceDelayMs": 600,
     "fadeOutMs": 450,
-    "fadeInMs": 160
+    "fadeInMs": 160,
+    "style": "ribbon",
+    "colorMode": "auto",
+    "colors": {
+      "primary": "#ff3478",
+      "complement": "#4ae9b4",
+      "neutral": "#ffffff"
+    },
+    "sensitivity": 1,
+    "height": 104,
+    "position": "bottom"
   },
   "frameRate": {
     "interactive": 60,
@@ -52,6 +63,21 @@
     "animation": {
       "staggerDelayMs": 48,
       "durationMs": 820
+    },
+    "layout": "trapezoid",
+    "cards": [
+      { "id": "time", "enabled": true },
+      { "id": "weather", "enabled": true },
+      { "id": "tide", "enabled": true },
+      { "id": "calendar", "enabled": true },
+      { "id": "custom", "enabled": false }
+    ],
+    "customCard": {
+      "title": "NOTE",
+      "text": "",
+      "timeFormat": "HH:mm",
+      "dateFormat": "MMM dd, yyyy",
+      "showTime": false
     }
   },
   "weather": {

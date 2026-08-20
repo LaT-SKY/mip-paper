@@ -11,6 +11,17 @@ const COLLAPSE_VECTORS = Object.freeze([
   Object.freeze({ x: 0.44, y: 0.18 }),
 ]);
 
+// Stable per-id vectors for the 0.4.1 panel cards. When a card has a known id
+// the vector is id-based (so hidden cards don't shift siblings); unknown ids
+// fall back to index-based COLLAPSE_VECTORS so legacy tests with a/b/c/d keep passing.
+const COLLAPSE_VECTORS_BY_ID = Object.freeze({
+  time: Object.freeze({ x: -0.46, y: -0.28 }),
+  weather: Object.freeze({ x: 0.46, y: -0.28 }),
+  tide: Object.freeze({ x: -0.44, y: 0.18 }),
+  calendar: Object.freeze({ x: 0.44, y: 0.18 }),
+  custom: Object.freeze({ x: 0, y: 0.22 }),
+});
+
 export function createPanelState(config, cardCenters) {
   const expanded = !config.autoExpandHide && config.expanded;
   const progress = expanded ? 1 : 0;
@@ -23,20 +34,23 @@ export function createPanelState(config, cardCenters) {
     lastPointerAt: 0,
     order: cardCenters.map(({ id }) => id),
     lastExpansionOrder: cardCenters.map(({ id }) => id),
-    cards: cardCenters.map((center, index) => ({
-      ...center,
-      collapseX: center.collapseX ?? COLLAPSE_VECTORS[index]?.x ?? 0,
-      collapseY: center.collapseY ?? COLLAPSE_VECTORS[index]?.y ?? 0,
-      progress,
-      startProgress: progress,
-      target: progress,
-      pending: progress,
-      activateAt: 0,
-      velocity: 0,
-      previousVelocity: 0,
-      bounceCount: 0,
-      settling: false,
-    })),
+    cards: cardCenters.map((center, index) => {
+      const byId = COLLAPSE_VECTORS_BY_ID[center.id];
+      return {
+        ...center,
+        collapseX: center.collapseX ?? byId?.x ?? COLLAPSE_VECTORS[index]?.x ?? 0,
+        collapseY: center.collapseY ?? byId?.y ?? COLLAPSE_VECTORS[index]?.y ?? 0,
+        progress,
+        startProgress: progress,
+        target: progress,
+        pending: progress,
+        activateAt: 0,
+        velocity: 0,
+        previousVelocity: 0,
+        bounceCount: 0,
+        settling: false,
+      };
+    }),
   };
 }
 

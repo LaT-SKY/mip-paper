@@ -39,6 +39,7 @@ let state = null;
 let draft = null;
 let dirty = false;
 let currentSection = 'interaction';
+let selectedDisplayId = 'all';
 let animToken = 0;
 let statusTimer = null;
 // Shared visual icon picker for the custom-command rows.
@@ -663,6 +664,116 @@ function createCommandsEditor() {
   return editor;
 }
 
+const PANEL_CARD_LABELS = Object.freeze({ time: '时间', weather: '天气', tide: '潮汐', calendar: '月历', custom: '自定义' });
+
+function createPanelCardRow(index) {
+  const cards = getPath(draft, 'panel.cards') ?? [];
+  const entry = cards[index] ?? {};
+  const row = document.createElement('div');
+  row.className = 'command-row';
+  row.dataset.panelCardIndex = String(index);
+  if (!entry.enabled) row.style.opacity = '0.6';
+  const name = document.createElement('div');
+  name.textContent = PANEL_CARD_LABELS[entry.id] ?? entry.id;
+  name.style.width = '80px';
+  name.style.fontWeight = '600';
+  row.appendChild(name);
+  const toggleLabel = document.createElement('label');
+  toggleLabel.className = 'switch';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = entry.enabled !== false;
+  input.addEventListener('change', () => {
+    const next = [...(getPath(draft, 'panel.cards') ?? [])];
+    if (!next[index]) return;
+    next[index] = { ...next[index], enabled: input.checked };
+    const enabledCount = next.filter((c) => c.enabled !== false).length;
+    if (enabledCount === 0) {
+      input.checked = true;
+      next[index].enabled = true;
+      showStatus('error', '至少启用一张卡');
+      return;
+    }
+    setPath(draft, 'panel.cards', next);
+    markDirty();
+    const msg = validateField(findField('panel.cards'), next, draft);
+    if (msg) setFieldError('panel.cards', msg); else clearFieldError('panel.cards');
+    syncFooterState();
+    syncConditionalFields();
+    row.style.opacity = input.checked ? '1' : '0.6';
+  });
+  const track = document.createElement('span');
+  track.className = 'track';
+  const thumb = document.createElement('span');
+  thumb.className = 'thumb';
+  toggleLabel.append(input, track, thumb);
+  row.appendChild(toggleLabel);
+  const idLabel = document.createElement('span');
+  idLabel.textContent = entry.id;
+  idLabel.className = 'hint';
+  idLabel.style.marginLeft = '8px';
+  row.appendChild(idLabel);
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'command-more';
+  more.innerHTML = menuActionIcon('more');
+  more.title = '更多';
+  more.addEventListener('click', () => openPanelCardMenu(more, index));
+  row.appendChild(more);
+  // Fill remaining grid slots
+  const filler = document.createElement('div');
+  row.appendChild(filler);
+  return row;
+}
+
+function createPanelCardsEditor() {
+  const editor = document.createElement('div');
+  editor.className = 'commands-editor';
+  const cards = getPath(draft, 'panel.cards') ?? [];
+  cards.forEach((_, idx) => editor.appendChild(createPanelCardRow(idx)));
+  const hint = document.createElement('div');
+  hint.className = 'hint';
+  hint.style.marginTop = '6px';
+  hint.textContent = '拖拽或“更多”中上移/下移可排序；开关控制显隐';
+  editor.appendChild(hint);
+  return editor;
+}
+
+function openPanelCardMenu(anchor, index) {
+  const menu = ensureCommandMenu();
+  const cards = getPath(draft, 'panel.cards') ?? [];
+  menu.index = index;
+  menu.popover.replaceChildren();
+  menu.popover.dataset.panelCardMenu = 'true';
+  const actions = [
+    { id: 'move-up', label: '上移', icon: 'chevron-up', disabled: index === 0 },
+    { id: 'move-down', label: '下移', icon: 'chevron-down', disabled: index === cards.length - 1 },
+  ];
+  for (const action of actions) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'command-more-item';
+    item.disabled = Boolean(action.disabled);
+    item.innerHTML = menuActionIcon(action.icon) + '<span class="command-more-label">' + action.label + '</span>';
+    item.addEventListener('click', () => {
+      const next = [...(getPath(draft, 'panel.cards') ?? [])];
+      const target = action.id === 'move-up' ? index - 1 : index + 1;
+      if (target < 0 || target >= next.length) return;
+      const [entry] = next.splice(index, 1);
+      next.splice(target, 0, entry);
+      setPath(draft, 'panel.cards', next);
+      markDirty();
+      closeCommandMenu();
+      renderSection(currentSection, { animate: false });
+    });
+    menu.popover.appendChild(item);
+  }
+  const rect = anchor.getBoundingClientRect();
+  menu.popover.style.left = rect.right - 168 + 'px';
+  menu.popover.style.top = rect.bottom + 6 + 'px';
+  menu.popover.hidden = false;
+}
+
 // --- Shared copy row + credentials / about ----------------------------------
 
 function createCopy(labelText, description) {
@@ -794,9 +905,14 @@ function appendAboutSection(card) {
 function coverInfoFor(entry) {
   if (!entry || !state.displays || state.displays.length === 0) return `${entry.width}×${entry.height}`;
   const fit = getPath(draft, 'wallpaper.fit') || 'cover';
-  const primary = state.displays[0];
-  const primaryW = primary.bounds.width;
-  const primaryH = primary.bounds.height;
+  const perDisplay = getPath(draft, 'wallpaper.perDisplay');
+  let target = state.displays[0];
+  if (perDisplay && selectedDisplayId !== 'all') {
+    const found = state.displays.find((d) => String(d.id) === String(selectedDisplayId));
+    if (found) target = found;
+  }
+  const primaryW = target.bounds.width;
+  const primaryH = target.bounds.height;
   let scale;
   if (fit === 'contain') scale = Math.min(primaryW / entry.width, primaryH / entry.height);
   else if (fit === 'stretch') return `${entry.width}×${entry.height} → ${primaryW}×${primaryH} stretch`;
@@ -804,7 +920,7 @@ function coverInfoFor(entry) {
   else scale = Math.max(primaryW / entry.width, primaryH / entry.height);
   const sw = Math.round(entry.width * scale);
   const sh = Math.round(entry.height * scale);
-  const multi = state.displays.length > 1 ? ` · ${state.displays.length}屏` : '';
+  const multi = !perDisplay && state.displays.length > 1 ? ` · ${state.displays.length}屏` : (perDisplay ? ` · ${target.bounds.width}×${target.bounds.height}` : '');
   return `${entry.width}×${entry.height} → ${sw}×${sh} ${fit}${multi}`;
 }
 
@@ -831,6 +947,48 @@ function appendWallpaperSection(card) {
   modeHint.style.marginTop = '6px';
   card.appendChild(modeHint);
 
+  // Per-display scope selector (only when perDisplay enabled) — styled as field-row to match green boxes
+  const perDisplayOn = Boolean(getPath(draft, 'wallpaper.perDisplay'));
+  if (perDisplayOn && state.displays && state.displays.length > 0) {
+    const selectorRow = document.createElement('div');
+    selectorRow.className = 'field-row';
+    const copy = createCopy('作用域', state.assignments?.fallback ? `fallback: ${state.assignments.fallback.slice(0, 12)}` : '选择画廊图片要分配到的显示器');
+    const err = document.createElement('div');
+    err.className = 'field-error';
+    err.dataset.errorFor = 'wallpaper.displayScope';
+    copy.appendChild(err);
+    selectorRow.appendChild(copy);
+    const control = document.createElement('div');
+    control.className = 'field-control';
+    const select = document.createElement('select');
+    select.id = 'wallpaper-display-select';
+    select.setAttribute('aria-describedby', 'wallpaper-displayScope-error');
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = '全部显示器 (fallback)';
+    select.appendChild(allOpt);
+    for (const d of state.displays) {
+      const opt = document.createElement('option');
+      opt.value = String(d.id);
+      opt.textContent = `${d.bounds.width}×${d.bounds.height} @${d.bounds.x},${d.bounds.y}${String(d.id) === String(state.displays[0].id) ? ' (主)' : ''}`;
+      select.appendChild(opt);
+    }
+    select.value = selectedDisplayId;
+    select.addEventListener('change', () => {
+      selectedDisplayId = select.value;
+      renderSection(currentSection, { animate: false });
+    });
+    control.appendChild(select);
+    selectorRow.appendChild(control);
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'field-reset';
+    reset.textContent = '重置';
+    reset.addEventListener('click', () => { selectedDisplayId = 'all'; renderSection(currentSection, { animate: false }); });
+    selectorRow.appendChild(reset);
+    card.appendChild(selectorRow);
+  }
+
   // Gallery grid
   const gallery = state.gallery ?? [];
   const grid = document.createElement('div');
@@ -851,7 +1009,12 @@ function appendWallpaperSection(card) {
     empty.textContent = '画廊为空，导入图片后会保留历史，收藏的图片不会被自动清理';
     grid.appendChild(empty);
   } else {
-    const activeContentKey = gallery.find((e) => e.file === state.wallpaper.path)?.contentKey;
+    const assignments = state.assignments ?? { fallback: null, assignments: {} };
+    const perDisplayActive = perDisplayOn;
+    const fallbackKey = assignments.fallback ?? gallery.find((e) => e.file === state.wallpaper.path)?.contentKey ?? null;
+    const activeContentKey = perDisplayActive
+      ? (assignments.assignments[String(selectedDisplayId)] ?? fallbackKey)
+      : gallery.find((e) => e.file === state.wallpaper.path)?.contentKey;
     for (const entry of gallery) {
       const item = document.createElement('div');
       item.className = 'gallery-item' + (entry.contentKey === activeContentKey ? ' is-active' : '');
@@ -868,9 +1031,10 @@ function appendWallpaperSection(card) {
       const activate = async () => {
         if (entry.contentKey === activeContentKey) return;
         try {
-          await window.settings.setGalleryActive(entry.id);
+          if (perDisplayOn) await window.settings.setGalleryActive(entry.id, selectedDisplayId);
+          else await window.settings.setGalleryActive(entry.id);
           await reloadState();
-          showStatus('ok', '已设为当前壁纸');
+          showStatus('ok', perDisplayOn ? `已分配到 ${selectedDisplayId === 'all' ? '全部' : selectedDisplayId}` : '已设为当前壁纸');
         } catch (err) {
           showStatus('error', '切换失败：' + (err?.message || err));
         }
@@ -908,9 +1072,10 @@ function appendWallpaperSection(card) {
       useBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         try {
-          await window.settings.setGalleryActive(entry.id);
+          if (perDisplayOn) await window.settings.setGalleryActive(entry.id, selectedDisplayId);
+          else await window.settings.setGalleryActive(entry.id);
           await reloadState();
-          showStatus('ok', '已设为当前壁纸');
+          showStatus('ok', perDisplayOn ? `已分配到 ${selectedDisplayId === 'all' ? '全部' : selectedDisplayId}` : '已设为当前壁纸');
         } catch (err) {
           showStatus('error', '切换失败：' + (err?.message || err));
         }
@@ -1008,7 +1173,7 @@ function renderSection(groupId, { animate = true } = {}) {
         for (const key of section.fieldKeys) {
           const field = findField(key);
           if (!field) continue;
-          if (field.type === 'commands') {
+          if (field.type === 'commands' || field.type === 'panelCards') {
             const row = document.createElement('div');
             row.className = 'field-row field-row--stacked';
             row.dataset.field = field.key;
@@ -1019,7 +1184,8 @@ function renderSection(groupId, { animate = true } = {}) {
             err.id = fieldErrorId(field.key);
             copy.appendChild(err);
             row.appendChild(copy);
-            row.appendChild(createCommandsEditor());
+            if (field.type === 'panelCards') row.appendChild(createPanelCardsEditor());
+            else row.appendChild(createCommandsEditor());
             card.appendChild(row);
           } else if (field.external) {
             continue;
@@ -1096,6 +1262,7 @@ function renderSection(groupId, { animate = true } = {}) {
     for (const c of cards) { c.style.opacity = '1'; c.style.transform = 'none'; }
   }
   syncFooterState();
+  syncConditionalFields();
 }
 
 function animateSection(card, tokenOverride, index = 0) {
@@ -1163,6 +1330,42 @@ function syncFooterState() {
     saveButton.title = '存在未通过校验的字段';
   } else {
     saveButton.title = '';
+  }
+}
+
+function syncConditionalFields() {
+  const colorMode = getPath(draft, 'audio.colorMode');
+  const isAuto = colorMode === 'auto';
+  for (const key of ['audio.colors.primary', 'audio.colors.complement', 'audio.colors.neutral']) {
+    const row = contentRoot.querySelector('[data-field="' + key + '"]');
+    if (!row) continue;
+    const input = row.querySelector('[data-field="' + key + '"]');
+    if (input) {
+      input.disabled = isAuto;
+      input.style.opacity = isAuto ? '0.45' : '1';
+    }
+    row.style.opacity = isAuto ? '0.6' : '1';
+    row.style.pointerEvents = isAuto ? 'none' : '';
+  }
+  const cards = getPath(draft, 'panel.cards');
+  const customEnabled = Array.isArray(cards) ? cards.find((c) => c.id === 'custom')?.enabled : false;
+  for (const key of ['panel.customCard.title', 'panel.customCard.text', 'panel.customCard.timeFormat', 'panel.customCard.dateFormat', 'panel.customCard.showTime']) {
+    const row = contentRoot.querySelector('[data-field="' + key + '"]');
+    if (!row) continue;
+    const input = row.querySelector('[data-field="' + key + '"]');
+    if (input) input.disabled = !customEnabled;
+    row.style.opacity = customEnabled ? '1' : '0.45';
+    row.style.pointerEvents = customEnabled ? '' : 'none';
+  }
+  const perDisplay = getPath(draft, 'wallpaper.perDisplay');
+  const displaySelect = document.getElementById('wallpaper-display-select');
+  if (displaySelect) {
+    displaySelect.disabled = !perDisplay || getPath(draft, 'wallpaper.mode') === 'kde';
+    const row = displaySelect.closest('.field-row');
+    if (row) {
+      row.style.opacity = displaySelect.disabled ? '0.5' : '1';
+      row.style.pointerEvents = displaySelect.disabled ? 'none' : '';
+    }
   }
 }
 
@@ -1398,6 +1601,7 @@ contentRoot.addEventListener('input', (event) => {
         if (lngMsg) setFieldError('weather.location.longitude', lngMsg); else clearFieldError('weather.location.longitude');
       }
       syncFooterState();
+      syncConditionalFields();
       if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
       if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
         // Refresh cover hints without full re-render
@@ -1407,6 +1611,10 @@ contentRoot.addEventListener('input', (event) => {
           const e = gallery[idx];
           if (e) el.textContent = coverInfoFor(e) + (e.favorite ? ' · 收藏' : '');
         });
+      }
+      if (fieldKey === 'wallpaper.perDisplay' && currentSection === 'wallpaper') {
+        // Re-render to show/hide display selector
+        renderSection(currentSection, { animate: false });
       }
     }
     return;
@@ -1453,6 +1661,7 @@ contentRoot.addEventListener('change', (event) => {
         if (lngMsg) setFieldError('weather.location.longitude', lngMsg); else clearFieldError('weather.location.longitude');
       }
       syncFooterState();
+      syncConditionalFields();
       if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
       if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
         const gallery = state.gallery ?? [];

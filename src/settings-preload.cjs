@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('settings', Object.freeze({
   saveCredentials: (payload) => ipcRenderer.invoke(SETTINGS_SAVE_CREDENTIALS_CHANNEL, payload),
   importWallpaper: () => ipcRenderer.invoke(SETTINGS_IMPORT_WALLPAPER_CHANNEL),
   getGallery: () => ipcRenderer.invoke(SETTINGS_GALLERY_LIST_CHANNEL),
-  setGalleryActive: (id) => ipcRenderer.invoke(SETTINGS_GALLERY_SET_ACTIVE_CHANNEL, id),
+  setGalleryActive: (id, displayId) => ipcRenderer.invoke(SETTINGS_GALLERY_SET_ACTIVE_CHANNEL, displayId ? { id, displayId } : id),
   toggleGalleryFavorite: (id) => ipcRenderer.invoke(SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL, id),
   removeGalleryImage: (id) => ipcRenderer.invoke(SETTINGS_GALLERY_REMOVE_CHANNEL, id),
   importGalleryImage: () => ipcRenderer.invoke(SETTINGS_GALLERY_IMPORT_CHANNEL),
