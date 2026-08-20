@@ -1661,6 +1661,7 @@ contentRoot.addEventListener('change', (event) => {
         if (lngMsg) setFieldError('weather.location.longitude', lngMsg); else clearFieldError('weather.location.longitude');
       }
       syncFooterState();
+      syncConditionalFields();
       if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
       if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
         const gallery = state.gallery ?? [];

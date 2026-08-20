@@ -16,14 +16,12 @@ function validateAudioConfig(config) {
     || !Number.isFinite(config.fadeInMs) || config.fadeInMs < 0 || config.fadeInMs > 3000) {
     throw new TypeError('invalid audio config');
   }
-  // 0.4.1 extensions are optional; validate if present
-  if (config.style !== undefined && !['ribbon','bars','wave','mirror'].includes(config.style)) throw new TypeError('invalid audio style');
+  // 0.4.1 extensions are optional; validate if present (bars removed)
+  if (config.style !== undefined && !['ribbon','wave','mirror'].includes(config.style)) throw new TypeError('invalid audio style');
   if (config.colorMode !== undefined && !['auto','manual'].includes(config.colorMode)) throw new TypeError('invalid audio colorMode');
   if (config.sensitivity !== undefined && (!Number.isFinite(config.sensitivity) || config.sensitivity < 0.3 || config.sensitivity > 3)) throw new TypeError('invalid audio sensitivity');
   if (config.height !== undefined && (!Number.isInteger(config.height) || config.height < 48 || config.height > 200)) throw new TypeError('invalid audio height');
   if (config.position !== undefined && !['top','center','bottom'].includes(config.position)) throw new TypeError('invalid audio position');
-  if (config.barCount !== undefined && (!Number.isInteger(config.barCount) || config.barCount < 16 || config.barCount > 72)) throw new TypeError('invalid audio barCount');
-  if (config.mirrored !== undefined && typeof config.mirrored !== 'boolean') throw new TypeError('invalid audio mirrored');
   if (config.colors !== undefined) {
     if (!config.colors || typeof config.colors !== 'object') throw new TypeError('invalid audio colors');
     for (const k of ['primary','complement','neutral']) if (config.colors[k] !== undefined && typeof config.colors[k] !== 'string') throw new TypeError('invalid audio colors');
@@ -233,116 +231,88 @@ export function createAudioRibbonController({ root, config } = {}) {
   if (!paths.left || !paths.energy || !paths.right) {
     throw new TypeError('audio ribbon paths are required');
   }
-  // Bars container for 'bars' style — created lazily
-  let barsRoot = root.querySelector('[data-audio-bars]');
-  if (!barsRoot) {
-    barsRoot = document.createElement('div');
-    barsRoot.setAttribute('data-audio-bars', '');
-    barsRoot.className = 'audio-bars';
-    barsRoot.hidden = true;
-    // Create barCount divs lazily on first render
-    root.appendChild(barsRoot);
-  }
   const state = createAudioRibbonState(config);
   let destroyed = false;
 
-  function ensureBars(count) {
-    const need = Math.max(16, Math.min(72, count));
-    while (barsRoot.children.length < need) {
-      const bar = document.createElement('div');
-      bar.className = 'audio-bar';
-      barsRoot.appendChild(bar);
-    }
-    while (barsRoot.children.length > need) barsRoot.removeChild(barsRoot.lastChild);
-  }
-
   function applyVisualConfig() {
-    const cfg = state.config;
-    if (cfg.height && Number.isInteger(cfg.height)) root.style.setProperty('--audio-height', `${cfg.height}px`);
-    if (cfg.position) {
-      root.dataset.position = cfg.position;
-      if (cfg.position === 'top') root.style.top = '14%';
-      else if (cfg.position === 'center') root.style.top = '46%';
-      else root.style.top = '76%';
-    }
-    if (cfg.colorMode === 'manual' && cfg.colors) {
-      if (cfg.colors.primary) root.style.setProperty('--accent-audio-primary', cfg.colors.primary);
-      if (cfg.colors.complement) root.style.setProperty('--accent-audio-complement', cfg.colors.complement);
-      if (cfg.colors.neutral) root.style.setProperty('--accent-audio-neutral', cfg.colors.neutral);
-    } else {
-      root.style.removeProperty('--accent-audio-primary');
-      root.style.removeProperty('--accent-audio-complement');
-      root.style.removeProperty('--accent-audio-neutral');
-    }
-    const style = cfg.style ?? 'ribbon';
-    root.dataset.style = style;
-    const isBars = style === 'bars';
-    if (svg) svg.hidden = isBars;
-    barsRoot.hidden = !isBars;
-    if (isBars) ensureBars(cfg.barCount ?? 36);
-    // For wave/mirror we keep SVG but adjust visibility: wave shows only energy, mirror shows left/right
-    if (style === 'wave') {
-      paths.left.style.display = 'none';
-      paths.right.style.display = 'none';
-      paths.energy.style.display = '';
-    } else if (style === 'mirror') {
-      paths.energy.style.display = 'none';
-      paths.left.style.display = '';
-      paths.right.style.display = '';
-    } else {
-      // ribbon and bars (bars hides svg anyway)
-      paths.left.style.display = '';
-      paths.right.style.display = '';
-      paths.energy.style.display = '';
-    }
-  }
-
-  function renderBars() {
-    const cfg = state.config;
-    const count = cfg.barCount ?? 36;
-    const sensitivity = cfg.sensitivity ?? 1;
-    const exponent = 0.68 / Math.max(0.3, Math.min(3, sensitivity));
-    // Downsample 72 -> count by max-pool
-    const groupSize = BAND_COUNT / count;
-    const mirrored = cfg.mirrored !== false;
-    for (let i = 0; i < count; i++) {
-      const start = Math.floor(i * groupSize);
-      const end = Math.floor((i + 1) * groupSize);
-      let max = 0;
-      for (let j = start; j < end; j++) {
-        const v = mirrored ? Math.max(clamp(state.left[j]), clamp(state.right[j])) : clamp((clamp(state.left[j]) + clamp(state.right[j])) / 2);
-        if (v > max) max = v;
+    try {
+      const cfg = state.config;
+      if (cfg.height && Number.isInteger(cfg.height)) {
+        try { root.style.setProperty('--audio-height', `${cfg.height}px`); } catch {}
       }
-      const h = Math.pow(max, exponent) * 100; // 0..100%
-      const bar = barsRoot.children[i];
-      if (bar) {
-        bar.style.height = `${Math.max(2, h * 0.9)}%`;
-        bar.style.opacity = String(state.opacity);
-        // Use primary for mirrored, neutral for mono
-        bar.style.background = mirrored ? 'var(--accent-audio-primary)' : 'var(--accent-audio-neutral)';
+      if (cfg.position) {
+        try {
+          root.dataset.position = cfg.position;
+          if (cfg.position === 'top') root.style.top = '14%';
+          else if (cfg.position === 'center') root.style.top = '46%';
+          else root.style.top = '76%';
+        } catch {}
       }
+      if (cfg.colorMode === 'manual' && cfg.colors && typeof cfg.colors === 'object') {
+        try {
+          if (typeof cfg.colors.primary === 'string' && cfg.colors.primary) root.style.setProperty('--accent-audio-primary', cfg.colors.primary);
+          if (typeof cfg.colors.complement === 'string' && cfg.colors.complement) root.style.setProperty('--accent-audio-complement', cfg.colors.complement);
+          if (typeof cfg.colors.neutral === 'string' && cfg.colors.neutral) root.style.setProperty('--accent-audio-neutral', cfg.colors.neutral);
+        } catch {}
+      } else {
+        try {
+          root.style.removeProperty('--accent-audio-primary');
+          root.style.removeProperty('--accent-audio-complement');
+          root.style.removeProperty('--accent-audio-neutral');
+        } catch {}
+      }
+      const style = cfg.style ?? 'ribbon';
+      try { root.dataset.style = style; } catch {}
+      if (svg) {
+        try { svg.hidden = false; } catch {}
+        // Ensure SVG is always visible (bars removed)
+        try { svg.removeAttribute('hidden'); } catch {}
+      }
+      // Handle wave/mirror visibility: wave shows only energy, mirror shows left/right
+      if (style === 'wave') {
+        paths.left.style.display = 'none';
+        paths.right.style.display = 'none';
+        paths.energy.style.display = '';
+      } else if (style === 'mirror') {
+        paths.energy.style.display = 'none';
+        paths.left.style.display = '';
+        paths.right.style.display = '';
+      } else {
+        // ribbon (default)
+        paths.left.style.display = '';
+        paths.right.style.display = '';
+        paths.energy.style.display = '';
+      }
+    } catch (error) {
+      console.error('applyVisualConfig failed:', error);
     }
   }
 
   function render() {
-    const style = state.config.style ?? 'ribbon';
-    if (style === 'bars') {
-      renderBars();
-    } else if (style === 'wave') {
-      // Wave: mono average
-      const mono = state.left.map((v, i) => (clamp(v) + clamp(state.right[i])) / 2);
-      const points = buildRibbonPoints(mono, { baseline: MIRRORED_GEOMETRY.baseline, amplitude: MIRRORED_GEOMETRY.channelAmplitude, direction: 0, responseExponent: 0.68 / Math.max(0.3, Math.min(3, state.config.sensitivity ?? 1)) });
-      // Center wave around baseline
-      paths.energy.setAttribute('d', pointsToSmoothPath(points));
-      // Hide left/right already done in applyVisualConfig
-    } else {
-      const points = buildMirroredRibbonPoints(state.left, state.right, { sensitivity: state.config.sensitivity ?? 1 });
-      paths.energy.setAttribute('d', pointsToSmoothPath(points.energy));
-      paths.left.setAttribute('d', pointsToSmoothPath(points.left));
-      paths.right.setAttribute('d', pointsToSmoothPath(points.right));
+    try {
+      const style = state.config.style ?? 'ribbon';
+      if (style === 'wave') {
+        // Wave: mono average
+        const mono = state.left.map((v, i) => {
+          const lv = Number.isFinite(v) ? clamp(v) : 0;
+          const rv = Number.isFinite(state.right[i]) ? clamp(state.right[i]) : 0;
+          return (lv + rv) / 2;
+        });
+        const points = buildRibbonPoints(mono, { baseline: MIRRORED_GEOMETRY.baseline, amplitude: MIRRORED_GEOMETRY.channelAmplitude, direction: 0, responseExponent: 0.68 / Math.max(0.3, Math.min(3, Number.isFinite(state.config.sensitivity) ? state.config.sensitivity : 1)) });
+        paths.energy.setAttribute('d', pointsToSmoothPath(points));
+      } else {
+        const left = state.left.map((v) => Number.isFinite(v) ? clamp(v) : 0);
+        const right = state.right.map((v) => Number.isFinite(v) ? clamp(v) : 0);
+        const points = buildMirroredRibbonPoints(left, right, { sensitivity: Number.isFinite(state.config.sensitivity) ? state.config.sensitivity : 1 });
+        paths.energy.setAttribute('d', pointsToSmoothPath(points.energy));
+        paths.left.setAttribute('d', pointsToSmoothPath(points.left));
+        paths.right.setAttribute('d', pointsToSmoothPath(points.right));
+      }
+      root.style.opacity = String(Number.isFinite(state.opacity) ? state.opacity : 0);
+      root.dataset.status = state.status;
+    } catch (error) {
+      console.error('audio ribbon render failed:', error);
     }
-    root.style.opacity = String(state.opacity);
-    root.dataset.status = state.status;
   }
 
   applyVisualConfig();
@@ -354,14 +324,22 @@ export function createAudioRibbonController({ root, config } = {}) {
     },
     setConfig(audioConfig) {
       if (!destroyed) {
-        applyAudioConfig(state, audioConfig);
-        applyVisualConfig();
-        render();
+        try {
+          applyAudioConfig(state, audioConfig);
+          applyVisualConfig();
+          render();
+        } catch (error) {
+          console.error('audio ribbon setConfig failed:', error);
+        }
       }
     },
     advance(elapsedMs, nowMs) {
       if (destroyed) return;
-      advanceAudioRibbon(state, elapsedMs, nowMs);
+      try {
+        advanceAudioRibbon(state, elapsedMs, nowMs);
+      } catch (error) {
+        console.error('audio ribbon advance failed:', error);
+      }
       render();
     },
     resize() {},

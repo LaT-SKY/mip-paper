@@ -34,9 +34,7 @@
     },
     "sensitivity": 1,
     "height": 104,
-    "position": "bottom",
-    "barCount": 36,
-    "mirrored": true
+    "position": "bottom"
   },
   "frameRate": {
     "interactive": 60,

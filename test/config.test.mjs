@@ -29,8 +29,6 @@ test('defaults match the approved v1 design', () => {
       sensitivity: 1,
       height: 104,
       position: 'bottom',
-      barCount: 36,
-      mirrored: true,
     },
     frameRate: {
       interactive: 60,
@@ -145,8 +143,6 @@ test('accepts every audio boundary including immediate transitions', () => {
     sensitivity: 1,
     height: 104,
     position: 'bottom',
-    barCount: 36,
-    mirrored: true,
   });
   assert.deepEqual(validateConfig({ audio: {
     gain: 4,
@@ -165,8 +161,6 @@ test('accepts every audio boundary including immediate transitions', () => {
     sensitivity: 1,
     height: 104,
     position: 'bottom',
-    barCount: 36,
-    mirrored: true,
   });
 });
 
