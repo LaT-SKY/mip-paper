@@ -664,6 +664,118 @@ function createCommandsEditor() {
   return editor;
 }
 
+const PANEL_CARD_LABELS = Object.freeze({ time: '时间', weather: '天气', tide: '潮汐', calendar: '月历', custom: '自定义' });
+
+function createPanelCardRow(index) {
+  const cards = getPath(draft, 'panel.cards') ?? [];
+  const entry = cards[index] ?? {};
+  const row = document.createElement('div');
+  row.className = 'command-row';
+  row.dataset.panelCardIndex = String(index);
+  if (!entry.enabled) row.style.opacity = '0.6';
+  const name = document.createElement('div');
+  name.textContent = PANEL_CARD_LABELS[entry.id] ?? entry.id;
+  name.style.width = '80px';
+  name.style.fontWeight = '600';
+  row.appendChild(name);
+  const toggleLabel = document.createElement('label');
+  toggleLabel.className = 'switch';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = entry.enabled !== false;
+  input.addEventListener('change', () => {
+    const next = [...(getPath(draft, 'panel.cards') ?? [])];
+    if (!next[index]) return;
+    next[index] = { ...next[index], enabled: input.checked };
+    // Ensure at least one enabled
+    const enabledCount = next.filter((c) => c.enabled !== false).length;
+    if (enabledCount === 0) {
+      input.checked = true;
+      next[index].enabled = true;
+      showStatus('error', '至少启用一张卡');
+      return;
+    }
+    setPath(draft, 'panel.cards', next);
+    markDirty();
+    // Re-validate
+    const msg = validateField(findField('panel.cards'), next, draft);
+    if (msg) setFieldError('panel.cards', msg); else clearFieldError('panel.cards');
+    syncFooterState();
+    syncConditionalFields();
+    renderSection(currentSection, { animate: false });
+  });
+  const track = document.createElement('span');
+  track.className = 'track';
+  const thumb = document.createElement('span');
+  thumb.className = 'thumb';
+  toggleLabel.append(input, track, thumb);
+  row.appendChild(toggleLabel);
+  const idLabel = document.createElement('span');
+  idLabel.textContent = entry.id;
+  idLabel.className = 'hint';
+  idLabel.style.marginLeft = '8px';
+  row.appendChild(idLabel);
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'command-more';
+  more.innerHTML = menuActionIcon('more');
+  more.title = '更多';
+  more.addEventListener('click', () => openPanelCardMenu(more, index));
+  row.appendChild(more);
+  // Fill remaining grid slots
+  const filler = document.createElement('div');
+  row.appendChild(filler);
+  return row;
+}
+
+function createPanelCardsEditor() {
+  const editor = document.createElement('div');
+  editor.className = 'commands-editor';
+  const cards = getPath(draft, 'panel.cards') ?? [];
+  cards.forEach((_, idx) => editor.appendChild(createPanelCardRow(idx)));
+  const hint = document.createElement('div');
+  hint.className = 'hint';
+  hint.style.marginTop = '6px';
+  hint.textContent = '拖拽或“更多”中上移/下移可排序；开关控制显隐';
+  editor.appendChild(hint);
+  return editor;
+}
+
+function openPanelCardMenu(anchor, index) {
+  const menu = ensureCommandMenu();
+  const cards = getPath(draft, 'panel.cards') ?? [];
+  menu.index = index;
+  menu.popover.replaceChildren();
+  menu.popover.dataset.panelCardMenu = 'true';
+  const actions = [
+    { id: 'move-up', label: '上移', icon: 'chevron-up', disabled: index === 0 },
+    { id: 'move-down', label: '下移', icon: 'chevron-down', disabled: index === cards.length - 1 },
+  ];
+  for (const action of actions) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'command-more-item';
+    item.disabled = Boolean(action.disabled);
+    item.innerHTML = menuActionIcon(action.icon) + '<span class="command-more-label">' + action.label + '</span>';
+    item.addEventListener('click', () => {
+      const next = [...(getPath(draft, 'panel.cards') ?? [])];
+      const target = action.id === 'move-up' ? index - 1 : index + 1;
+      if (target < 0 || target >= next.length) return;
+      const [entry] = next.splice(index, 1);
+      next.splice(target, 0, entry);
+      setPath(draft, 'panel.cards', next);
+      markDirty();
+      closeCommandMenu();
+      renderSection(currentSection, { animate: false });
+    });
+    menu.popover.appendChild(item);
+  }
+  const rect = anchor.getBoundingClientRect();
+  menu.popover.style.left = rect.right - 168 + 'px';
+  menu.popover.style.top = rect.bottom + 6 + 'px';
+  menu.popover.hidden = false;
+}
+
 // --- Shared copy row + credentials / about ----------------------------------
 
 function createCopy(labelText, description) {
@@ -1061,7 +1173,7 @@ function renderSection(groupId, { animate = true } = {}) {
         for (const key of section.fieldKeys) {
           const field = findField(key);
           if (!field) continue;
-          if (field.type === 'commands') {
+          if (field.type === 'commands' || field.type === 'panelCards') {
             const row = document.createElement('div');
             row.className = 'field-row field-row--stacked';
             row.dataset.field = field.key;
@@ -1072,7 +1184,8 @@ function renderSection(groupId, { animate = true } = {}) {
             err.id = fieldErrorId(field.key);
             copy.appendChild(err);
             row.appendChild(copy);
-            row.appendChild(createCommandsEditor());
+            if (field.type === 'panelCards') row.appendChild(createPanelCardsEditor());
+            else row.appendChild(createCommandsEditor());
             card.appendChild(row);
           } else if (field.external) {
             continue;

@@ -209,8 +209,8 @@ export const SETTINGS_GROUPS = Object.freeze([
     title: '信息面板',
     icon: 'layout',
     fields: [
-      { key: 'panel.layout', label: '布局预设', type: 'enum', options: [{ value: 'trapezoid', label: '梯形' }, { value: 'grid-2x2', label: '2×2 网格' }, { value: 'compact', label: '紧凑横排' }, { value: 'stack', label: '单列堆叠' }] },
-      { key: 'panel.cards', label: '卡片显隐与排序', type: 'text', description: 'JSON 数组，如 [{id:\"time\",enabled:true},...]；设置页提供可视化编辑' },
+      { key: 'panel.layout', label: '布局预设', type: 'enum', options: [{ value: 'trapezoid', label: '梯形' }] , description: '仅梯形为官方预设，拖动卡片可存为自定义' },
+      { key: 'panel.cards', label: '卡片显隐与排序', type: 'panelCards', description: '开关显隐，拖拽或“更多”中上移/下移排序，至少保留一张' },
       { key: 'panel.customCard.title', label: '自定义卡标题', type: 'text', placeholder: 'NOTE' },
       { key: 'panel.customCard.text', label: '自定义卡文本', type: 'text', placeholder: 'KEEP BUILDING · {{date}} {{time}} 可用' },
       { key: 'panel.customCard.timeFormat', label: '自定义时间格式', type: 'enum', options: [{ value: 'HH:mm', label: 'HH:mm' }, { value: 'hh:mm a', label: 'hh:mm a' }, { value: 'HH:mm:ss', label: 'HH:mm:ss' }] },
