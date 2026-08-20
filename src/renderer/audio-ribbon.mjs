@@ -224,6 +224,7 @@ export function createAudioRibbonController({ root, config } = {}) {
   if (!root || typeof root.querySelector !== 'function') {
     throw new TypeError('audio ribbon root is required');
   }
+  const svg = root.querySelector('svg');
   const paths = {
     left: root.querySelector('[data-audio-path="left"]'),
     energy: root.querySelector('[data-audio-path="energy"]'),
@@ -232,8 +233,28 @@ export function createAudioRibbonController({ root, config } = {}) {
   if (!paths.left || !paths.energy || !paths.right) {
     throw new TypeError('audio ribbon paths are required');
   }
+  // Bars container for 'bars' style — created lazily
+  let barsRoot = root.querySelector('[data-audio-bars]');
+  if (!barsRoot) {
+    barsRoot = document.createElement('div');
+    barsRoot.setAttribute('data-audio-bars', '');
+    barsRoot.className = 'audio-bars';
+    barsRoot.hidden = true;
+    // Create barCount divs lazily on first render
+    root.appendChild(barsRoot);
+  }
   const state = createAudioRibbonState(config);
   let destroyed = false;
+
+  function ensureBars(count) {
+    const need = Math.max(16, Math.min(72, count));
+    while (barsRoot.children.length < need) {
+      const bar = document.createElement('div');
+      bar.className = 'audio-bar';
+      barsRoot.appendChild(bar);
+    }
+    while (barsRoot.children.length > need) barsRoot.removeChild(barsRoot.lastChild);
+  }
 
   function applyVisualConfig() {
     const cfg = state.config;
@@ -253,13 +274,73 @@ export function createAudioRibbonController({ root, config } = {}) {
       root.style.removeProperty('--accent-audio-complement');
       root.style.removeProperty('--accent-audio-neutral');
     }
+    const style = cfg.style ?? 'ribbon';
+    root.dataset.style = style;
+    const isBars = style === 'bars';
+    if (svg) svg.hidden = isBars;
+    barsRoot.hidden = !isBars;
+    if (isBars) ensureBars(cfg.barCount ?? 36);
+    // For wave/mirror we keep SVG but adjust visibility: wave shows only energy, mirror shows left/right
+    if (style === 'wave') {
+      paths.left.style.display = 'none';
+      paths.right.style.display = 'none';
+      paths.energy.style.display = '';
+    } else if (style === 'mirror') {
+      paths.energy.style.display = 'none';
+      paths.left.style.display = '';
+      paths.right.style.display = '';
+    } else {
+      // ribbon and bars (bars hides svg anyway)
+      paths.left.style.display = '';
+      paths.right.style.display = '';
+      paths.energy.style.display = '';
+    }
+  }
+
+  function renderBars() {
+    const cfg = state.config;
+    const count = cfg.barCount ?? 36;
+    const sensitivity = cfg.sensitivity ?? 1;
+    const exponent = 0.68 / Math.max(0.3, Math.min(3, sensitivity));
+    // Downsample 72 -> count by max-pool
+    const groupSize = BAND_COUNT / count;
+    const mirrored = cfg.mirrored !== false;
+    for (let i = 0; i < count; i++) {
+      const start = Math.floor(i * groupSize);
+      const end = Math.floor((i + 1) * groupSize);
+      let max = 0;
+      for (let j = start; j < end; j++) {
+        const v = mirrored ? Math.max(clamp(state.left[j]), clamp(state.right[j])) : clamp((clamp(state.left[j]) + clamp(state.right[j])) / 2);
+        if (v > max) max = v;
+      }
+      const h = Math.pow(max, exponent) * 100; // 0..100%
+      const bar = barsRoot.children[i];
+      if (bar) {
+        bar.style.height = `${Math.max(2, h * 0.9)}%`;
+        bar.style.opacity = String(state.opacity);
+        // Use primary for mirrored, neutral for mono
+        bar.style.background = mirrored ? 'var(--accent-audio-primary)' : 'var(--accent-audio-neutral)';
+      }
+    }
   }
 
   function render() {
-    const points = buildMirroredRibbonPoints(state.left, state.right, { sensitivity: state.config.sensitivity ?? 1 });
-    paths.energy.setAttribute('d', pointsToSmoothPath(points.energy));
-    paths.left.setAttribute('d', pointsToSmoothPath(points.left));
-    paths.right.setAttribute('d', pointsToSmoothPath(points.right));
+    const style = state.config.style ?? 'ribbon';
+    if (style === 'bars') {
+      renderBars();
+    } else if (style === 'wave') {
+      // Wave: mono average
+      const mono = state.left.map((v, i) => (clamp(v) + clamp(state.right[i])) / 2);
+      const points = buildRibbonPoints(mono, { baseline: MIRRORED_GEOMETRY.baseline, amplitude: MIRRORED_GEOMETRY.channelAmplitude, direction: 0, responseExponent: 0.68 / Math.max(0.3, Math.min(3, state.config.sensitivity ?? 1)) });
+      // Center wave around baseline
+      paths.energy.setAttribute('d', pointsToSmoothPath(points));
+      // Hide left/right already done in applyVisualConfig
+    } else {
+      const points = buildMirroredRibbonPoints(state.left, state.right, { sensitivity: state.config.sensitivity ?? 1 });
+      paths.energy.setAttribute('d', pointsToSmoothPath(points.energy));
+      paths.left.setAttribute('d', pointsToSmoothPath(points.left));
+      paths.right.setAttribute('d', pointsToSmoothPath(points.right));
+    }
     root.style.opacity = String(state.opacity);
     root.dataset.status = state.status;
   }
