@@ -28,6 +28,7 @@ export function validateRuntimeConfig(value) {
     && object(value.panel) && typeof value.panel.autoExpandHide === 'boolean'
     && finite(value.panel.expandTriggerDistancePx) && finite(value.panel.collapseDelaySeconds)
     && typeof value.panel.expanded === 'boolean' && finite(value.panel.collapsedOpacity)
+    && finite(value.panel.borderRadius) && value.panel.borderRadius >= 0 && value.panel.borderRadius <= 24
     && object(value.panel.animation) && finite(value.panel.animation.staggerDelayMs)
     && finite(value.panel.animation.durationMs)
     && object(value.weather) && object(value.weather.location)

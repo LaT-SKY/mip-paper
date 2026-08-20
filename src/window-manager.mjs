@@ -1,4 +1,11 @@
 import { DEFAULT_CONFIG } from './config.mjs';
+import {
+  importToGallery as galleryImportToGallery,
+  listGallery as galleryListGallery,
+  removeFromGallery as galleryRemoveFromGallery,
+  setActiveGalleryImage as gallerySetActive,
+  toggleFavorite as galleryToggleFavorite,
+} from './wallpaper-gallery.mjs';
 
 export const BOOTSTRAP_CHANNEL = 'wallpaper:get-bootstrap';
 export const PROBE_REPORT_CHANNEL = 'wallpaper:report-probe';
@@ -32,6 +39,11 @@ export const SETTINGS_STATE_CHANNEL = 'settings:get-state';
 export const SETTINGS_SAVE_CONFIG_CHANNEL = 'settings:save-config';
 export const SETTINGS_SAVE_CREDENTIALS_CHANNEL = 'settings:save-credentials';
 export const SETTINGS_IMPORT_WALLPAPER_CHANNEL = 'settings:import-wallpaper';
+export const SETTINGS_GALLERY_LIST_CHANNEL = 'settings:gallery-list';
+export const SETTINGS_GALLERY_SET_ACTIVE_CHANNEL = 'settings:gallery-set-active';
+export const SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL = 'settings:gallery-toggle-favorite';
+export const SETTINGS_GALLERY_REMOVE_CHANNEL = 'settings:gallery-remove';
+export const SETTINGS_GALLERY_IMPORT_CHANNEL = 'settings:gallery-import';
 const APP_ID = 'mip-paper';
 
 export function formatDisplayTargetTitle(display) {
@@ -188,11 +200,11 @@ export function createWindowManager({
 
   // Snapshot for the settings UI: the validated config, its defaults (for the
   // reset controls), appearance, accent, credentials presence (never the key),
-  // wallpaper mode/path, and the user config path. Extra state from the main
-  // process (credentials status, accent, wallpaper path) arrives through the
-  // getSettingsState callback.
-  function buildSettingsState() {
-    const extra = getSettingsState ? getSettingsState() : {};
+  // wallpaper mode/path, gallery, displays and the user config path. Extra state
+  // from the main process arrives through the getSettingsState callback (may be async).
+  async function buildSettingsState() {
+    const raw = getSettingsState ? getSettingsState() : {};
+    const extra = raw && typeof raw.then === 'function' ? await raw : raw;
     const credentials = extra.credentials ?? { configured: false, apiHost: null };
     const wallpaper = extra.wallpaper ?? { mode: currentConfig.wallpaper?.mode ?? 'kde', path: wallpaperPath };
     return {
@@ -202,6 +214,9 @@ export function createWindowManager({
       ...(extra.accent ? { accent: extra.accent } : {}),
       credentials,
       wallpaper,
+      ...(extra.gallery ? { gallery: structuredClone(extra.gallery) } : {}),
+      ...(extra.displays ? { displays: structuredClone(extra.displays) } : {}),
+      ...(extra.galleryError ? { galleryError: extra.galleryError } : {}),
       configPath,
       appVersion,
     };
@@ -379,7 +394,7 @@ export function createWindowManager({
       return createSettingsWindow();
     });
     if (settingsPath) {
-      ipcMain.handle(SETTINGS_STATE_CHANNEL, (event) => {
+      ipcMain.handle(SETTINGS_STATE_CHANNEL, async (event) => {
         if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
         return buildSettingsState();
       });
@@ -413,7 +428,15 @@ export function createWindowManager({
           return { ok: false, canceled: true };
         }
         const source = result.filePaths[0];
-        const imported = await importWallpaper(source, wallpaperPath);
+        // New gallery path: import to gallery and activate; keep legacy direct import as fallback
+        let imported;
+        try {
+          const entry = await galleryImportToGallery(source, { env: process.env, homedir: undefined });
+          await gallerySetActive(entry.id, { env: process.env, homedir: undefined });
+          imported = entry;
+        } catch {
+          imported = await importWallpaper(source, wallpaperPath);
+        }
         if (currentConfig.wallpaper.mode !== 'manual') {
           await settingsService.saveConfigFile(configPath, {
             ...currentConfig,
@@ -428,6 +451,56 @@ export function createWindowManager({
         return { ok: true, mode: 'manual', path: wallpaperPath, imported: { ...imported } };
       });
     }
+    // Gallery IPC (settings window)
+    ipcMain.handle(SETTINGS_GALLERY_LIST_CHANNEL, async (event) => {
+      if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+      return galleryListGallery(process.env, undefined);
+    });
+    ipcMain.handle(SETTINGS_GALLERY_SET_ACTIVE_CHANNEL, async (event, id) => {
+      if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+      const result = await gallerySetActive(id, { env: process.env, homedir: undefined });
+      if (currentConfig.wallpaper.mode !== 'manual') {
+        await settingsService.saveConfigFile(configPath, {
+          ...currentConfig,
+          wallpaper: { mode: 'manual' },
+        });
+      }
+      if (onWallpaperImported) await onWallpaperImported();
+      return { ok: true, ...result };
+    });
+    ipcMain.handle(SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL, async (event, id) => {
+      if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+      return galleryToggleFavorite(id, { env: process.env, homedir: undefined });
+    });
+    ipcMain.handle(SETTINGS_GALLERY_REMOVE_CHANNEL, async (event, id) => {
+      if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+      return galleryRemoveFromGallery(id, { env: process.env, homedir: undefined });
+    });
+    ipcMain.handle(SETTINGS_GALLERY_IMPORT_CHANNEL, async (event) => {
+      if (!isSettingsSender(event.sender.id)) throw new Error('Unknown settings renderer');
+      const options = {
+        title: '选择壁纸图片',
+        properties: ['openFile'],
+        filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+      };
+      const result = settingsWindow && !settingsWindow.isDestroyed?.()
+        ? await dialog.showOpenDialog(settingsWindow, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || result.filePaths.length === 0) {
+        return { ok: false, canceled: true };
+      }
+      const source = result.filePaths[0];
+      const entry = await galleryImportToGallery(source, { env: process.env, homedir: undefined });
+      await gallerySetActive(entry.id, { env: process.env, homedir: undefined });
+      if (currentConfig.wallpaper.mode !== 'manual') {
+        await settingsService.saveConfigFile(configPath, {
+          ...currentConfig,
+          wallpaper: { mode: 'manual' },
+        });
+      }
+      if (onWallpaperImported) await onWallpaperImported();
+      return { ok: true, entry };
+    });
     screen.on('display-added', onDisplayAdded);
     screen.on('display-removed', onDisplayRemoved);
     screen.on('display-metrics-changed', onDisplayMetricsChanged);
@@ -450,6 +523,11 @@ export function createWindowManager({
     ipcMain.removeHandler(SETTINGS_SAVE_CONFIG_CHANNEL);
     ipcMain.removeHandler(SETTINGS_SAVE_CREDENTIALS_CHANNEL);
     ipcMain.removeHandler(SETTINGS_IMPORT_WALLPAPER_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_GALLERY_LIST_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_GALLERY_SET_ACTIVE_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_GALLERY_TOGGLE_FAVORITE_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_GALLERY_REMOVE_CHANNEL);
+    ipcMain.removeHandler(SETTINGS_GALLERY_IMPORT_CHANNEL);
     ipcMain.removeAllListeners(NOTIFY_MENU_OPENED_CHANNEL);
     if (informationService) ipcMain.removeHandler(INFORMATION_CHANNEL);
     if (probe && onProbeReport) ipcMain.removeHandler(PROBE_REPORT_CHANNEL);

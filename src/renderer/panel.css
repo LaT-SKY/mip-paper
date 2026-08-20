@@ -8,6 +8,7 @@
   --accent-audio-neutral: rgb(255 255 255);
   --accent-transition-ms: 900ms;
   --appearance-transition-ms: 900ms;
+  --panel-radius: 16px;
 }
 
 :root,
@@ -49,8 +50,9 @@
   position: absolute;
   box-sizing: border-box;
   color: var(--text-secondary);
-  box-shadow: 8px 9px 0 var(--accent-shadow), 0 16px 38px var(--ambient-shadow);
-  transition: color var(--appearance-transition-ms) ease, box-shadow var(--accent-transition-ms) ease;
+  border-radius: var(--panel-radius);
+  box-shadow: 6px 7px 0 var(--accent-shadow), 0 12px 32px var(--ambient-shadow);
+  transition: color var(--appearance-transition-ms) ease, box-shadow var(--accent-transition-ms) ease, filter var(--appearance-transition-ms) ease;
   transform: translate3d(var(--panel-x), var(--panel-y), var(--panel-z)) scale(var(--panel-scale)) rotateX(var(--panel-rx)) rotateY(var(--panel-ry)) rotateZ(var(--panel-rz));
   transform-origin: center;
   will-change: transform, opacity, filter;
@@ -63,6 +65,7 @@
   overflow: hidden;
   padding: var(--card-padding);
   border: 1px solid var(--surface-border);
+  border-radius: var(--panel-radius);
   background: var(--surface);
   backdrop-filter: blur(9px) saturate(1.08);
   transition: background-color var(--appearance-transition-ms) ease, border-color var(--appearance-transition-ms) ease;

@@ -133,6 +133,29 @@ A failed replacement preserves the previous valid image. A successful replacemen
 
 You can also import an image from the settings window: right-click the wallpaper → Settings → Wallpaper section → Choose image…, which imports a JPEG / PNG / WebP and switches to manual mode automatically.
 
+### Gallery (0.4.0)
+
+Every `mip-paper wallpaper set` imports the image into the gallery and activates it, deduplicated by `sha256:contentKey`; favorited images are never auto-pruned. Gallery storage:
+
+```text
+${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery/<shortHash>/wallpaper
+${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery/index.json
+```
+
+The history limit is 50 non-favorite, non-active entries; oldest non-favorite entries are evicted first.
+
+```bash
+mip-paper wallpaper gallery list
+mip-paper wallpaper gallery show <id>
+mip-paper wallpaper gallery set <id>
+mip-paper wallpaper gallery favorite <id>
+mip-paper wallpaper gallery unfavorite <id>
+mip-paper wallpaper gallery remove <id>
+mip-paper wallpaper gallery prune
+```
+
+The settings wallpaper section shows a gallery grid with lazy thumbnails, a cover-info hint computed from the primary display bounds (`800×600 → 1920×1080 cover`), and actions for set-active/favorite/remove plus a drop zone that opens the file dialog.
+
 ## KWin Integration
 
 `setup` (or `install` for source installs) installs two KWin integrations for Mip-Paper windows:

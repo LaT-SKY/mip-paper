@@ -45,6 +45,8 @@ let statusTimer = null;
 let iconPicker = null;
 // Shared per-command "more" action menu.
 let commandMenu = null;
+// Gallery remove confirmation bubble
+let galleryConfirm = null;
 
 function iconMarkup(name) {
   const paths = SETTINGS_ICONS[name];
@@ -322,6 +324,62 @@ function closeCommandMenu() {
   }
 }
 
+function ensureGalleryConfirm() {
+  if (galleryConfirm) return galleryConfirm;
+  const popover = document.createElement('div');
+  popover.className = 'gallery-confirm-popover';
+  popover.hidden = true;
+  document.body.appendChild(popover);
+  galleryConfirm = { popover, entryId: null, anchor: null };
+  return galleryConfirm;
+}
+
+function closeGalleryConfirm() {
+  if (galleryConfirm) {
+    galleryConfirm.popover.hidden = true;
+    galleryConfirm.entryId = null;
+    galleryConfirm.anchor = null;
+  }
+}
+
+function openGalleryConfirm(anchor, entryId) {
+  const c = ensureGalleryConfirm();
+  c.entryId = entryId;
+  c.anchor = anchor;
+  c.popover.replaceChildren();
+  const text = document.createElement('div');
+  text.className = 'gallery-confirm-text';
+  text.textContent = '移除该图片？收藏的图片也会被删除';
+  const actions = document.createElement('div');
+  actions.className = 'gallery-confirm-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'button';
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeGalleryConfirm);
+  const confirm = document.createElement('button');
+  confirm.type = 'button';
+  confirm.className = 'button primary';
+  confirm.textContent = '移除';
+  confirm.addEventListener('click', async () => {
+    const id = c.entryId;
+    closeGalleryConfirm();
+    try {
+      await window.settings.removeGalleryImage(id);
+      await reloadState();
+      showStatus('ok', '已移除');
+    } catch (err) {
+      showStatus('error', '移除失败：' + (err?.message || err));
+    }
+  });
+  actions.append(cancel, confirm);
+  c.popover.append(text, actions);
+  const rect = anchor.getBoundingClientRect();
+  c.popover.style.left = Math.min(rect.left, window.innerWidth - 220) + 'px';
+  c.popover.style.top = rect.bottom + 8 + 'px';
+  c.popover.hidden = false;
+}
+
 function openCommandMenu(anchor, index) {
   const menu = ensureCommandMenu();
   const commands = getPath(draft, 'menu.customCommands') ?? [];
@@ -542,7 +600,7 @@ function appendCredentialsSection(card) {
   const hint = document.createElement('span');
   hint.className = 'hint';
   hint.textContent = configured
-    ? '已配置：' + (state.credentials.apiHost || '未知') + '（写入 weather-credentials.json，0600 权限）'
+    ? '已配置：' + (state.credentials.apiHost || '未知')
     : '未配置 — 在 console.qweather.com 创建项目和 API Key 后填写';
   actions.appendChild(hint);
   card.appendChild(actions);
@@ -580,55 +638,126 @@ function appendAboutSection(card) {
 
 // --- Section rendering ------------------------------------------------------
 
-function appendWallpaperSection(card) {
-  const preview = document.createElement('div');
-  preview.className = 'wallpaper-preview';
-  const frame = document.createElement('div');
-  frame.className = 'wallpaper-preview-frame';
-  const image = document.createElement('img');
-  image.className = 'wallpaper-preview-image';
-  image.alt = '壁纸预览';
-  const placeholder = document.createElement('span');
-  placeholder.className = 'wallpaper-preview-placeholder';
-  placeholder.textContent = '尚未导入图片';
-  const manualUrl = fileUrlFor(state.wallpaper && state.wallpaper.path);
-  if (manualUrl) {
-    // The manual wallpaper file is replaced in place, so bust the URL to
-    // always show the latest bytes.
-    image.src = manualUrl + '?v=' + Date.now();
-    image.addEventListener('error', () => {
-      image.hidden = true;
-      placeholder.hidden = false;
-    });
-    image.addEventListener('load', () => {
-      image.hidden = false;
-      placeholder.hidden = true;
-    });
-  } else {
-    image.hidden = true;
-  }
-  frame.append(image, placeholder);
-  preview.appendChild(frame);
-  const hint = document.createElement('span');
-  hint.className = 'wallpaper-preview-hint';
-  hint.textContent = '跟随 KDE 模式下不可用';
-  preview.appendChild(hint);
-  card.appendChild(preview);
+function coverInfoFor(entry) {
+  if (!entry || !state.displays || state.displays.length === 0) return `${entry.width}×${entry.height}`;
+  // Show cover scale for primary display as smart-crop hint
+  const d = state.displays[0];
+  const scale = Math.max(d.bounds.width / entry.width, d.bounds.height / entry.height);
+  const sw = Math.round(entry.width * scale);
+  const sh = Math.round(entry.height * scale);
+  return `${entry.width}×${entry.height} → ${sw}×${sh} cover`;
+}
 
+function appendWallpaperSection(card) {
   const actions = document.createElement('div');
   actions.className = 'wallpaper-actions';
   const pick = document.createElement('button');
   pick.type = 'button';
-  pick.className = 'button';
+  pick.className = 'button primary';
   pick.id = 'wallpaper-pick';
   pick.textContent = '选择图片…';
+  pick.title = '导入 JPEG / PNG / WebP 并切换到手动模式';
   pick.addEventListener('click', importWallpaper);
   actions.appendChild(pick);
   const hintText = document.createElement('span');
   hintText.className = 'hint';
-  hintText.textContent = '导入 JPEG / PNG / WebP 并切换到手动模式（所有显示器）';
+  hintText.textContent = '画廊按内容去重，收藏永久保留，历史自动清理';
   actions.appendChild(hintText);
   card.appendChild(actions);
+
+  // Gallery grid
+  const gallery = state.gallery ?? [];
+  const grid = document.createElement('div');
+  grid.className = 'gallery-grid';
+  grid.id = 'gallery-grid';
+  if (gallery.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'hint';
+    empty.textContent = '画廊为空，导入图片后会保留历史，收藏的图片不会被自动清理';
+    grid.appendChild(empty);
+  } else {
+    const activeContentKey = gallery.find((e) => e.file === state.wallpaper.path)?.contentKey;
+    for (const entry of gallery) {
+      const item = document.createElement('div');
+      item.className = 'gallery-item' + (entry.contentKey === activeContentKey ? ' is-active' : '');
+      const thumb = document.createElement('img');
+      thumb.className = 'gallery-thumb';
+      thumb.alt = entry.id;
+      thumb.loading = 'lazy';
+      const url = fileUrlFor(entry.file);
+      if (url) thumb.src = url + '?v=' + (entry.mtimeMs || entry.size);
+      thumb.style.cursor = entry.contentKey === activeContentKey ? 'default' : 'pointer';
+      thumb.addEventListener('click', async () => {
+        if (entry.contentKey === activeContentKey) return;
+        try {
+          await window.settings.setGalleryActive(entry.id);
+          await reloadState();
+          showStatus('ok', '已设为当前壁纸');
+        } catch (err) {
+          showStatus('error', '切换失败：' + (err?.message || err));
+        }
+      });
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'gallery-thumb-wrap';
+      const fav = document.createElement('button');
+      fav.type = 'button';
+      fav.className = 'gallery-fav' + (entry.favorite ? ' is-fav' : '');
+      fav.title = entry.favorite ? '已收藏（永久保留）' : '收藏（永久保留）';
+      fav.setAttribute('aria-label', entry.favorite ? '已收藏' : '收藏');
+      fav.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8l2.1 4.3 4.7 0.7-3.4 3.3 0.8 4.7-4.2-2.2-4.2 2.2 0.8-4.7-3.4-3.3 4.7-0.7z"></path></svg>';
+      fav.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await window.settings.toggleGalleryFavorite(entry.id);
+          await reloadState();
+          showStatus('ok', entry.favorite ? '已取消收藏' : '已收藏 · 永久保留');
+        } catch (err) {
+          showStatus('error', '收藏失败：' + (err?.message || err));
+        }
+      });
+      const row = document.createElement('div');
+      row.className = 'gallery-actions';
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'button primary';
+      useBtn.textContent = '设为当前';
+      useBtn.disabled = entry.contentKey === activeContentKey;
+      useBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await window.settings.setGalleryActive(entry.id);
+          await reloadState();
+          showStatus('ok', '已设为当前壁纸');
+        } catch (err) {
+          showStatus('error', '切换失败：' + (err?.message || err));
+        }
+      });
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'button';
+      delBtn.textContent = '移除';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openGalleryConfirm(delBtn, entry.id);
+      });
+      row.append(useBtn, delBtn);
+      thumbWrap.append(thumb, fav, row);
+      const meta = document.createElement('div');
+      meta.className = 'gallery-meta';
+      const title = document.createElement('div');
+      title.className = 'gallery-title';
+      title.textContent = entry.id;
+      const sub = document.createElement('div');
+      sub.className = 'gallery-subtitle';
+      sub.textContent = coverInfoFor(entry) + (entry.favorite ? ' · 收藏' : '');
+      meta.append(title, sub);
+      item.append(thumbWrap, meta);
+      grid.appendChild(item);
+    }
+  }
+  card.appendChild(grid);
+
+
 }
 
 // Keep the wallpaper section's interactive state in sync with the draft mode
@@ -638,14 +767,18 @@ function updateWallpaperSectionControls() {
   if (!card) return;
   const kde = getPath(draft, 'wallpaper.mode') === 'kde';
   const pick = card.querySelector('#wallpaper-pick');
-  if (pick) pick.disabled = kde;
-  const preview = card.querySelector('.wallpaper-preview');
-  if (preview) preview.classList.toggle('is-dimmed', kde);
+  if (pick) {
+    pick.disabled = kde;
+    pick.title = kde ? '跟随 KDE 模式下不可用，切换到手动模式后可导入' : '导入 JPEG / PNG / WebP 并切换到手动模式';
+  }
+  const grid = card.querySelector('#gallery-grid');
+  if (grid) grid.classList.toggle('is-dimmed', kde);
 }
 
-function renderSection(groupId) {
+function renderSection(groupId, { animate = true } = {}) {
   const group = SETTINGS_GROUPS.find((candidate) => candidate.id === groupId);
   if (!group) return;
+  const sectionChanged = groupId !== currentSection;
   currentSection = groupId;
   renderNav();
 
@@ -684,12 +817,24 @@ function renderSection(groupId) {
   // The card must be attached before the control state is synced; otherwise
   // the initial KDE/manual mode would never grey out the pick button.
   if (group.id === 'wallpaper') updateWallpaperSectionControls();
-  animateSection(card);
+  if (animate && sectionChanged) animateSection(card);
+  else if (animate && !sectionChanged) {
+    // Same-section refresh (e.g. gallery favorite/setActive) — keep steady, no flash
+    card.style.opacity = '1';
+    card.style.transform = 'none';
+  } else {
+    card.style.opacity = '1';
+    card.style.transform = 'none';
+  }
   syncFooterState();
 }
 
 function animateSection(card) {
-  if (reducedMotion.matches) return;
+  if (reducedMotion.matches) {
+    card.style.opacity = '1';
+    card.style.transform = 'none';
+    return;
+  }
   const token = ++animToken;
   const start = performance.now();
   let scale = SPRING.startScale;
@@ -697,13 +842,9 @@ function animateSection(card) {
   let last = start;
   const omega = SPRING.omega;
   const damping = SPRING.damping;
-  const rows = [...card.querySelectorAll('.field-row, .command-row, .wallpaper-actions, .wallpaper-preview, .credentials-actions, .about-list')];
+  // Only animate the container — rows stay visible to avoid staged flash (matches context-menu language)
   card.style.opacity = '0';
-  for (const row of rows) {
-    row.style.opacity = '0';
-    row.style.transform = 'translateY(2px)';
-  }
-
+  card.style.transform = `scale(${scale})`;
   function frame(now) {
     if (token !== animToken) return;
     const dt = Math.min(0.032, Math.max(0, (now - last) / 1000));
@@ -714,22 +855,12 @@ function animateSection(card) {
     const acceleration = omega * omega * (SPRING.targetScale - scale) - 2 * damping * omega * velocity;
     velocity += acceleration * dt;
     scale += velocity * dt;
-    card.style.transform = 'scale(' + scale.toFixed(4) + ')';
-    rows.forEach((row, index) => {
-      const delay = Math.min(index * ROW_STAGGER_MS, SECTION_TRANSITION_MS);
-      const rowProgress = Math.min(1, Math.max(0, (elapsed - delay) / SECTION_TRANSITION_MS));
-      row.style.opacity = String(rowProgress);
-      row.style.transform = rowProgress >= 1 ? 'none' : 'translateY(2px)';
-    });
+    card.style.transform = `scale(${scale.toFixed(4)})`;
     const settled = Math.abs(SPRING.targetScale - scale) < SPRING.settleEpsilon
       && Math.abs(velocity) < SPRING.settleVelocity;
     if (settled || elapsed > 600) {
       card.style.transform = 'scale(1)';
       card.style.opacity = '1';
-      for (const row of rows) {
-        row.style.opacity = '1';
-        row.style.transform = 'none';
-      }
       return;
     }
     requestAnimationFrame(frame);
@@ -791,13 +922,31 @@ function highlightFieldError(message) {
 }
 
 async function reloadState() {
+  const previousDirty = dirty;
+  const previousDraft = draft ? structuredClone(draft) : null;
   state = await window.settings.getState();
-  draft = structuredClone(state.config);
-  dirty = false;
+  // Preserve pending wallpaper.mode change if user switched KDE↔manual without saving;
+  // any gallery operation (favorite/remove) must not revert the dropdown.
+  if (!previousDirty || !previousDraft) {
+    draft = structuredClone(state.config);
+    dirty = false;
+  } else {
+    // Keep the user's pending draft, but sync gallery/displays and clear dirty if file now matches
+    const stillDirty = JSON.stringify(previousDraft) !== JSON.stringify(state.config);
+    // If file caught up (e.g. setActive saved manual), draft now equals file → clear dirty
+    if (!stillDirty) dirty = false;
+    else {
+      // Keep draft as is; do not overwrite with stale file
+      // state.config remains file's version for reference, draft is user's intent
+    }
+    // If we kept draft, ensure draft is still the object we render from
+    if (stillDirty) draft = previousDraft;
+    else draft = structuredClone(state.config);
+  }
   applyTheme();
   applyAccent();
   if (state.appVersion) versionEl.textContent = 'v' + state.appVersion;
-  renderSection(currentSection);
+  renderSection(currentSection, { animate: false });
 }
 
 async function saveConfig() {
@@ -827,8 +976,8 @@ async function saveCredentials() {
   try {
     const result = await window.settings.saveCredentials({ apiHost: host, apiKey: key });
     state.credentials = result;
-    renderSection(currentSection);
-    showStatus('ok', '凭据已保存（0600 权限）');
+    renderSection(currentSection, { animate: false });
+    showStatus('ok', '凭据已保存');
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
     showStatus('error', '凭据保存失败：' + message);
@@ -857,6 +1006,7 @@ function selectSection(groupId) {
   clearFieldErrors();
   closeIconPicker();
   closeCommandMenu();
+  closeGalleryConfirm();
   renderSection(groupId);
 }
 
@@ -901,7 +1051,7 @@ contentRoot.addEventListener('click', (event) => {
   }
 });
 
-// The icon picker and the command "more" menu are floating popovers: close
+// The icon picker, command "more" and gallery confirm are floating popovers: close
 // them on outside clicks, Escape, or when the section scrolls under them.
 document.addEventListener('pointerdown', (event) => {
   if (iconPicker && !iconPicker.popover.hidden) {
@@ -916,6 +1066,12 @@ document.addEventListener('pointerdown', (event) => {
     if (moreButton) return;
     closeCommandMenu();
   }
+  if (galleryConfirm && !galleryConfirm.popover.hidden) {
+    if (galleryConfirm.popover.contains(event.target)) return;
+    const delButton = event.target.closest && event.target.closest('.gallery-actions .button');
+    if (delButton && delButton.textContent === '移除') return;
+    closeGalleryConfirm();
+  }
 });
 window.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
@@ -925,11 +1081,15 @@ window.addEventListener('keydown', (event) => {
   } else if (commandMenu && !commandMenu.popover.hidden) {
     event.preventDefault();
     closeCommandMenu();
+  } else if (galleryConfirm && !galleryConfirm.popover.hidden) {
+    event.preventDefault();
+    closeGalleryConfirm();
   }
 });
 contentRoot.addEventListener('scroll', () => {
   closeIconPicker();
   closeCommandMenu();
+  closeGalleryConfirm();
 }, { passive: true });
 
 saveButton.addEventListener('click', saveConfig);
@@ -937,6 +1097,7 @@ reloadButton.addEventListener('click', async () => {
   clearFieldErrors();
   closeIconPicker();
   closeCommandMenu();
+  closeGalleryConfirm();
   await reloadState();
   showStatus('ok', '已重新加载配置');
 });
@@ -962,7 +1123,7 @@ window.settings.onConfigUpdated((payload) => {
   if (!dirty) {
     state.config = payload.config;
     draft = structuredClone(payload.config);
-    renderSection(currentSection);
+    renderSection(currentSection, { animate: false });
   }
   if (payload.appearance) {
     state.appearance = payload.appearance;
