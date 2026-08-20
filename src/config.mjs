@@ -39,6 +39,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     collapseDelaySeconds: 8,
     expanded: true,
     collapsedOpacity: 0.08,
+    borderRadius: 16,
     animation: Object.freeze({ staggerDelayMs: 48, durationMs: 820 }),
   }),
   weather: Object.freeze({
@@ -99,6 +100,7 @@ const SCHEMA = {
     collapseDelaySeconds: 'nonNegative',
     expanded: 'boolean',
     collapsedOpacity: 'opacity',
+    borderRadius: 'panelRadius',
     animation: {
       staggerDelayMs: 'nonNegative',
       durationMs: 'animationDuration',
@@ -289,6 +291,9 @@ function validateShape(value, schema, prefix = '') {
     }
     if (rule === 'opacity' && (!Number.isFinite(fieldValue) || fieldValue < 0 || fieldValue > 1)) {
       throw new RangeError(`${fieldPath} must be between 0 and 1`);
+    }
+    if (rule === 'panelRadius' && (!Number.isFinite(fieldValue) || fieldValue < 0 || fieldValue > 24)) {
+      throw new RangeError(`${fieldPath} must be between 0 and 24`);
     }
     if (rule === 'animationDuration' && (!Number.isFinite(fieldValue) || fieldValue < 400)) {
       throw new RangeError(`${fieldPath} must be at least 400`);

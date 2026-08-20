@@ -44,6 +44,7 @@ test('defaults match the approved v1 design', () => {
       collapseDelaySeconds: 8,
       expanded: true,
       collapsedOpacity: 0.08,
+      borderRadius: 16,
       animation: { staggerDelayMs: 48, durationMs: 820 },
     },
     weather: {

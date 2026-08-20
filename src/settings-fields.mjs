@@ -177,6 +177,7 @@ export const SETTINGS_GROUPS = Object.freeze([
       { key: 'panel.collapseDelaySeconds', label: '收起等待时间', type: 'number', min: 0, step: 0.5, unit: 's', description: '无交互后开始收起的等待时间' },
       { key: 'panel.expanded', label: '固定展开', type: 'boolean', description: '禁用自动模式时使用的固定展开状态' },
       { key: 'panel.collapsedOpacity', label: '收起最低不透明度', type: 'number', min: 0, max: 1, step: 0.01 },
+      { key: 'panel.borderRadius', label: '卡片圆角', type: 'number', min: 0, max: 24, step: 1, unit: 'px', description: '信息卡圆角半径，0 为直角' },
       { key: 'panel.animation.staggerDelayMs', label: '动画错开时间', type: 'number', min: 0, step: 10, unit: 'ms' },
       { key: 'panel.animation.durationMs', label: '单块动画时长', type: 'number', min: 400, step: 10, unit: 'ms', description: '包含两次回弹的单块面板动画时长' },
     ],
