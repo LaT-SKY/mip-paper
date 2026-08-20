@@ -514,7 +514,15 @@ wallpaper_command() {
           fi
           ;;
         show) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" show "$3" ;;
-        set) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" set "$3"; node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual; if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then printf 'Gallery image activated; live service will hot-reload.\n'; else printf 'Gallery image activated; run mip-paper start to apply.\n'; fi ;;
+        set)
+          if [[ "${4:-}" == "--display" ]]; then
+            (($# == 5)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" set "$3" --display "$5"; node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual
+            if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then printf 'Gallery image assigned to display %s; live service will hot-reload.\n' "$5"; else printf 'Gallery image assigned to display %s; run mip-paper start to apply.\n' "$5"; fi
+          else
+            (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" set "$3"; node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual
+            if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then printf 'Gallery image activated; live service will hot-reload.\n'; else printf 'Gallery image activated; run mip-paper start to apply.\n'; fi
+          fi
+          ;;
         import) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" import-only "$3" ;;
         favorite) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" favorite "$3" ;;
         unfavorite) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" unfavorite "$3" ;;
