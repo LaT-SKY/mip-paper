@@ -13,11 +13,16 @@
 import { exec, execFileSync, spawn } from 'node:child_process';
 
 // Terminal emulator presets, in auto-detection preference order. The wrapped
-// command is passed as a single `sh -c` argument. Terminal windows close by
+// command is passed as a single `<shell> -c` argument. Terminal windows close by
 // default once the command finishes; terminals that cannot keep the window
 // open natively get an interactive read suffix appended when autoExit is off.
 // Users may pin any of these (or an unpreset terminal, which falls back to
 // the generic invocation) via the `menu.terminal` config key.
+//
+// The placeholder `sh` in `args` is replaced at spawn time with the user's
+// shell (`$SHELL` or `sh`) so fish-style substitutions like
+// `nvim /tmp/(openssl rand -hex 8)` are expanded correctly for fish users
+// instead of producing `sh: Syntax error: "(" unexpected` and an instant exit.
 const TERMINALS = Object.freeze([
   Object.freeze({ name: 'konsole', args: ['-e', 'sh', '-c'], keepOpenFlag: '--hold' }),
   Object.freeze({ name: 'xfce4-terminal', args: ['-e', 'sh', '-c'], keepOpenFlag: '--hold' }),
@@ -51,13 +56,32 @@ export function defaultFindExecutable(name) {
   }
 }
 
+function isFishShell(shell) {
+  return typeof shell === 'string' && shell.toLowerCase().includes('fish');
+}
+
+function resolveShellArgs(args, shell) {
+  const effectiveShell = shell && shell.trim() !== '' ? shell.trim() : 'sh';
+  return args.map((arg) => arg === 'sh' ? effectiveShell : arg);
+}
+
+function keepOpenSuffix(shell) {
+  if (isFishShell(shell)) {
+    return "\nread -P 'Press any key to close' -n 1";
+  }
+  return "\nread -n 1 -s -r -p 'Press any key to close'";
+}
+
 export function createMenuCommandRunner({
   execProcess = exec,
   spawnProcess = spawn,
   homedir = process.env.HOME,
+  shell = 'sh',
   findExecutable = defaultFindExecutable,
   log = () => {},
 } = {}) {
+  const effectiveShell = shell && typeof shell === 'string' && shell.trim() !== '' ? shell.trim() : 'sh';
+
   function findTerminal() {
     for (const terminal of TERMINALS) {
       if (findExecutable(terminal.name)) return terminal;
@@ -66,7 +90,7 @@ export function createMenuCommandRunner({
   }
 
   function runBackground(command) {
-    execProcess(command, { cwd: homedir }, (error) => {
+    execProcess(command, { cwd: homedir, shell: effectiveShell }, (error) => {
       if (error) {
         log('Menu command failed (' + (error.code ?? 'error') + '): ' + command);
       }
@@ -78,9 +102,10 @@ export function createMenuCommandRunner({
   // interactive read suffix). The default (autoExit) lets the terminal close
   // on its own once the command exits.
   function runTerminal(command, name, args, keepOpenFlag, keepOpen) {
-    const effectiveArgs = keepOpen && keepOpenFlag ? [keepOpenFlag, ...args] : args;
+    const resolvedArgs = resolveShellArgs(args, effectiveShell);
+    const effectiveArgs = keepOpen && keepOpenFlag ? [keepOpenFlag, ...resolvedArgs] : resolvedArgs;
     const wrapped = keepOpen && !keepOpenFlag
-      ? command + "\nread -n 1 -s -r -p 'Press any key to close'"
+      ? command + keepOpenSuffix(effectiveShell)
       : command;
     const child = spawnProcess(name, [...effectiveArgs, wrapped], {
       cwd: homedir,

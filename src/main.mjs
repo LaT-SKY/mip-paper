@@ -215,6 +215,7 @@ async function run() {
 
   const menuCommandRunner = createMenuCommandRunner({
     homedir: os.homedir(),
+    shell: process.env.SHELL || 'sh',
     log: (message) => console.error(message),
   });
   // Settings-window paths and helpers. The credentials file path and the
