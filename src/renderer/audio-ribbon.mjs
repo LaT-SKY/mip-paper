@@ -356,6 +356,7 @@ export function createAudioRibbonController({ root, config } = {}) {
       if (!destroyed) {
         applyAudioConfig(state, audioConfig);
         applyVisualConfig();
+        render();
       }
     },
     advance(elapsedMs, nowMs) {

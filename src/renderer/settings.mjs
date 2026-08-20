@@ -687,7 +687,6 @@ function createPanelCardRow(index) {
     const next = [...(getPath(draft, 'panel.cards') ?? [])];
     if (!next[index]) return;
     next[index] = { ...next[index], enabled: input.checked };
-    // Ensure at least one enabled
     const enabledCount = next.filter((c) => c.enabled !== false).length;
     if (enabledCount === 0) {
       input.checked = true;
@@ -697,12 +696,11 @@ function createPanelCardRow(index) {
     }
     setPath(draft, 'panel.cards', next);
     markDirty();
-    // Re-validate
     const msg = validateField(findField('panel.cards'), next, draft);
     if (msg) setFieldError('panel.cards', msg); else clearFieldError('panel.cards');
     syncFooterState();
     syncConditionalFields();
-    renderSection(currentSection, { animate: false });
+    row.style.opacity = input.checked ? '1' : '0.6';
   });
   const track = document.createElement('span');
   track.className = 'track';
@@ -949,20 +947,22 @@ function appendWallpaperSection(card) {
   modeHint.style.marginTop = '6px';
   card.appendChild(modeHint);
 
-  // Per-display scope selector (only when perDisplay enabled)
+  // Per-display scope selector (only when perDisplay enabled) — styled as field-row to match green boxes
   const perDisplayOn = Boolean(getPath(draft, 'wallpaper.perDisplay'));
   if (perDisplayOn && state.displays && state.displays.length > 0) {
-    const selectorWrap = document.createElement('div');
-    selectorWrap.className = 'wallpaper-display-selector';
-    selectorWrap.style.display = 'flex';
-    selectorWrap.style.alignItems = 'center';
-    selectorWrap.style.gap = '8px';
-    selectorWrap.style.margin = '10px 0 6px';
-    const label = document.createElement('span');
-    label.className = 'hint';
-    label.textContent = '作用域：';
+    const selectorRow = document.createElement('div');
+    selectorRow.className = 'field-row';
+    const copy = createCopy('作用域', state.assignments?.fallback ? `fallback: ${state.assignments.fallback.slice(0, 12)}` : '选择画廊图片要分配到的显示器');
+    const err = document.createElement('div');
+    err.className = 'field-error';
+    err.dataset.errorFor = 'wallpaper.displayScope';
+    copy.appendChild(err);
+    selectorRow.appendChild(copy);
+    const control = document.createElement('div');
+    control.className = 'field-control';
     const select = document.createElement('select');
     select.id = 'wallpaper-display-select';
+    select.setAttribute('aria-describedby', 'wallpaper-displayScope-error');
     const allOpt = document.createElement('option');
     allOpt.value = 'all';
     allOpt.textContent = '全部显示器 (fallback)';
@@ -978,15 +978,15 @@ function appendWallpaperSection(card) {
       selectedDisplayId = select.value;
       renderSection(currentSection, { animate: false });
     });
-    selectorWrap.append(label, select);
-    if (state.assignments) {
-      const hint = document.createElement('span');
-      hint.className = 'hint';
-      const fallback = state.assignments.fallback ? state.assignments.fallback.slice(0, 12) : '无';
-      hint.textContent = `fallback: ${fallback}`;
-      selectorWrap.appendChild(hint);
-    }
-    card.appendChild(selectorWrap);
+    control.appendChild(select);
+    selectorRow.appendChild(control);
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'field-reset';
+    reset.textContent = '重置';
+    reset.addEventListener('click', () => { selectedDisplayId = 'all'; renderSection(currentSection, { animate: false }); });
+    selectorRow.appendChild(reset);
+    card.appendChild(selectorRow);
   }
 
   // Gallery grid
@@ -1361,8 +1361,11 @@ function syncConditionalFields() {
   const displaySelect = document.getElementById('wallpaper-display-select');
   if (displaySelect) {
     displaySelect.disabled = !perDisplay || getPath(draft, 'wallpaper.mode') === 'kde';
-    displaySelect.closest('.wallpaper-display-selector').style.opacity = displaySelect.disabled ? '0.5' : '1';
-    displaySelect.closest('.wallpaper-display-selector').style.pointerEvents = displaySelect.disabled ? 'none' : '';
+    const row = displaySelect.closest('.field-row');
+    if (row) {
+      row.style.opacity = displaySelect.disabled ? '0.5' : '1';
+      row.style.pointerEvents = displaySelect.disabled ? 'none' : '';
+    }
   }
 }
 
