@@ -27,6 +27,7 @@ import { createWindowManager } from './window-manager.mjs';
 import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
 import { importWallpaper, wallpaperPath } from './wallpaper-image.mjs';
+import { listGallery } from './wallpaper-gallery.mjs';
 import { saveConfigFile, saveWeatherCredentialsFile } from './settings-service.mjs';
 import { createKdeWallpaperSync } from './kde-wallpaper-sync.mjs';
 import { createKdeAccentWatcher } from './kde-accent.mjs';
@@ -242,7 +243,7 @@ async function run() {
       wallpaperSync.setMode('manual');
       await wallpaperSync.whenIdle();
     },
-    getSettingsState: () => {
+    getSettingsState: async () => {
       let accent = null;
       try {
         const primary = screen.getPrimaryDisplay();
@@ -250,12 +251,30 @@ async function run() {
       } catch {
         accent = null;
       }
+      let gallery = [];
+      let galleryError = null;
+      try {
+        gallery = await listGallery(process.env, os.homedir());
+      } catch (error) {
+        galleryError = error?.message || String(error);
+      }
+      let displays = [];
+      try {
+        displays = screen.getAllDisplays().map((d) => ({
+          id: String(d.id),
+          bounds: { ...d.bounds },
+          scaleFactor: d.scaleFactor ?? 1,
+        }));
+      } catch {}
       return {
         credentials: credentials
           ? { configured: true, apiHost: credentials.apiHost }
           : { configured: false, apiHost: null },
         ...(accent ? { accent } : {}),
         wallpaper: { mode: currentConfig.wallpaper.mode, path: wallpaperPathname },
+        gallery,
+        ...(galleryError ? { galleryError } : {}),
+        displays,
         logoPath: logoPathname,
       };
     },
