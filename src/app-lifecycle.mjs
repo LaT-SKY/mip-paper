@@ -6,6 +6,7 @@ export function createShutdownCoordinator({
   quit,
   stopConfigWatcher = () => {},
   stopCredentialsWatcher = () => {},
+  stopAssignmentsWatcher = () => {},
   stopRuntimeCoordinator = () => {},
   stopAppearance = () => {},
   stopWallpaperSync = () => {},
@@ -33,6 +34,7 @@ export function createShutdownCoordinator({
     await stop('runtime config coordinator', stopRuntimeCoordinator);
     await stop('config watcher', stopConfigWatcher);
     await stop('credentials watcher', stopCredentialsWatcher);
+    await stop('assignments watcher', stopAssignmentsWatcher);
     await stop('appearance', stopAppearance);
     await stop('wallpaper sync', stopWallpaperSync);
     await stop('color service', stopColorService);
