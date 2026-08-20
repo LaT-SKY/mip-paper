@@ -1149,6 +1149,7 @@ function renderSection(groupId, { animate = true } = {}) {
     for (const c of cards) { c.style.opacity = '1'; c.style.transform = 'none'; }
   }
   syncFooterState();
+  syncConditionalFields();
 }
 
 function animateSection(card, tokenOverride, index = 0) {
@@ -1216,6 +1217,39 @@ function syncFooterState() {
     saveButton.title = '存在未通过校验的字段';
   } else {
     saveButton.title = '';
+  }
+}
+
+function syncConditionalFields() {
+  const colorMode = getPath(draft, 'audio.colorMode');
+  const isAuto = colorMode === 'auto';
+  for (const key of ['audio.colors.primary', 'audio.colors.complement', 'audio.colors.neutral']) {
+    const row = contentRoot.querySelector('[data-field="' + key + '"]');
+    if (!row) continue;
+    const input = row.querySelector('[data-field="' + key + '"]');
+    if (input) {
+      input.disabled = isAuto;
+      input.style.opacity = isAuto ? '0.45' : '1';
+    }
+    row.style.opacity = isAuto ? '0.6' : '1';
+    row.style.pointerEvents = isAuto ? 'none' : '';
+  }
+  const cards = getPath(draft, 'panel.cards');
+  const customEnabled = Array.isArray(cards) ? cards.find((c) => c.id === 'custom')?.enabled : false;
+  for (const key of ['panel.customCard.title', 'panel.customCard.text', 'panel.customCard.timeFormat', 'panel.customCard.dateFormat', 'panel.customCard.showTime']) {
+    const row = contentRoot.querySelector('[data-field="' + key + '"]');
+    if (!row) continue;
+    const input = row.querySelector('[data-field="' + key + '"]');
+    if (input) input.disabled = !customEnabled;
+    row.style.opacity = customEnabled ? '1' : '0.45';
+    row.style.pointerEvents = customEnabled ? '' : 'none';
+  }
+  const perDisplay = getPath(draft, 'wallpaper.perDisplay');
+  const displaySelect = document.getElementById('wallpaper-display-select');
+  if (displaySelect) {
+    displaySelect.disabled = !perDisplay || getPath(draft, 'wallpaper.mode') === 'kde';
+    displaySelect.closest('.wallpaper-display-selector').style.opacity = displaySelect.disabled ? '0.5' : '1';
+    displaySelect.closest('.wallpaper-display-selector').style.pointerEvents = displaySelect.disabled ? 'none' : '';
   }
 }
 
@@ -1451,6 +1485,7 @@ contentRoot.addEventListener('input', (event) => {
         if (lngMsg) setFieldError('weather.location.longitude', lngMsg); else clearFieldError('weather.location.longitude');
       }
       syncFooterState();
+      syncConditionalFields();
       if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
       if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
         // Refresh cover hints without full re-render
@@ -1460,6 +1495,10 @@ contentRoot.addEventListener('input', (event) => {
           const e = gallery[idx];
           if (e) el.textContent = coverInfoFor(e) + (e.favorite ? ' · 收藏' : '');
         });
+      }
+      if (fieldKey === 'wallpaper.perDisplay' && currentSection === 'wallpaper') {
+        // Re-render to show/hide display selector
+        renderSection(currentSection, { animate: false });
       }
     }
     return;
