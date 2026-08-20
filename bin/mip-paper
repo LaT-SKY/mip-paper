@@ -59,9 +59,16 @@ Commands:
   restart               Restart the user service
   status                Show the user service status
   doctor                Diagnose the installation and Plasma integration
-  wallpaper set PATH    Import and use a JPEG, PNG or WebP image
+  wallpaper set PATH    Import and use a JPEG, PNG or WebP image (via gallery)
   wallpaper use-kde     Follow each display's KDE static wallpaper
   wallpaper status      Show wallpaper mode and managed image status
+  wallpaper gallery list                    List gallery images
+  wallpaper gallery show ID                 Show gallery entry
+  wallpaper gallery set ID                  Activate gallery image
+  wallpaper gallery favorite ID             Mark as favorite
+  wallpaper gallery unfavorite ID           Remove favorite
+  wallpaper gallery remove ID               Remove from gallery
+  wallpaper gallery prune                   Prune non-favorite history
   probe [OPTION]        Compare renderer scheduling strategies on the live desktop
 EOF
   exit 2
@@ -488,11 +495,24 @@ wallpaper_command() {
   case "$action" in
     set)
       (($# == 2)) || usage
-      node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" set "$2"
+      node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" import "$2"
       node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual
       if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then
         systemctl --user restart "$SERVICE_NAME"
       fi
+      ;;
+    gallery)
+      local sub=${2:-}
+      case "$sub" in
+        list) (($# == 2)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list ;;
+        show) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" show "$3" ;;
+        set) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" set "$3"; node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual; if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then systemctl --user restart "$SERVICE_NAME"; fi ;;
+        favorite) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" favorite "$3" ;;
+        unfavorite) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" unfavorite "$3" ;;
+        remove) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" remove "$3" ;;
+        prune) (($# == 2)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" prune ;;
+        *) usage ;;
+      esac
       ;;
     use-kde)
       (($# == 1)) || usage
@@ -509,6 +529,10 @@ wallpaper_command() {
       printf 'Wallpaper mode: %s\n' "$mode"
       if [[ "$mode" == manual ]]; then
         node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status
+        if node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list >/dev/null 2>&1; then
+          echo "---"
+          node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list 2>&1 | head -n 20
+        fi
       elif [[ -d "$DATA_DIRECTORY/wallpapers" ]]; then
         find "$DATA_DIRECTORY/wallpapers" -mindepth 2 -maxdepth 2 -name status.json -type f -print0 \
           | sort -z | xargs -0 -r -n1 node --input-type=module -e '
@@ -651,6 +675,13 @@ NODE
     check_pass image "$WALLPAPER_PATH"
   else
     check_fail image 'managed wallpaper is missing or invalid'
+  fi
+  local gallery_helper="$runtime_root/scripts/wallpaper-gallery.mjs"
+  if [[ ! -f "$gallery_helper" ]]; then gallery_helper="$SOURCE_ROOT/scripts/wallpaper-gallery.mjs"; fi
+  if [[ -f "$gallery_helper" ]] && node "$gallery_helper" list >/dev/null 2>&1; then
+    check_pass gallery-index "$DATA_DIRECTORY/gallery/index.json"
+  else
+    check_fail gallery-index 'gallery index is missing or unreadable'
   fi
 
   check_manual 'window stacking' 'verify wallpaper remains below ordinary windows and above the desktop surface'

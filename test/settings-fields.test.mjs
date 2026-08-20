@@ -37,6 +37,7 @@ const CONFIG_LEAF_KEYS = [
   'panel.collapseDelaySeconds',
   'panel.expanded',
   'panel.collapsedOpacity',
+  'panel.borderRadius',
   'panel.animation.staggerDelayMs',
   'panel.animation.durationMs',
   'weather.location.mode',

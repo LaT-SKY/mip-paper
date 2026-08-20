@@ -139,6 +139,29 @@ mip-paper wallpaper use-kde
 
 在设置窗口中也可以导入图片：右键壁纸 → 设置 → 壁纸分区 → 选择图片…，导入 JPEG / PNG / WebP 并自动切换到手动模式。
 
+### 画廊（0.4.0 新增）
+
+每次 `mip-paper wallpaper set` 都会把图片导入到画廊并设为当前，自动按内容去重（`sha256:contentKey`），收藏的图片不会被自动清理。画廊保存在：
+
+```text
+${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery/<shortHash>/wallpaper
+${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery/index.json
+```
+
+历史上限 50 张（非收藏、非当前），超出时最旧的自动清理；收藏与当前生效的图片永不过期。
+
+```bash
+mip-paper wallpaper gallery list              # 列出画廊
+mip-paper wallpaper gallery show <id>         # 查看单条
+mip-paper wallpaper gallery set <id>          # 设为当前（自动切 manual 并重启服务）
+mip-paper wallpaper gallery favorite <id>     # 收藏
+mip-paper wallpaper gallery unfavorite <id>   # 取消收藏
+mip-paper wallpaper gallery remove <id>       # 移除
+mip-paper wallpaper gallery prune             # 手动清理
+```
+
+设置窗口的壁纸分区新增画廊网格：缩略图按 `object-fit: cover` 预览，副标题显示按主显示器 `bounds` 计算的 cover 覆盖提示（`800×600 → 1920×1080 cover`），支持收藏/设为当前/移除与拖拽区域（拖拽后弹出文件选择对话框完成导入）。
+
 ## KWin 集成
 
 `setup`（源码安装为 `install`）会为 Mip-Paper 窗口安装两项 KWin 集成：

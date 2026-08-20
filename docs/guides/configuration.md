@@ -43,9 +43,10 @@
     "collapseDelaySeconds": 8,
     "expanded": true,
     "collapsedOpacity": 0.08,
+    "borderRadius": 16,
     "animation": {
-      "staggerDelayMs": 60,
-      "durationMs": 950
+      "staggerDelayMs": 48,
+      "durationMs": 820
     }
   },
   "weather": {
@@ -68,6 +69,8 @@
 ```
 
 0.3.2 及更早版本的顶层 `interactionEnabled` 会被自动迁移为 `mouse.buttonsEnabled` 与 `mouse.interactionEnabled`（旧值同时应用到两项）。未知字段会被拒绝。保存合法文件后所有字段自动生效，不会重启 Electron 或壁纸窗口。JSON 错误、未知字段、越界值、未完整写入或删除文件都会保留最后一份有效配置；文件修正后自动恢复热加载。`mip-paper restart` 仍可用于服务管理和故障排查，但不是正常配置步骤。音频字段的错误值沿用兼容行为并回退到默认值。
+
+> **画廊不进 `config.json`：** 0.4.0 的画廊索引位于 `gallery/index.json`（0600），按内容哈希管理，与 `wallpaper.mode` 无关；`wallpaper.mode` 仍仅有 `kde|manual` 两档。画廊容量（非收藏 50 张上限）为常量，后续版本再考虑配置化。
 
 ## 顶层与帧率
 
@@ -138,8 +141,9 @@
 | `panel.collapseDelaySeconds` | 有限数值，`>= 0` 秒 | `8` | 无交互后开始收起的等待时间 | 实时热加载 |
 | `panel.expanded` | boolean | `true` | 禁用自动模式时使用的固定展开状态 | 实时热加载 |
 | `panel.collapsedOpacity` | `0–1` | `0.08` | 收起面板的最低不透明度 | 实时热加载 |
-| `panel.animation.staggerDelayMs` | 有限数值，`>= 0` ms | `60` | 多块面板依次动画的错开时间 | 实时热加载 |
-| `panel.animation.durationMs` | 有限数值，`>= 400` ms | `950` | 包含两次回弹的单块面板动画时长 | 实时热加载 |
+| `panel.borderRadius` | 有限数值，`0–24` px | `16` | 信息卡圆角半径 | 实时热加载 |
+| `panel.animation.staggerDelayMs` | 有限数值，`>= 0` ms | `48` | 多块面板依次动画的错开时间 | 实时热加载 |
+| `panel.animation.durationMs` | 有限数值，`>= 400` ms | `820` | 包含两次回弹的单块面板动画时长 | 实时热加载 |
 
 面板展开或动画期间使用交互帧率；收起动画结束后、卡片完全静止时，绘制节拍回落到 `frameRate.drift`。
 

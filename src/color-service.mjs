@@ -144,6 +144,15 @@ export function createColorService({
     return path.join(root, 'by-content', `${digest}.json`);
   }
 
+  function cacheSetWithLimit(key, value) {
+    // FIFO eviction at 32 entries to bound memory after large gallery imports
+    if (!contentCache.has(key) && contentCache.size >= 32) {
+      const oldest = contentCache.keys().next().value;
+      if (oldest !== undefined) contentCache.delete(oldest);
+    }
+    contentCache.set(key, value);
+  }
+
   async function loadContentColor(contentKey) {
     if (contentCache.has(contentKey)) return contentCache.get(contentKey);
     let analysis = null;
@@ -160,7 +169,7 @@ export function createColorService({
     } catch {
       // Missing, stale, or malformed content cache is non-fatal.
     }
-    contentCache.set(contentKey, analysis);
+    cacheSetWithLimit(contentKey, analysis);
     return analysis;
   }
 
@@ -271,7 +280,7 @@ export function createColorService({
         throw new TypeError('invalid wallpaper luminance');
       }
       const analysis = Object.freeze({ rgb, luminance: submission.luminance });
-      contentCache.set(contentKey, analysis);
+      cacheSetWithLimit(contentKey, analysis);
       for (const active of records.values()) {
         if (active.contentKey !== contentKey) continue;
         active.wallpaperAnalysis = analysis;
