@@ -43,6 +43,7 @@
     "collapseDelaySeconds": 8,
     "expanded": true,
     "collapsedOpacity": 0.08,
+    "borderRadius": 16,
     "animation": {
       "staggerDelayMs": 48,
       "durationMs": 820
@@ -140,6 +141,7 @@
 | `panel.collapseDelaySeconds` | 有限数值，`>= 0` 秒 | `8` | 无交互后开始收起的等待时间 | 实时热加载 |
 | `panel.expanded` | boolean | `true` | 禁用自动模式时使用的固定展开状态 | 实时热加载 |
 | `panel.collapsedOpacity` | `0–1` | `0.08` | 收起面板的最低不透明度 | 实时热加载 |
+| `panel.borderRadius` | 有限数值，`0–24` px | `16` | 信息卡圆角半径 | 实时热加载 |
 | `panel.animation.staggerDelayMs` | 有限数值，`>= 0` ms | `48` | 多块面板依次动画的错开时间 | 实时热加载 |
 | `panel.animation.durationMs` | 有限数值，`>= 400` ms | `820` | 包含两次回弹的单块面板动画时长 | 实时热加载 |
 

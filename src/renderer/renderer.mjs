@@ -153,6 +153,11 @@ async function start() {
   // Chromium over-sizes the Wayland window.
   viewport = { width: Math.max(display.bounds.width, 1), height: Math.max(display.bounds.height, 1) };
   state = createMotionState(currentConfig, viewport, displayPhase(display.id));
+  function applyPanelRadius(radius) {
+    const value = Number.isFinite(radius) ? Math.max(0, Math.min(24, radius)) : 16;
+    document.documentElement.style.setProperty('--panel-radius', `${value}px`);
+  }
+  applyPanelRadius(currentConfig.panel.borderRadius);
   const panel = createPanelController({
     root: document.getElementById('information-panel'),
     cards: [...document.querySelectorAll('[data-panel-card]')],
@@ -243,6 +248,7 @@ async function start() {
         transition: brightnessTransition,
       });
       panel.setConfig(currentConfig.panel);
+      applyPanelRadius(currentConfig.panel.borderRadius);
       audioRibbon.setConfig(currentConfig.audio);
       if (menu.isOpen()) rebuildMenuItems();
       if (!currentConfig.mouse.interactionEnabled) {

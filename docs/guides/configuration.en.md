@@ -43,6 +43,7 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "collapseDelaySeconds": 8,
     "expanded": true,
     "collapsedOpacity": 0.08,
+    "borderRadius": 16,
     "animation": {
       "staggerDelayMs": 48,
       "durationMs": 820
@@ -138,6 +139,7 @@ When a fullscreen or maximized window (video, game, etc.) covers a display, that
 | `panel.collapseDelaySeconds` | finite number, `>= 0` seconds | `8` | Idle delay before collapse starts | Live reload |
 | `panel.expanded` | boolean | `true` | Fixed state when automatic behavior is disabled | Live reload |
 | `panel.collapsedOpacity` | `0–1` | `0.08` | Minimum opacity of collapsed panels | Live reload |
+| `panel.borderRadius` | finite number, `0–24` px | `16` | Card corner radius | Live reload |
 | `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `48` | Delay between panel animations | Live reload |
 | `panel.animation.durationMs` | finite number, `>= 400` ms | `820` | Single-panel animation including two rebounds | Live reload |
 
