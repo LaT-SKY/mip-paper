@@ -54,6 +54,14 @@ async function fixture({
     path.join(repositoryRoot, 'scripts', 'wallpaper-image.mjs'),
     path.join(installRoot, 'scripts', 'wallpaper-image.mjs'),
   );
+  await cp(
+    path.join(repositoryRoot, 'scripts', 'wallpaper-gallery.mjs'),
+    path.join(installRoot, 'scripts', 'wallpaper-gallery.mjs'),
+  );
+  await cp(
+    path.join(repositoryRoot, 'src', 'wallpaper-gallery.mjs'),
+    path.join(installRoot, 'src', 'wallpaper-gallery.mjs'),
+  );
   await writeFile(path.join(installRoot, 'scripts', 'kwin-rules.sh'), '#!/usr/bin/env bash\nexit 0\n');
   await chmod(path.join(installRoot, 'scripts', 'kwin-rules.sh'), 0o755);
   const coordinatorHelper = await readFile(path.join(repositoryRoot, 'scripts', 'kwin-script.sh'), 'utf8');

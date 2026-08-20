@@ -44,8 +44,8 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "expanded": true,
     "collapsedOpacity": 0.08,
     "animation": {
-      "staggerDelayMs": 60,
-      "durationMs": 950
+      "staggerDelayMs": 48,
+      "durationMs": 820
     }
   },
   "weather": {
@@ -138,8 +138,8 @@ When a fullscreen or maximized window (video, game, etc.) covers a display, that
 | `panel.collapseDelaySeconds` | finite number, `>= 0` seconds | `8` | Idle delay before collapse starts | Live reload |
 | `panel.expanded` | boolean | `true` | Fixed state when automatic behavior is disabled | Live reload |
 | `panel.collapsedOpacity` | `0–1` | `0.08` | Minimum opacity of collapsed panels | Live reload |
-| `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `60` | Delay between panel animations | Live reload |
-| `panel.animation.durationMs` | finite number, `>= 400` ms | `950` | Single-panel animation including two rebounds | Live reload |
+| `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `48` | Delay between panel animations | Live reload |
+| `panel.animation.durationMs` | finite number, `>= 400` ms | `820` | Single-panel animation including two rebounds | Live reload |
 
 An expanded panel or an in-flight panel animation renders at the interactive frame rate; after the collapse animation finishes and the cards settle, the drawing cadence falls back to `frameRate.drift`.
 
