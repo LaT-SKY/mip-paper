@@ -13,10 +13,10 @@ test('declares the 0.3.9 release version consistently', async () => {
     readFile('kwin/mip-paper/metadata.json', 'utf8').then(JSON.parse),
   ]);
 
-  assert.equal(packageJson.version, '0.3.9');
-  assert.equal(lockfile.version, '0.3.9');
-  assert.equal(lockfile.packages[''].version, '0.3.9');
-  assert.equal(kwinMetadata.KPlugin.Version, '0.3.9');
+  assert.equal(packageJson.version, '0.4.0');
+  assert.equal(lockfile.version, '0.4.0');
+  assert.equal(lockfile.packages[''].version, '0.4.0');
+  assert.equal(kwinMetadata.KPlugin.Version, '0.4.0');
 });
 
 test('uses system Electron for source and packaged installations', async () => {

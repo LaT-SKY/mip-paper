@@ -13,6 +13,8 @@ const CONFIG_LEAF_KEYS = [
   'mouse.buttonsEnabled',
   'mouse.interactionEnabled',
   'wallpaper.mode',
+  'wallpaper.fit',
+  'wallpaper.crossfadeMs',
   'color.mode',
   'color.transitionDurationMs',
   'appearance.mode',
@@ -38,6 +40,9 @@ const CONFIG_LEAF_KEYS = [
   'panel.expanded',
   'panel.collapsedOpacity',
   'panel.borderRadius',
+  'panel.surfaceOpacity',
+  'panel.shadowIntensity',
+  'panel.height',
   'panel.animation.staggerDelayMs',
   'panel.animation.durationMs',
   'weather.location.mode',
@@ -121,6 +126,7 @@ test('enum options match config.mjs allowed values', () => {
     .find((field) => field.key === key).options.map((option) => option.value);
 
   assert.deepEqual(optionsFor('wallpaper.mode'), ['kde', 'manual']);
+  assert.deepEqual(optionsFor('wallpaper.fit'), ['cover', 'contain', 'stretch', 'center']);
   assert.deepEqual(optionsFor('color.mode'), ['default', 'kde', 'wallpaper', 'hybrid']);
   assert.deepEqual(optionsFor('appearance.mode'), ['light', 'dark', 'system']);
   assert.deepEqual(optionsFor('weather.location.mode'), ['auto', 'fixed']);

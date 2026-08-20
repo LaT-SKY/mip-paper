@@ -14,7 +14,7 @@ import {
 test('defaults match the approved v1 design', () => {
   assert.deepEqual(DEFAULT_CONFIG, {
     mouse: { buttonsEnabled: true, interactionEnabled: true },
-    wallpaper: { mode: 'kde' },
+    wallpaper: { mode: 'kde', fit: 'cover', crossfadeMs: 420 },
     color: { mode: 'hybrid', transitionDurationMs: 900 },
     appearance: { mode: 'system', dark: { wallpaperBrightness: 0.72 } },
     audio: {
@@ -45,6 +45,9 @@ test('defaults match the approved v1 design', () => {
       expanded: true,
       collapsedOpacity: 0.08,
       borderRadius: 16,
+      surfaceOpacity: 0.77,
+      shadowIntensity: 1,
+      height: 400,
       animation: { staggerDelayMs: 48, durationMs: 820 },
     },
     weather: {

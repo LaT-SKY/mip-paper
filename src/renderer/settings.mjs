@@ -640,12 +640,19 @@ function appendAboutSection(card) {
 
 function coverInfoFor(entry) {
   if (!entry || !state.displays || state.displays.length === 0) return `${entry.width}×${entry.height}`;
-  // Show cover scale for primary display as smart-crop hint
-  const d = state.displays[0];
-  const scale = Math.max(d.bounds.width / entry.width, d.bounds.height / entry.height);
+  const fit = getPath(draft, 'wallpaper.fit') || 'cover';
+  const primary = state.displays[0];
+  const primaryW = primary.bounds.width;
+  const primaryH = primary.bounds.height;
+  let scale;
+  if (fit === 'contain') scale = Math.min(primaryW / entry.width, primaryH / entry.height);
+  else if (fit === 'stretch') return `${entry.width}×${entry.height} → ${primaryW}×${primaryH} stretch`;
+  else if (fit === 'center') return `${entry.width}×${entry.height} · center`;
+  else scale = Math.max(primaryW / entry.width, primaryH / entry.height);
   const sw = Math.round(entry.width * scale);
   const sh = Math.round(entry.height * scale);
-  return `${entry.width}×${entry.height} → ${sw}×${sh} cover`;
+  const multi = state.displays.length > 1 ? ` · ${state.displays.length}屏` : '';
+  return `${entry.width}×${entry.height} → ${sw}×${sh} ${fit}${multi}`;
 }
 
 function appendWallpaperSection(card) {
@@ -661,18 +668,33 @@ function appendWallpaperSection(card) {
   actions.appendChild(pick);
   const hintText = document.createElement('span');
   hintText.className = 'hint';
+  hintText.id = 'wallpaper-hint';
   hintText.textContent = '画廊按内容去重，收藏永久保留，历史自动清理';
   actions.appendChild(hintText);
   card.appendChild(actions);
+  const modeHint = document.createElement('div');
+  modeHint.className = 'hint';
+  modeHint.id = 'wallpaper-mode-hint';
+  modeHint.style.marginTop = '6px';
+  card.appendChild(modeHint);
 
   // Gallery grid
   const gallery = state.gallery ?? [];
   const grid = document.createElement('div');
   grid.className = 'gallery-grid';
   grid.id = 'gallery-grid';
+  grid.setAttribute('role', 'list');
+  if (state.galleryError) {
+    const banner = document.createElement('div');
+    banner.className = 'hint';
+    banner.style.color = '#d64545';
+    banner.textContent = '画廊索引曾损坏，已自动恢复：' + state.galleryError;
+    grid.appendChild(banner);
+  }
   if (gallery.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'hint';
+    empty.id = 'gallery-empty';
     empty.textContent = '画廊为空，导入图片后会保留历史，收藏的图片不会被自动清理';
     grid.appendChild(empty);
   } else {
@@ -680,6 +702,9 @@ function appendWallpaperSection(card) {
     for (const entry of gallery) {
       const item = document.createElement('div');
       item.className = 'gallery-item' + (entry.contentKey === activeContentKey ? ' is-active' : '');
+      item.setAttribute('role', 'listitem');
+      item.tabIndex = 0;
+      item.setAttribute('aria-label', `${entry.id} ${entry.width}×${entry.height} ${entry.favorite ? '已收藏' : '未收藏'}${entry.contentKey === activeContentKey ? ' 当前壁纸' : ''}`);
       const thumb = document.createElement('img');
       thumb.className = 'gallery-thumb';
       thumb.alt = entry.id;
@@ -687,7 +712,7 @@ function appendWallpaperSection(card) {
       const url = fileUrlFor(entry.file);
       if (url) thumb.src = url + '?v=' + (entry.mtimeMs || entry.size);
       thumb.style.cursor = entry.contentKey === activeContentKey ? 'default' : 'pointer';
-      thumb.addEventListener('click', async () => {
+      const activate = async () => {
         if (entry.contentKey === activeContentKey) return;
         try {
           await window.settings.setGalleryActive(entry.id);
@@ -696,6 +721,10 @@ function appendWallpaperSection(card) {
         } catch (err) {
           showStatus('error', '切换失败：' + (err?.message || err));
         }
+      };
+      thumb.addEventListener('click', activate);
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
       });
       const thumbWrap = document.createElement('div');
       thumbWrap.className = 'gallery-thumb-wrap';
@@ -704,6 +733,7 @@ function appendWallpaperSection(card) {
       fav.className = 'gallery-fav' + (entry.favorite ? ' is-fav' : '');
       fav.title = entry.favorite ? '已收藏（永久保留）' : '收藏（永久保留）';
       fav.setAttribute('aria-label', entry.favorite ? '已收藏' : '收藏');
+      fav.setAttribute('aria-pressed', String(Boolean(entry.favorite)));
       fav.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8l2.1 4.3 4.7 0.7-3.4 3.3 0.8 4.7-4.2-2.2-4.2 2.2 0.8-4.7-3.4-3.3 4.7-0.7z"></path></svg>';
       fav.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -773,6 +803,22 @@ function updateWallpaperSectionControls() {
   }
   const grid = card.querySelector('#gallery-grid');
   if (grid) grid.classList.toggle('is-dimmed', kde);
+  const hint = card.querySelector('#wallpaper-hint');
+  if (hint) {
+    hint.textContent = kde ? '跟随 KDE 模式下画廊仅预览，按显示器同步，不可设为当前' : '画廊按内容去重，收藏永久保留，历史自动清理';
+  }
+  const modeHint = card.querySelector('#wallpaper-mode-hint');
+  if (modeHint && state && state.config) {
+    const fileMode = state.config.wallpaper?.mode;
+    const draftMode = getPath(draft, 'wallpaper.mode');
+    if (fileMode !== draftMode) {
+      modeHint.textContent = `待保存：${draftMode === 'kde' ? '跟随 KDE' : '手动图片'}（当前生效：${fileMode === 'kde' ? '跟随 KDE' : '手动图片'}）`;
+      modeHint.style.color = 'var(--accent)';
+    } else {
+      modeHint.textContent = draftMode === 'kde' ? '当前：跟随 KDE（各屏按 Plasma 静图独立显示）' : '当前：手动图片（所有显示器统一）';
+      modeHint.style.color = '';
+    }
+  }
 }
 
 function renderSection(groupId, { animate = true } = {}) {
@@ -949,8 +995,35 @@ async function reloadState() {
   renderSection(currentSection, { animate: false });
 }
 
+function localValidateDraft() {
+  for (const group of SETTINGS_GROUPS) {
+    if (group.static) continue;
+    for (const field of group.fields) {
+      if (field.external || field.type !== 'number') continue;
+      const value = getPath(draft, field.key);
+      if (value == null || value === '' || typeof value !== 'number' || Number.isNaN(value)) continue;
+      if (field.min !== undefined && value < field.min - 1e-9) {
+        return `${field.key} must be between ${field.min} and ${field.max ?? '∞'}`;
+      }
+      if (field.max !== undefined && value > field.max + 1e-9) {
+        return `${field.key} must be between ${field.min ?? '-∞'} and ${field.max}`;
+      }
+      if (field.key === 'panel.shadowIntensity' && (value < 0 || value > 1)) {
+        return 'panel.shadowIntensity must be between 0 and 1';
+      }
+    }
+  }
+  return null;
+}
+
 async function saveConfig() {
   clearFieldErrors();
+  const localError = localValidateDraft();
+  if (localError) {
+    showStatus('error', '保存失败');
+    highlightFieldError(localError);
+    return;
+  }
   try {
     const saved = await window.settings.saveConfig(draft);
     state.config = saved;
@@ -1020,6 +1093,15 @@ contentRoot.addEventListener('input', (event) => {
       setPath(draft, fieldKey, parseControlValue(input, field));
       markDirty();
       if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
+      if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
+        // Refresh cover hints without full re-render
+        const gallery = state.gallery ?? [];
+        const subtitles = contentRoot.querySelectorAll('.gallery-subtitle');
+        subtitles.forEach((el, idx) => {
+          const e = gallery[idx];
+          if (e) el.textContent = coverInfoFor(e) + (e.favorite ? ' · 收藏' : '');
+        });
+      }
     }
     return;
   }
@@ -1031,6 +1113,26 @@ contentRoot.addEventListener('input', (event) => {
     commands[index][commandField] = input.value;
     setPath(draft, 'menu.customCommands', commands);
     markDirty();
+  }
+});
+contentRoot.addEventListener('change', (event) => {
+  const input = event.target;
+  const fieldKey = input.dataset && input.dataset.field;
+  if (fieldKey) {
+    const field = findField(fieldKey);
+    if (field && field.type === 'enum') {
+      setPath(draft, fieldKey, parseControlValue(input, field));
+      markDirty();
+      if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
+      if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
+        const gallery = state.gallery ?? [];
+        const subtitles = contentRoot.querySelectorAll('.gallery-subtitle');
+        subtitles.forEach((el, idx) => {
+          const e = gallery[idx];
+          if (e) el.textContent = coverInfoFor(e) + (e.favorite ? ' · 收藏' : '');
+        });
+      }
+    }
   }
 });
 

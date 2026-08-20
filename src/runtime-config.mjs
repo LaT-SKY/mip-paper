@@ -10,6 +10,8 @@ export function validateRuntimeConfig(value) {
     && typeof value.mouse.buttonsEnabled === 'boolean'
     && typeof value.mouse.interactionEnabled === 'boolean'
     && object(value.wallpaper) && ['kde', 'manual'].includes(value.wallpaper.mode)
+    && ['cover', 'contain', 'stretch', 'center'].includes(value.wallpaper.fit ?? 'cover')
+    && Number.isInteger(value.wallpaper.crossfadeMs ?? 0)
     && object(value.color) && ['default', 'kde', 'wallpaper', 'hybrid'].includes(value.color.mode)
     && Number.isInteger(value.color.transitionDurationMs)
     && object(value.appearance) && ['light', 'dark', 'system'].includes(value.appearance.mode)
@@ -29,6 +31,7 @@ export function validateRuntimeConfig(value) {
     && finite(value.panel.expandTriggerDistancePx) && finite(value.panel.collapseDelaySeconds)
     && typeof value.panel.expanded === 'boolean' && finite(value.panel.collapsedOpacity)
     && finite(value.panel.borderRadius) && value.panel.borderRadius >= 0 && value.panel.borderRadius <= 24
+    && finite(value.panel.surfaceOpacity ?? 0.77) && finite(value.panel.shadowIntensity ?? 1) && finite(value.panel.height ?? 400)
     && object(value.panel.animation) && finite(value.panel.animation.staggerDelayMs)
     && finite(value.panel.animation.durationMs)
     && object(value.weather) && object(value.weather.location)

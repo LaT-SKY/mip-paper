@@ -135,9 +135,9 @@ mip-paper wallpaper status
 mip-paper wallpaper use-kde
 ```
 
-替换失败时会保留上一张有效图片。若服务正在运行，成功更换后会自动重启壁纸。
+替换失败时会保留上一张有效图片。若服务正在运行，成功更换后会热重载壁纸（无需重启，支持 `wallpaper.fit/crossfadeMs` 配置的适配与过渡）；服务未运行时下次 `mip-paper start` 生效。
 
-在设置窗口中也可以导入图片：右键壁纸 → 设置 → 壁纸分区 → 选择图片…，导入 JPEG / PNG / WebP 并自动切换到手动模式。
+在设置窗口中也可以导入图片：右键壁纸 → 设置 → 壁纸分区 → 选择图片…，导入 JPEG / PNG / WebP 并自动切换到手动模式与热发布。
 
 ### 画廊（0.4.0 新增）
 
@@ -152,15 +152,17 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery/index.json
 
 ```bash
 mip-paper wallpaper gallery list              # 列出画廊
+mip-paper wallpaper gallery list --json       # JSON 输出（供脚本）
 mip-paper wallpaper gallery show <id>         # 查看单条
-mip-paper wallpaper gallery set <id>          # 设为当前（自动切 manual 并重启服务）
+mip-paper wallpaper gallery set <id>          # 设为当前（自动切 manual 并热重载）
+mip-paper wallpaper gallery import <path>     # 仅导入不激活
 mip-paper wallpaper gallery favorite <id>     # 收藏
 mip-paper wallpaper gallery unfavorite <id>   # 取消收藏
 mip-paper wallpaper gallery remove <id>       # 移除
 mip-paper wallpaper gallery prune             # 手动清理
 ```
 
-设置窗口的壁纸分区新增画廊网格：缩略图按 `object-fit: cover` 预览，副标题显示按主显示器 `bounds` 计算的 cover 覆盖提示（`800×600 → 1920×1080 cover`），支持收藏/设为当前/移除与拖拽区域（拖拽后弹出文件选择对话框完成导入）。
+设置窗口的壁纸分区新增画廊网格：收藏优先→最近使用排序，缩略图按 `object-fit: cover` 预览，支持键盘（`Enter`/`Space` 设为当前）与 `aria-pressed` 收藏状态；副标题按 `wallpaper.fit` 与主显示器 `bounds×scaleFactor` 计算覆盖提示（`800×600 → 1920×1080 cover`，多屏追加 `· N屏`），多屏差异仅提示不误导；支持“移除”二次确认。
 
 ## KWin 集成
 

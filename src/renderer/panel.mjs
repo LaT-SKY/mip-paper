@@ -2,6 +2,7 @@ import {
   advancePanel,
   createPanelState,
   getCardTransforms,
+  getPanelHeightFactor,
   panelRequestsInteractiveFps,
   recordPointer,
   updatePanelConfig,
@@ -78,7 +79,8 @@ export function createPanelController({ root, cards, config, viewport }) {
       const now = new Date();
       renderClock(now);
       renderCalendar(now);
-      root.style.transform = `translate3d(${camera.x * 1.1}px, ${camera.y * 1.1 - 8}px, 42px) rotate(${camera.angle}rad) rotateX(${-pointer.normalizedY * 1.25}deg) rotateY(${pointer.normalizedX * 1.8}deg)`;
+      const hf = getPanelHeightFactor(state.config);
+      root.style.transform = `translate3d(${camera.x * 1.1 * hf}px, ${camera.y * 1.1 * hf - 8 * hf}px, ${42 * hf}px) rotate(${camera.angle}rad) rotateX(${-pointer.normalizedY * 1.25 * hf}deg) rotateY(${pointer.normalizedX * 1.8 * hf}deg)`;
       for (const transform of getCardTransforms(state)) {
         const element = elements.get(transform.id);
         element.style.setProperty('--panel-x', `${element.offsetWidth * transform.translateXFactor}px`);

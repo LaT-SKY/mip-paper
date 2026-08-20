@@ -10,7 +10,7 @@
     "buttonsEnabled": true,
     "interactionEnabled": true
   },
-  "wallpaper": { "mode": "kde" },
+  "wallpaper": { "mode": "kde", "fit": "cover", "crossfadeMs": 420 },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "appearance": {
     "mode": "system",
@@ -44,6 +44,9 @@
     "expanded": true,
     "collapsedOpacity": 0.08,
     "borderRadius": 16,
+    "surfaceOpacity": 0.77,
+    "shadowIntensity": 1,
+    "height": 400,
     "animation": {
       "staggerDelayMs": 48,
       "durationMs": 820
@@ -70,7 +73,7 @@
 
 0.3.2 及更早版本的顶层 `interactionEnabled` 会被自动迁移为 `mouse.buttonsEnabled` 与 `mouse.interactionEnabled`（旧值同时应用到两项）。未知字段会被拒绝。保存合法文件后所有字段自动生效，不会重启 Electron 或壁纸窗口。JSON 错误、未知字段、越界值、未完整写入或删除文件都会保留最后一份有效配置；文件修正后自动恢复热加载。`mip-paper restart` 仍可用于服务管理和故障排查，但不是正常配置步骤。音频字段的错误值沿用兼容行为并回退到默认值。
 
-> **画廊不进 `config.json`：** 0.4.0 的画廊索引位于 `gallery/index.json`（0600），按内容哈希管理，与 `wallpaper.mode` 无关；`wallpaper.mode` 仍仅有 `kde|manual` 两档。画廊容量（非收藏 50 张上限）为常量，后续版本再考虑配置化。
+> **画廊不进 `config.json`：** 0.4.0 的画廊索引位于 `gallery/index.json`（0600），按内容哈希管理，与 `wallpaper` 无关；`wallpaper.mode` 仍仅有 `kde|manual` 两档，`wallpaper.fit/crossfadeMs` 控制呈现与切换过渡。画廊容量（非收藏 50 张上限）为常量，后续版本再考虑配置化。画廊按收藏优先→最近使用排序，设置窗口支持键盘可达（`Enter`/`Space` 设为当前）。
 
 ## 顶层与帧率
 
@@ -80,6 +83,16 @@
 | `mouse.interactionEnabled` | boolean | `true` | 是否用指针移动驱动视差与信息面板；关闭后仅停止视差响应，仍可打开右键菜单 | 实时热加载 |
 | `frameRate.interactive` | 整数，`1–180` FPS | `60` | 交互、回归、面板展开与面板动画阶段目标帧率 | 实时热加载 |
 | `frameRate.drift` | 整数，`1–180` FPS | `30` | 面板收起且完全静止时的待机漂移阶段目标帧率 | 实时热加载 |
+
+## 壁纸
+
+| 配置项 | 类型/范围 | 默认值 | 作用 | 生效方式 |
+| --- | --- | --- | --- | --- |
+| `wallpaper.mode` | `kde` 或 `manual` | `kde` | 跟随 KDE 静态壁纸或使用手动图片（画廊） | 实时热加载 |
+| `wallpaper.fit` | `cover`、`contain`、`stretch` 或 `center` | `cover` | 壁纸适配：裁剪填充、完整留白、拉伸、居中 | 实时热加载 |
+| `wallpaper.crossfadeMs` | 整数，`0–1200 ms` | `420` | 壁纸切换交叉淡化时长；`0` 立即切换，减少动态效果时强制为 `0` | 实时热加载 |
+
+`wallpaper.fit=contain` 时以视口为底色留白，`stretch` 会拉伸图片填满视口，`center` 保持原尺寸居中。`crossfadeMs` 在轻量过渡期间双缓冲绘制，暂停时通过 `requestAnimationFrame` 完成，不提升常驻帧率。
 
 ## 明暗外观
 
@@ -142,6 +155,9 @@
 | `panel.expanded` | boolean | `true` | 禁用自动模式时使用的固定展开状态 | 实时热加载 |
 | `panel.collapsedOpacity` | `0–1` | `0.08` | 收起面板的最低不透明度 | 实时热加载 |
 | `panel.borderRadius` | 有限数值，`0–24` px | `16` | 信息卡圆角半径 | 实时热加载 |
+| `panel.surfaceOpacity` | `0.2–1` | `0.77` | 信息卡表面不透明度 | 实时热加载 |
+| `panel.shadowIntensity` | `0–1` | `1` | 重点色装饰尺寸（图中红圈的右侧描边与底部光晕线）；`0`=无装饰，越大装饰越大；非 `box-shadow` | 实时热加载 |
+| `panel.height` | `240–560` px | `400` | 面板等效高度，用于缩放悬浮与视差运动幅度；越大越晃 | 实时热加载 |
 | `panel.animation.staggerDelayMs` | 有限数值，`>= 0` ms | `48` | 多块面板依次动画的错开时间 | 实时热加载 |
 | `panel.animation.durationMs` | 有限数值，`>= 400` ms | `820` | 包含两次回弹的单块面板动画时长 | 实时热加载 |
 
