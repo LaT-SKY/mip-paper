@@ -16,7 +16,19 @@ function validateAudioConfig(config) {
     || !Number.isFinite(config.fadeInMs) || config.fadeInMs < 0 || config.fadeInMs > 3000) {
     throw new TypeError('invalid audio config');
   }
-  return { ...config };
+  // 0.4.1 extensions are optional; validate if present
+  if (config.style !== undefined && !['ribbon','bars','wave','mirror'].includes(config.style)) throw new TypeError('invalid audio style');
+  if (config.colorMode !== undefined && !['auto','manual'].includes(config.colorMode)) throw new TypeError('invalid audio colorMode');
+  if (config.sensitivity !== undefined && (!Number.isFinite(config.sensitivity) || config.sensitivity < 0.3 || config.sensitivity > 3)) throw new TypeError('invalid audio sensitivity');
+  if (config.height !== undefined && (!Number.isInteger(config.height) || config.height < 48 || config.height > 200)) throw new TypeError('invalid audio height');
+  if (config.position !== undefined && !['top','center','bottom'].includes(config.position)) throw new TypeError('invalid audio position');
+  if (config.barCount !== undefined && (!Number.isInteger(config.barCount) || config.barCount < 16 || config.barCount > 72)) throw new TypeError('invalid audio barCount');
+  if (config.mirrored !== undefined && typeof config.mirrored !== 'boolean') throw new TypeError('invalid audio mirrored');
+  if (config.colors !== undefined) {
+    if (!config.colors || typeof config.colors !== 'object') throw new TypeError('invalid audio colors');
+    for (const k of ['primary','complement','neutral']) if (config.colors[k] !== undefined && typeof config.colors[k] !== 'string') throw new TypeError('invalid audio colors');
+  }
+  return { ...config, colors: config.colors ? { ...config.colors } : undefined };
 }
 
 function validBands(values) {
@@ -181,20 +193,29 @@ export function buildEnergyPoints(left, right) {
   });
 }
 
-export function buildMirroredRibbonPoints(left, right) {
+export function buildMirroredRibbonPoints(left, right, { sensitivity = 1 } = {}) {
+  const exponent = 0.68 / Math.max(0.3, Math.min(3, sensitivity));
   return {
     left: buildRibbonPoints(left, {
       baseline: MIRRORED_GEOMETRY.baseline,
       amplitude: MIRRORED_GEOMETRY.channelAmplitude,
       direction: -1,
-      responseExponent: MIRRORED_GEOMETRY.responseExponent,
+      responseExponent: exponent,
     }),
-    energy: buildEnergyPoints(left, right),
+    energy: buildRibbonPoints(
+      left.map((v, i) => Math.sqrt((clamp(v) ** 2 + clamp(right[i]) ** 2) / 2)),
+      {
+        baseline: MIRRORED_GEOMETRY.baseline,
+        amplitude: MIRRORED_GEOMETRY.energyAmplitude,
+        direction: -1,
+        responseExponent: exponent,
+      },
+    ),
     right: buildRibbonPoints(right, {
       baseline: MIRRORED_GEOMETRY.baseline,
       amplitude: MIRRORED_GEOMETRY.channelAmplitude,
       direction: 1,
-      responseExponent: MIRRORED_GEOMETRY.responseExponent,
+      responseExponent: exponent,
     }),
   };
 }
@@ -214,8 +235,28 @@ export function createAudioRibbonController({ root, config } = {}) {
   const state = createAudioRibbonState(config);
   let destroyed = false;
 
+  function applyVisualConfig() {
+    const cfg = state.config;
+    if (cfg.height && Number.isInteger(cfg.height)) root.style.setProperty('--audio-height', `${cfg.height}px`);
+    if (cfg.position) {
+      root.dataset.position = cfg.position;
+      if (cfg.position === 'top') root.style.top = '14%';
+      else if (cfg.position === 'center') root.style.top = '46%';
+      else root.style.top = '76%';
+    }
+    if (cfg.colorMode === 'manual' && cfg.colors) {
+      if (cfg.colors.primary) root.style.setProperty('--accent-audio-primary', cfg.colors.primary);
+      if (cfg.colors.complement) root.style.setProperty('--accent-audio-complement', cfg.colors.complement);
+      if (cfg.colors.neutral) root.style.setProperty('--accent-audio-neutral', cfg.colors.neutral);
+    } else {
+      root.style.removeProperty('--accent-audio-primary');
+      root.style.removeProperty('--accent-audio-complement');
+      root.style.removeProperty('--accent-audio-neutral');
+    }
+  }
+
   function render() {
-    const points = buildMirroredRibbonPoints(state.left, state.right);
+    const points = buildMirroredRibbonPoints(state.left, state.right, { sensitivity: state.config.sensitivity ?? 1 });
     paths.energy.setAttribute('d', pointsToSmoothPath(points.energy));
     paths.left.setAttribute('d', pointsToSmoothPath(points.left));
     paths.right.setAttribute('d', pointsToSmoothPath(points.right));
@@ -223,6 +264,7 @@ export function createAudioRibbonController({ root, config } = {}) {
     root.dataset.status = state.status;
   }
 
+  applyVisualConfig();
   render();
   return {
     setSnapshot(snapshot, receivedAtMs = performance.now()) {
@@ -230,7 +272,10 @@ export function createAudioRibbonController({ root, config } = {}) {
       return false;
     },
     setConfig(audioConfig) {
-      if (!destroyed) applyAudioConfig(state, audioConfig);
+      if (!destroyed) {
+        applyAudioConfig(state, audioConfig);
+        applyVisualConfig();
+      }
     },
     advance(elapsedMs, nowMs) {
       if (destroyed) return;
