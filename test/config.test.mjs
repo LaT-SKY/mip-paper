@@ -14,7 +14,7 @@ import {
 test('defaults match the approved v1 design', () => {
   assert.deepEqual(DEFAULT_CONFIG, {
     mouse: { buttonsEnabled: true, interactionEnabled: true },
-    wallpaper: { mode: 'kde', fit: 'cover', crossfadeMs: 420 },
+    wallpaper: { mode: 'kde', fit: 'cover', crossfadeMs: 420, perDisplay: false },
     color: { mode: 'hybrid', transitionDurationMs: 900 },
     appearance: { mode: 'system', dark: { wallpaperBrightness: 0.72 } },
     audio: {
@@ -23,6 +23,14 @@ test('defaults match the approved v1 design', () => {
       silenceDelayMs: 600,
       fadeOutMs: 450,
       fadeInMs: 160,
+      style: 'ribbon',
+      colorMode: 'auto',
+      colors: { primary: '#ff3478', complement: '#4ae9b4', neutral: '#ffffff' },
+      sensitivity: 1,
+      height: 104,
+      position: 'bottom',
+      barCount: 36,
+      mirrored: true,
     },
     frameRate: {
       interactive: 60,
@@ -49,6 +57,15 @@ test('defaults match the approved v1 design', () => {
       shadowIntensity: 1,
       height: 400,
       animation: { staggerDelayMs: 48, durationMs: 820 },
+      layout: 'trapezoid',
+      cards: [
+        { id: 'time', enabled: true },
+        { id: 'weather', enabled: true },
+        { id: 'tide', enabled: true },
+        { id: 'calendar', enabled: true },
+        { id: 'custom', enabled: false },
+      ],
+      customCard: { title: 'NOTE', text: '', timeFormat: 'HH:mm', dateFormat: 'MMM dd, yyyy', showTime: false },
     },
     weather: {
       location: { mode: 'auto', latitude: null, longitude: null, fallbackLocationId: '101281601' },
@@ -122,6 +139,14 @@ test('accepts every audio boundary including immediate transitions', () => {
     silenceDelayMs: 0,
     fadeOutMs: 0,
     fadeInMs: 0,
+    style: 'ribbon',
+    colorMode: 'auto',
+    colors: { primary: '#ff3478', complement: '#4ae9b4', neutral: '#ffffff' },
+    sensitivity: 1,
+    height: 104,
+    position: 'bottom',
+    barCount: 36,
+    mirrored: true,
   });
   assert.deepEqual(validateConfig({ audio: {
     gain: 4,
@@ -134,6 +159,14 @@ test('accepts every audio boundary including immediate transitions', () => {
     silenceDelayMs: 5000,
     fadeOutMs: 3000,
     fadeInMs: 3000,
+    style: 'ribbon',
+    colorMode: 'auto',
+    colors: { primary: '#ff3478', complement: '#4ae9b4', neutral: '#ffffff' },
+    sensitivity: 1,
+    height: 104,
+    position: 'bottom',
+    barCount: 36,
+    mirrored: true,
   });
 });
 
