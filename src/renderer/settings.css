@@ -838,22 +838,7 @@ body {
 
 .gallery-fav.is-fav svg { fill: currentColor; stroke: currentColor; }
 
-.gallery-drop {
-  margin-top: 12px;
-  min-height: 96px;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  border: 1.5px dashed var(--settings-border);
-  border-radius: 14px;
-  color: var(--settings-text-muted);
-  font: 500 13px/1.4 system-ui, sans-serif;
-  text-align: center;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-.gallery-grid.is-dimmed,
-.gallery-drop.is-dimmed {
+.gallery-grid.is-dimmed {
   opacity: 0.38;
   pointer-events: none;
 }
@@ -884,12 +869,6 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.gallery-drop.is-dragover {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-color: var(--accent);
-  color: var(--settings-text);
 }
 
 .wallpaper-actions,
