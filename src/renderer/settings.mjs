@@ -946,9 +946,27 @@ function highlightFieldError(message) {
 }
 
 async function reloadState() {
+  const previousDirty = dirty;
+  const previousDraft = draft ? structuredClone(draft) : null;
   state = await window.settings.getState();
-  draft = structuredClone(state.config);
-  dirty = false;
+  // Preserve pending wallpaper.mode change if user switched KDE↔manual without saving;
+  // any gallery operation (favorite/remove) must not revert the dropdown.
+  if (!previousDirty || !previousDraft) {
+    draft = structuredClone(state.config);
+    dirty = false;
+  } else {
+    // Keep the user's pending draft, but sync gallery/displays and clear dirty if file now matches
+    const stillDirty = JSON.stringify(previousDraft) !== JSON.stringify(state.config);
+    // If file caught up (e.g. setActive saved manual), draft now equals file → clear dirty
+    if (!stillDirty) dirty = false;
+    else {
+      // Keep draft as is; do not overwrite with stale file
+      // state.config remains file's version for reference, draft is user's intent
+    }
+    // If we kept draft, ensure draft is still the object we render from
+    if (stillDirty) draft = previousDraft;
+    else draft = structuredClone(state.config);
+  }
   applyTheme();
   applyAccent();
   if (state.appVersion) versionEl.textContent = 'v' + state.appVersion;
