@@ -5,6 +5,35 @@ All notable changes to Mip-Paper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-22
+
+### Added
+
+- Highly customizable configuration schema (`src/config.mjs:SCHEMA`, `config/default.json`): `panel.layout` (`trapezoid`/`grid-2x2`/`compact`/`stack`, default `trapezoid`), `panel.cards` (ordered list of `{id, enabled}` for `time`/`weather`/`tide`/`calendar`/`custom`, at least one enabled, migrated from legacy), `panel.customCard` (`title` ≤24, `text` ≤120 with `{{time}}`/`{{date}}` templating, `timeFormat`/`dateFormat`/`showTime`), `wallpaper.perDisplay` (boolean, default `false`) and `audio` extensions (`style` `ribbon`/`wave`/`mirror` default `ribbon`, `colorMode` `auto`/`manual` with `colors` hex, `sensitivity` 0.3–3, `height` 48–200, `position` `top`/`center`/`bottom`) with validation, `normalize*` fallbacks and `migrateLegacyConfig` (panel cards/layout/customCard, wallpaper perDisplay, audio style/colors/sensitivity/height/position).
+- Panel layout presets via `src/panel-motion.mjs` (id-based `COLLAPSE_VECTORS`), `src/renderer/panel-layout.mjs` (preset table with centers/vectors) and `src/renderer/panel.css` (`.panel-layout--grid/.panel-layout--compact/.panel-layout--stack`); `panel.height` now scales motion via CSS variable (`src/renderer/renderer.mjs:applyPanelHeight`, `src/panel-motion.mjs`).
+- Panel cards controller in `src/renderer/panel.mjs`: `visibleIds` filtering, `custom` card rendering with `{{time}}`/`{{date}}` and `showTime`, and `layout` class switching; `informationService` respects `visibleIds` (hidden `weather`/`tide` no longer polls).
+- Per-display wallpaper assignments: `src/wallpaper-assignments.mjs` (`display-assignments.json` under `${XDG_CONFIG_HOME}/mip-paper`, `fallback` + per-display `sha256:contentKey`), `src/kde-wallpaper-sync.mjs` per-display `wallpaperUrl`/`contentKey` publishing, `src/window-manager.mjs` per-display `getWallpaperTransaction` and `src/app-lifecycle.mjs` wiring, plus `src/main.mjs` per-display reconcile.
+- CLI per-display assignment: `mip-paper wallpaper gallery set <id> [--display <id>|all]` and `mip-paper wallpaper set` now writes through `wallpaperSync` with atomic gallery import (`bin/mip-paper`, `scripts/wallpaper-gallery.mjs`), and `wallpaper-assignments.mjs` is packaged (`test/doctor.test.mjs`).
+- Gallery per-display scope selector in settings: `全部显示器 (fallback)` + per-display `WxH @x,y (主)` with `fallback` hint, styled as `field-row` with `field-control`/`field-reset`, and `coverInfoFor` recomputed per selected display (`src/renderer/settings.mjs`).
+- Audio visualization controls: `audio.style` (`ribbon`/`wave`/`mirror`), `audio.sensitivity`/`height`/`position` and `audio.colorMode`/`colors` (manual hex) with live preview via CSS variables (`--audio-height`, `--accent-audio-*`, `--panel-height`) and `src/renderer/audio-ribbon.mjs` style switching (ribbon 3-path mirrored with `sensitivity`-aware exponent, wave mono, mirror left/right) plus `src/renderer/panel.css` height/position handling (`src/settings-fields.mjs:audio-style`, `src/renderer/audio-ribbon.mjs`).
+- Settings panel cards editor: per-card `switch` for `enabled` with `至少启用一张卡` guard, and `更多` menu for `上移`/`下移` (disabled at ends) via shared `command-more-popover` (`src/renderer/settings.mjs:createPanelCardRow/createPanelCardsEditor/openPanelCardMenu`, `src/settings-fields.mjs:panelCards`).
+- Settings subdivision for 0.4.1: `panel` split into 5 sub-cards (layout, cards, custom, behavior, look, animation) and `audio` into `audio-core`/`audio-style`/`audio-color`/`audio-dynamics` (`src/settings-fields.mjs:SETTINGS_SECTIONS`, `src/renderer/settings.mjs|css`).
+- Documentation: 0.4.1 customization research (`docs/research/0.4.1-*`) and per-display scope notes.
+
+### Changed
+
+- Settings `audio` and `panel` sections now expose all 0.4.1 fields with live `field-error`/`data-invalid`/`aria-invalid` and conditional disabling (audio colors when `auto`, custom card fields when `custom` disabled) (`src/settings-fields.mjs:validateField`, `src/renderer/settings.mjs:syncConditionalFields`).
+- Wallpaper presentation `perDisplay` and `assignments` are hot-reloaded via `configWatcher`/`assignmentsWatcher` and `wallpaperSync.reconcile` without `systemctl restart`.
+
+### Fixed
+
+- Settings `panel.customCard` validation only when `custom` card is enabled and `audio.colors` validation only when `colorMode` is `manual`; `select` field-rows are now scoped to `.field-control` and `wallpaper` per-display selector correctly greys out when `perDisplay` is off or `wallpaper.mode` is `kde` (`src/settings-fields.mjs`, `src/renderer/settings.mjs`/`settings.css`).
+- Card `enabled` switch no longer triggers full section re-render (opacity toggle only) and `audio` style changes now apply visual config and re-render immediately with `try/catch` guards to prevent `adaptive` scheduler freeze (`src/renderer/audio-ribbon.mjs:applyVisualConfig/render/advance`, `src/renderer/renderer.mjs:advanceScene`).
+
+### Removed
+
+- `audio.style` `bars` (`柱状`) and its `barCount` (16–72) / `mirrored` configuration and flex `div` rendering (`.audio-bars`/`.audio-bar` in `src/renderer/panel.css` and `createAudioRibbonController` bars pipeline) due to freeze when switching to `柱状`; remaining styles (`ribbon`/`wave`/`mirror`) and `sensitivity`/`height`/`position`/`colorMode` are unaffected and legacy `bars` configs migrate to `ribbon` (`src/config.mjs`, `src/renderer/audio-ribbon.mjs`, `src/settings-fields.mjs`, `config/default.json`, `src/runtime-config.mjs`).
+
 ## [0.4.0] - 2026-08-21
 
 ### Added

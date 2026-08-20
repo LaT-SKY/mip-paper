@@ -6,17 +6,17 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-test('declares the 0.3.9 release version consistently', async () => {
+test('declares the 0.4.1 release version consistently', async () => {
   const [packageJson, lockfile, kwinMetadata] = await Promise.all([
     readFile('package.json', 'utf8').then(JSON.parse),
     readFile('package-lock.json', 'utf8').then(JSON.parse),
     readFile('kwin/mip-paper/metadata.json', 'utf8').then(JSON.parse),
   ]);
 
-  assert.equal(packageJson.version, '0.4.0');
-  assert.equal(lockfile.version, '0.4.0');
-  assert.equal(lockfile.packages[''].version, '0.4.0');
-  assert.equal(kwinMetadata.KPlugin.Version, '0.4.0');
+  assert.equal(packageJson.version, '0.4.1');
+  assert.equal(lockfile.version, '0.4.1');
+  assert.equal(lockfile.packages[''].version, '0.4.1');
+  assert.equal(kwinMetadata.KPlugin.Version, '0.4.1');
 });
 
 test('uses system Electron for source and packaged installations', async () => {
