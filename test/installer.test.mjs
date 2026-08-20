@@ -200,6 +200,14 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
       silenceDelayMs: 600,
       fadeOutMs: 450,
       fadeInMs: 160,
+      style: 'ribbon',
+      colorMode: 'auto',
+      colors: { primary: '#ff3478', complement: '#4ae9b4', neutral: '#ffffff' },
+      sensitivity: 1,
+      height: 104,
+      position: 'bottom',
+      barCount: 36,
+      mirrored: true,
     });
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
     const service = await readFile(fixture.service, 'utf8');
