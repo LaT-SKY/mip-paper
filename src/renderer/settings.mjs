@@ -600,7 +600,7 @@ function appendCredentialsSection(card) {
   const hint = document.createElement('span');
   hint.className = 'hint';
   hint.textContent = configured
-    ? '已配置：' + (state.credentials.apiHost || '未知') + '（写入 weather-credentials.json，0600 权限）'
+    ? '已配置：' + (state.credentials.apiHost || '未知')
     : '未配置 — 在 console.qweather.com 创建项目和 API Key 后填写';
   actions.appendChild(hint);
   card.appendChild(actions);
