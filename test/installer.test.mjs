@@ -206,8 +206,6 @@ test('install --no-start creates a relocatable snapshot without enabling the ser
       sensitivity: 1,
       height: 104,
       position: 'bottom',
-      barCount: 36,
-      mirrored: true,
     });
     assert.match(await readFile(fixture.kwinrc, 'utf8'), /mip-paperEnabled=true/);
     const service = await readFile(fixture.service, 'utf8');

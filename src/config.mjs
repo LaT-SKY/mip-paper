@@ -5,7 +5,7 @@ export const PANEL_LAYOUTS = Object.freeze(['trapezoid', 'grid-2x2', 'compact', 
 export const PANEL_CARD_IDS = Object.freeze(['time', 'weather', 'tide', 'calendar', 'custom']);
 export const TIME_FORMATS = Object.freeze(['HH:mm', 'hh:mm a', 'HH:mm:ss']);
 export const DATE_FORMATS = Object.freeze(['MMM dd, yyyy', 'yyyy-MM-dd', 'EEE, MMM dd']);
-export const AUDIO_STYLES = Object.freeze(['ribbon', 'bars', 'wave', 'mirror']);
+export const AUDIO_STYLES = Object.freeze(['ribbon', 'wave', 'mirror']);
 export const AUDIO_COLOR_MODES = Object.freeze(['auto', 'manual']);
 export const AUDIO_POSITIONS = Object.freeze(['top', 'center', 'bottom']);
 
@@ -32,8 +32,6 @@ export const DEFAULT_CONFIG = Object.freeze({
     sensitivity: 1,
     height: 104,
     position: 'bottom',
-    barCount: 36,
-    mirrored: true,
   }),
   frameRate: Object.freeze({
     interactive: 60,
@@ -119,8 +117,6 @@ const SCHEMA = {
     sensitivity: 'audioSensitivity',
     height: 'audioHeight',
     position: 'audioPosition',
-    barCount: 'barCount',
-    mirrored: 'boolean',
   },
   frameRate: {
     interactive: 'frameRate',
@@ -292,8 +288,6 @@ const AUDIO_KEYS = new Set([
   'sensitivity',
   'height',
   'position',
-  'barCount',
-  'mirrored',
 ]);
 
 function isHexColor(value) {
@@ -336,8 +330,6 @@ function normalizeAudioConfig(value) {
     sensitivity: validRange(value.sensitivity, 0.3, 3, DEFAULT_CONFIG.audio.sensitivity),
     height: Number.isInteger(value.height) && value.height >= 48 && value.height <= 200 ? value.height : DEFAULT_CONFIG.audio.height,
     position,
-    barCount: Number.isInteger(value.barCount) && value.barCount >= 16 && value.barCount <= 72 ? value.barCount : DEFAULT_CONFIG.audio.barCount,
-    mirrored: typeof value.mirrored === 'boolean' ? value.mirrored : DEFAULT_CONFIG.audio.mirrored,
   };
 }
 
@@ -546,9 +538,7 @@ function validateShape(value, schema, prefix = '') {
     if (rule === 'audioPosition' && !AUDIO_POSITIONS.includes(fieldValue)) {
       throw new TypeError(`${fieldPath} must be one of ${[...AUDIO_POSITIONS].join(', ')}`);
     }
-    if (rule === 'barCount' && (!Number.isInteger(fieldValue) || fieldValue < 16 || fieldValue > 72)) {
-      throw new RangeError(`${fieldPath} must be an integer between 16 and 72`);
-    }
+
   }
 }
 
@@ -688,8 +678,9 @@ function migrateLegacyConfig(value) {
     if (!Number.isFinite(audio.sensitivity) || audio.sensitivity < 0.3 || audio.sensitivity > 3) audio = { ...audio, sensitivity: DEFAULT_CONFIG.audio.sensitivity };
     if (!Number.isInteger(audio.height) || audio.height < 48 || audio.height > 200) audio = { ...audio, height: DEFAULT_CONFIG.audio.height };
     if (!AUDIO_POSITIONS.includes(audio.position)) audio = { ...audio, position: DEFAULT_CONFIG.audio.position };
-    if (!Number.isInteger(audio.barCount) || audio.barCount < 16 || audio.barCount > 72) audio = { ...audio, barCount: DEFAULT_CONFIG.audio.barCount };
-    if (typeof audio.mirrored !== 'boolean') audio = { ...audio, mirrored: DEFAULT_CONFIG.audio.mirrored };
+    // legacy barCount/mirrored silently dropped
+    if ('barCount' in audio) { const { barCount, ...rest } = audio; audio = rest; }
+    if ('mirrored' in audio) { const { mirrored, ...rest } = audio; audio = rest; }
     result = { ...result, audio };
   }
   return result;

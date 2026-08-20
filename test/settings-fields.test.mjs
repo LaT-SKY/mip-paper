@@ -30,8 +30,6 @@ const CONFIG_LEAF_KEYS = [
   'audio.sensitivity',
   'audio.height',
   'audio.position',
-  'audio.barCount',
-  'audio.mirrored',
   'audio.silenceDelayMs',
   'audio.fadeOutMs',
   'audio.fadeInMs',
