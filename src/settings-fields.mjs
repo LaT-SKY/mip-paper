@@ -110,6 +110,12 @@ export const SETTINGS_GROUPS = Object.freeze([
         unit: 'ms',
         description: '壁纸切换时的交叉淡化时长',
       },
+      {
+        key: 'wallpaper.perDisplay',
+        label: '按显示器分配',
+        type: 'boolean',
+        description: '开启后手动模式下每台显示器可分配不同画廊图片（设置页画廊选择作用域）',
+      },
     ],
   },
   {
@@ -166,6 +172,14 @@ export const SETTINGS_GROUPS = Object.freeze([
     fields: [
       { key: 'audio.enabled', label: '音频可视化', type: 'boolean', description: '启用或停止输出设备 monitor 频谱' },
       { key: 'audio.gain', label: '频谱增益', type: 'number', min: 0.25, max: 4, step: 0.05 },
+      { key: 'audio.style', label: '可视化样式', type: 'enum', options: [{ value: 'ribbon', label: '镜面丝带' }, { value: 'wave', label: '波形' }, { value: 'mirror', label: '对称' }] },
+      { key: 'audio.colorMode', label: '配色模式', type: 'enum', options: [{ value: 'auto', label: '跟随强调色' }, { value: 'manual', label: '自定义' }] },
+      { key: 'audio.colors.primary', label: '主色', type: 'text', placeholder: '#ff3478' },
+      { key: 'audio.colors.complement', label: '辅色', type: 'text', placeholder: '#4ae9b4' },
+      { key: 'audio.colors.neutral', label: '中性色', type: 'text', placeholder: '#ffffff' },
+      { key: 'audio.sensitivity', label: '灵敏度', type: 'number', min: 0.3, max: 3, step: 0.1, description: '渲染侧响应曲线，>1 更灵敏' },
+      { key: 'audio.height', label: '高度', type: 'number', min: 48, max: 200, step: 8, unit: 'px' },
+      { key: 'audio.position', label: '位置', type: 'enum', options: [{ value: 'top', label: '顶部' }, { value: 'center', label: '居中' }, { value: 'bottom', label: '底部' }] },
       { key: 'audio.silenceDelayMs', label: '静音等待', type: 'number', min: 0, max: 5000, step: 50, unit: 'ms', description: '静音后保持曲线的等待时间' },
       { key: 'audio.fadeOutMs', label: '淡出时长', type: 'number', min: 0, max: 3000, step: 50, unit: 'ms' },
       { key: 'audio.fadeInMs', label: '淡入时长', type: 'number', min: 0, max: 3000, step: 50, unit: 'ms' },
@@ -193,6 +207,13 @@ export const SETTINGS_GROUPS = Object.freeze([
     title: '信息面板',
     icon: 'layout',
     fields: [
+      { key: 'panel.layout', label: '布局预设', type: 'enum', options: [{ value: 'trapezoid', label: '梯形' }] , description: '仅梯形为官方预设，拖动卡片可存为自定义' },
+      { key: 'panel.cards', label: '卡片显隐与排序', type: 'panelCards', description: '开关显隐，拖拽或“更多”中上移/下移排序，至少保留一张' },
+      { key: 'panel.customCard.title', label: '自定义卡标题', type: 'text', placeholder: 'NOTE' },
+      { key: 'panel.customCard.text', label: '自定义卡文本', type: 'text', placeholder: 'KEEP BUILDING · {{date}} {{time}} 可用' },
+      { key: 'panel.customCard.timeFormat', label: '自定义时间格式', type: 'enum', options: [{ value: 'HH:mm', label: 'HH:mm' }, { value: 'hh:mm a', label: 'hh:mm a' }, { value: 'HH:mm:ss', label: 'HH:mm:ss' }] },
+      { key: 'panel.customCard.dateFormat', label: '自定义日期格式', type: 'enum', options: [{ value: 'MMM dd, yyyy', label: 'MMM dd, yyyy' }, { value: 'yyyy-MM-dd', label: 'yyyy-MM-dd' }, { value: 'EEE, MMM dd', label: 'EEE, MMM dd' }] },
+      { key: 'panel.customCard.showTime', label: '自定义卡显示时间', type: 'boolean' },
       { key: 'panel.autoExpandHide', label: '自动展开收起', type: 'boolean', description: '按鼠标距离自动展开并延迟收起' },
       { key: 'panel.expandTriggerDistancePx', label: '展开触发距离', type: 'number', min: 0, step: 1, unit: 'px', description: '触发下一块面板展开所需的累计指针移动' },
       { key: 'panel.collapseDelaySeconds', label: '收起等待时间', type: 'number', min: 0, step: 0.5, unit: 's', description: '无交互后开始收起的等待时间' },
@@ -255,7 +276,7 @@ export const SETTINGS_GROUPS = Object.freeze([
 // (including external ones). Groups without an entry stay as a single card.
 export const SETTINGS_SECTIONS = Object.freeze({
   wallpaper: Object.freeze([
-    { id: 'wallpaper-settings', title: '壁纸设置', fieldKeys: Object.freeze(['wallpaper.mode', 'wallpaper.fit', 'wallpaper.crossfadeMs']) },
+    { id: 'wallpaper-settings', title: '壁纸设置', fieldKeys: Object.freeze(['wallpaper.mode', 'wallpaper.fit', 'wallpaper.crossfadeMs', 'wallpaper.perDisplay']) },
     { id: 'wallpaper-gallery', title: '壁纸画廊', fieldKeys: Object.freeze([]), gallery: true },
   ]),
   appearance: Object.freeze([
@@ -264,7 +285,9 @@ export const SETTINGS_SECTIONS = Object.freeze({
   ]),
   audio: Object.freeze([
     { id: 'audio-core', title: '播放与增益', fieldKeys: Object.freeze(['audio.enabled', 'audio.gain']) },
-    { id: 'audio-timing', title: '静音与淡入淡出', fieldKeys: Object.freeze(['audio.silenceDelayMs', 'audio.fadeOutMs', 'audio.fadeInMs']) },
+    { id: 'audio-style', title: '样式', fieldKeys: Object.freeze(['audio.style', 'audio.position', 'audio.height']) },
+    { id: 'audio-color', title: '配色', fieldKeys: Object.freeze(['audio.colorMode', 'audio.colors.primary', 'audio.colors.complement', 'audio.colors.neutral']) },
+    { id: 'audio-dynamics', title: '灵敏度与动画', fieldKeys: Object.freeze(['audio.sensitivity', 'audio.silenceDelayMs', 'audio.fadeOutMs', 'audio.fadeInMs']) },
   ]),
   motion: Object.freeze([
     { id: 'motion-speed', title: '运动速度', fieldKeys: Object.freeze(['motion.interactionSpeed', 'motion.returnSpeed', 'motion.driftSpeed', 'motion.deadZonePx']) },
@@ -272,6 +295,8 @@ export const SETTINGS_SECTIONS = Object.freeze({
     { id: 'motion-frame', title: '帧率与暂停', fieldKeys: Object.freeze(['motion.pauseWhenFullscreen', 'frameRate.interactive', 'frameRate.drift']) },
   ]),
   panel: Object.freeze([
+    { id: 'panel-layout', title: '布局与排序', fieldKeys: Object.freeze(['panel.layout', 'panel.cards']) },
+    { id: 'panel-custom', title: '自定义卡', fieldKeys: Object.freeze(['panel.customCard.title', 'panel.customCard.text', 'panel.customCard.timeFormat', 'panel.customCard.dateFormat', 'panel.customCard.showTime']) },
     { id: 'panel-behavior', title: '交互行为', fieldKeys: Object.freeze(['panel.autoExpandHide', 'panel.expandTriggerDistancePx', 'panel.collapseDelaySeconds', 'panel.expanded']) },
     { id: 'panel-look', title: '卡片外观', fieldKeys: Object.freeze(['panel.collapsedOpacity', 'panel.borderRadius', 'panel.surfaceOpacity', 'panel.shadowIntensity', 'panel.height']) },
     { id: 'panel-animation', title: '动画', fieldKeys: Object.freeze(['panel.animation.staggerDelayMs', 'panel.animation.durationMs']) },
@@ -324,6 +349,7 @@ function isIntegerLike(field) {
     'audio.silenceDelayMs',
     'audio.fadeOutMs',
     'audio.fadeInMs',
+    'audio.height',
     'panel.expandTriggerDistancePx',
     'panel.borderRadius',
     'panel.height',
@@ -341,6 +367,41 @@ function isIntegerLike(field) {
 
 export function validateField(field, value, draft) {
   if (!field) return null;
+  if (field.key === 'panel.cards') {
+    if (!Array.isArray(value)) return '需为数组';
+    if (value.length === 0) return '至少保留一张卡';
+    const allowed = new Set(['time','weather','tide','calendar','custom']);
+    const seen = new Set();
+    for (let i=0;i<value.length;i++) {
+      const e=value[i];
+      if (!e || typeof e!=='object') return `第${i+1}项需为对象`;
+      if (!allowed.has(e.id)) return `第${i+1}项 id 非法`;
+      if (seen.has(e.id)) return '卡片 id 重复';
+      seen.add(e.id);
+      if (e.enabled !== undefined && typeof e.enabled !== 'boolean') return `第${i+1}项 enabled 需为布尔值`;
+    }
+    const enabledCount=value.filter((v)=>v.enabled!==false).length;
+    if (enabledCount===0) return '至少启用一张卡';
+    return null;
+  }
+  if (field.key && field.key.startsWith('audio.colors.')) {
+    const mode = draft ? getPath(draft, 'audio.colorMode') : null;
+    if (mode === 'auto') return null;
+    if (isEmptyValue(value)) return '不能为空';
+    if (typeof value !== 'string' || !/^#([0-9a-fA-F]{6})$/.test(value.trim())) return '需为 #rrggbb';
+    return null;
+  }
+  if (field.key && field.key.startsWith('panel.customCard.')) {
+    const cards = draft ? getPath(draft, 'panel.cards') : null;
+    const enabled = Array.isArray(cards) ? cards.find((c) => c.id === 'custom')?.enabled : false;
+    if (!enabled) return null;
+    if (field.key === 'panel.customCard.title' && typeof value === 'string' && value.length > 24) return '最多 24 字符';
+    if (field.key === 'panel.customCard.text' && typeof value === 'string' && value.length > 120) return '最多 120 字符';
+    if (field.key === 'panel.customCard.title' || field.key === 'panel.customCard.text') {
+      if (isEmptyValue(value)) return '不能为空';
+    }
+    if (field.key === 'panel.customCard.title' || field.key === 'panel.customCard.text') return null;
+  }
   // boolean / enum are not free-fill numbers but still validate
   if (field.type === 'boolean') {
     if (typeof value !== 'boolean') return '需为布尔值';

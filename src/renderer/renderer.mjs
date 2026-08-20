@@ -407,9 +407,21 @@ async function start() {
     audioRibbon.destroy();
   }, { once: true });
   const advanceScene = (...args) => {
-    advanceMotion(...args);
-    panel.advance(args[1], state.camera, state.pointer);
-    audioRibbon.advance(args[1] * 1000, args[2] * 1000);
+    try {
+      advanceMotion(...args);
+    } catch (error) {
+      console.error('motion advance failed:', error);
+    }
+    try {
+      panel.advance(args[1], state.camera, state.pointer);
+    } catch (error) {
+      console.error('panel advance failed:', error);
+    }
+    try {
+      audioRibbon.advance(args[1] * 1000, args[2] * 1000);
+    } catch (error) {
+      console.error('audio ribbon advance failed:', error);
+    }
   };
   function drawOnce() {
     if (!image || !state || !viewport) return;

@@ -19,6 +19,7 @@ export function createKdeWallpaperSync({
   importDisplay = importDisplayWallpaper,
   defaultWallpaper,
   manualWallpaper = wallpaperPath(env, homedir || os.homedir()),
+  resolveManualWallpaper = null,
   timers = globalThis,
   onUpdate = () => {},
   onStatus = () => {},
@@ -107,14 +108,21 @@ export function createKdeWallpaperSync({
     if (mode === 'manual') {
       for (const display of displays) {
         if (!running || mode !== 'manual' || currentGeneration !== generation) return;
-        const url = pathToFileURL(manualWallpaper).href;
-        const inspected = await inspect(manualWallpaper);
+        let targetPath = manualWallpaper;
+        if (resolveManualWallpaper) {
+          try {
+            const resolved = await resolveManualWallpaper(display.id);
+            if (resolved && resolved.path) targetPath = resolved.path;
+          } catch {}
+        }
+        const url = pathToFileURL(targetPath).href;
+        const inspected = await inspect(targetPath);
         if (!running || mode !== 'manual' || currentGeneration !== generation) return;
         const record = {
           displayId: display.id,
           mode: 'manual',
           status: 'manual',
-          wallpaperPath: manualWallpaper,
+          wallpaperPath: targetPath,
           // Cache-bust the file URL so a re-import (same path, new bytes)
           // always reloads instead of hitting Chromium's file cache.
           wallpaperUrl: url + '?v=' + inspected.size + '-' + (inspected.mtimeMs ?? 0),

@@ -38,6 +38,7 @@ import { SCHEDULER_NAMES } from './render-scheduler.mjs';
 import { validateProbeSummary } from './performance-probe.mjs';
 import { importWallpaper, wallpaperPath } from './wallpaper-image.mjs';
 import { listGallery } from './wallpaper-gallery.mjs';
+import { assignmentsPath, readAssignments, resolveContentKey } from './wallpaper-assignments.mjs';
 import { saveConfigFile, saveWeatherCredentialsFile } from './settings-service.mjs';
 import { createKdeWallpaperSync } from './kde-wallpaper-sync.mjs';
 import { createKdeAccentWatcher } from './kde-accent.mjs';
@@ -57,6 +58,7 @@ let informationService;
 let audioSpectrumService;
 let configWatcher;
 let credentialsWatcher;
+let assignmentsWatcher;
 let runtimeCoordinator;
 let wallpaperSync;
 let colorService;
@@ -69,6 +71,7 @@ const shutdownCoordinator = createShutdownCoordinator({
   quit: () => app.quit(),
   stopConfigWatcher: () => configWatcher?.stop(),
   stopCredentialsWatcher: () => credentialsWatcher?.stop(),
+  stopAssignmentsWatcher: () => assignmentsWatcher?.stop(),
   stopRuntimeCoordinator: () => runtimeCoordinator?.stop(),
   stopAppearance: () => appearanceCoordinator?.stop(),
   stopAudioSpectrum: () => audioSpectrumService?.stop(),
@@ -185,12 +188,24 @@ async function run() {
     onUpdate: (displayId, state) => manager?.updateColor(displayId, state),
   });
   await colorService.start();
+  const resolveManualWallpaper = async (displayId) => {
+    if (!currentConfig?.wallpaper?.perDisplay) return null;
+    try {
+      const contentKey = await resolveContentKey(displayId, process.env, os.homedir());
+      if (!contentKey) return null;
+      const gallery = await listGallery(process.env, os.homedir());
+      const entry = gallery.find((e) => e.contentKey === contentKey);
+      if (!entry) return null;
+      return { path: entry.file, contentKey };
+    } catch { return null; }
+  };
   wallpaperSync = createKdeWallpaperSync({
     config,
     plasmaConfigPath: path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'plasma-org.kde.plasma.desktop-appletsrc'),
     getDisplays: () => screen.getAllDisplays(),
     defaultWallpaper: wallpaperPathname,
     manualWallpaper: wallpaperPathname,
+    resolveManualWallpaper,
     watch: nodeWatch,
     async onUpdate(source) {
       const color = await colorService.wallpaperChanged(source.displayId, {
@@ -356,6 +371,10 @@ async function run() {
           await wallpaperSync.whenIdle();
           assertCurrent();
         }
+        if (nextConfig.wallpaper.perDisplay !== previousConfig.wallpaper.perDisplay) {
+          await wallpaperSync.reconcile();
+          assertCurrent();
+        }
         await appearanceCoordinator.updateConfig(nextConfig, { publish: false });
         const nextAppearance = appearanceCoordinator.getState();
         assertCurrent();
@@ -402,8 +421,16 @@ async function run() {
     onConfig(nextCredentials) { void runtimeCoordinator.updateCredentials(nextCredentials); },
     onError(error) { console.error(`Weather credentials reload failed: ${error?.message || 'unknown error'}`); },
   });
+  const assignmentsPathname = assignmentsPath(process.env, os.homedir());
+  assignmentsWatcher = createConfigWatcher({
+    pathname: assignmentsPathname,
+    load: () => readAssignments(process.env, os.homedir()),
+    onConfig() { void wallpaperSync.reconcile(); },
+    onError(error) { console.error(`Wallpaper assignments reload failed: ${error?.message || 'unknown error'}`); },
+  });
   configWatcher.start();
   credentialsWatcher.start();
+  assignmentsWatcher.start();
 }
 
 app.on('window-all-closed', () => {});
