@@ -388,12 +388,23 @@ export function validateField(field, value, draft) {
     return null;
   }
   if (field.key && field.key.startsWith('audio.colors.')) {
+    const mode = draft ? getPath(draft, 'audio.colorMode') : null;
+    if (mode === 'auto') return null;
     if (isEmptyValue(value)) return '不能为空';
     if (typeof value !== 'string' || !/^#([0-9a-fA-F]{6})$/.test(value.trim())) return '需为 #rrggbb';
     return null;
   }
-  if (field.key === 'panel.customCard.title' && typeof value === 'string' && value.length > 24) return '最多 24 字符';
-  if (field.key === 'panel.customCard.text' && typeof value === 'string' && value.length > 120) return '最多 120 字符';
+  if (field.key && field.key.startsWith('panel.customCard.')) {
+    const cards = draft ? getPath(draft, 'panel.cards') : null;
+    const enabled = Array.isArray(cards) ? cards.find((c) => c.id === 'custom')?.enabled : false;
+    if (!enabled) return null;
+    if (field.key === 'panel.customCard.title' && typeof value === 'string' && value.length > 24) return '最多 24 字符';
+    if (field.key === 'panel.customCard.text' && typeof value === 'string' && value.length > 120) return '最多 120 字符';
+    if (field.key === 'panel.customCard.title' || field.key === 'panel.customCard.text') {
+      if (isEmptyValue(value)) return '不能为空';
+    }
+    if (field.key === 'panel.customCard.title' || field.key === 'panel.customCard.text') return null;
+  }
   // boolean / enum are not free-fill numbers but still validate
   if (field.type === 'boolean') {
     if (typeof value !== 'boolean') return '需为布尔值';
