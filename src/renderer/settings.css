@@ -715,6 +715,11 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent), 0 4px 16px rgba(13,25,32,0.10);
 }
 
+.gallery-thumb-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
 .gallery-thumb {
   width: 100%;
   height: 132px;
@@ -724,7 +729,7 @@ body {
 }
 
 .gallery-meta {
-  padding: 8px 10px 36px; /* reserve for overlay */
+  padding: 8px 10px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
