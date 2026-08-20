@@ -250,6 +250,44 @@ export const SETTINGS_GROUPS = Object.freeze([
   },
 ]);
 
+// Subdivisions inside large groups. Each entry is rendered as a sub-card
+// within the same navigation page; fieldKeys reference SETTINGS_GROUPS fields
+// (including external ones). Groups without an entry stay as a single card.
+export const SETTINGS_SECTIONS = Object.freeze({
+  wallpaper: Object.freeze([
+    { id: 'wallpaper-settings', title: '壁纸设置', fieldKeys: Object.freeze(['wallpaper.mode', 'wallpaper.fit', 'wallpaper.crossfadeMs']) },
+    { id: 'wallpaper-gallery', title: '壁纸画廊', fieldKeys: Object.freeze([]), gallery: true },
+  ]),
+  appearance: Object.freeze([
+    { id: 'appearance-accent', title: '强调色', fieldKeys: Object.freeze(['color.mode', 'color.transitionDurationMs']) },
+    { id: 'appearance-theme', title: '明暗模式', fieldKeys: Object.freeze(['appearance.mode', 'appearance.dark.wallpaperBrightness']) },
+  ]),
+  audio: Object.freeze([
+    { id: 'audio-core', title: '播放与增益', fieldKeys: Object.freeze(['audio.enabled', 'audio.gain']) },
+    { id: 'audio-timing', title: '静音与淡入淡出', fieldKeys: Object.freeze(['audio.silenceDelayMs', 'audio.fadeOutMs', 'audio.fadeInMs']) },
+  ]),
+  motion: Object.freeze([
+    { id: 'motion-speed', title: '运动速度', fieldKeys: Object.freeze(['motion.interactionSpeed', 'motion.returnSpeed', 'motion.driftSpeed', 'motion.deadZonePx']) },
+    { id: 'motion-parallax', title: '视差幅度', fieldKeys: Object.freeze(['motion.horizontalPanPercent', 'motion.verticalPanPercent', 'motion.maxRotationDegrees']) },
+    { id: 'motion-frame', title: '帧率与暂停', fieldKeys: Object.freeze(['motion.pauseWhenFullscreen', 'frameRate.interactive', 'frameRate.drift']) },
+  ]),
+  panel: Object.freeze([
+    { id: 'panel-behavior', title: '交互行为', fieldKeys: Object.freeze(['panel.autoExpandHide', 'panel.expandTriggerDistancePx', 'panel.collapseDelaySeconds', 'panel.expanded']) },
+    { id: 'panel-look', title: '卡片外观', fieldKeys: Object.freeze(['panel.collapsedOpacity', 'panel.borderRadius', 'panel.surfaceOpacity', 'panel.shadowIntensity', 'panel.height']) },
+    { id: 'panel-animation', title: '动画', fieldKeys: Object.freeze(['panel.animation.staggerDelayMs', 'panel.animation.durationMs']) },
+  ]),
+  weather: Object.freeze([
+    { id: 'weather-location', title: '定位', fieldKeys: Object.freeze(['weather.location.mode', 'weather.location.latitude', 'weather.location.longitude', 'weather.location.fallbackLocationId']) },
+    { id: 'weather-tide', title: '潮汐', fieldKeys: Object.freeze(['weather.tideStationId']) },
+    { id: 'weather-credentials', title: '和风凭据', fieldKeys: Object.freeze(['apiHost', 'apiKey']) },
+  ]),
+  menu: Object.freeze([
+    { id: 'menu-behavior', title: '菜单行为', fieldKeys: Object.freeze(['menu.avoidObstacles', 'menu.closeOnFocusChange', 'menu.autoCloseMs']) },
+    { id: 'menu-terminal', title: '终端', fieldKeys: Object.freeze(['menu.terminal']) },
+    { id: 'menu-commands', title: '自定义命令', fieldKeys: Object.freeze(['menu.customCommands']) },
+  ]),
+});
+
 // Dot-path access helpers shared by the renderer and tests.
 export function getPath(object, key) {
   return key.split('.').reduce((value, part) => (value == null ? undefined : value[part]), object);
@@ -263,4 +301,251 @@ export function setPath(object, key, value) {
     return current[part];
   }, object);
   target[last] = value;
+}
+
+// ---------------------------------------------------------------------------
+// Validation — concise Chinese messages (精简技术风). Mirrors src/config.mjs
+// ranges so the UI can show readable errors before IPC and also translate
+// backend English errors.
+// ---------------------------------------------------------------------------
+
+function isEmptyValue(value) {
+  return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+}
+
+function isIntegerLike(field) {
+  // Integer fields are those with integer bounds and step 1/10/50/100; treat
+  // known integer keys explicitly to avoid float misclassification.
+  const integerKeys = new Set([
+    'wallpaper.crossfadeMs',
+    'color.transitionDurationMs',
+    'frameRate.interactive',
+    'frameRate.drift',
+    'audio.silenceDelayMs',
+    'audio.fadeOutMs',
+    'audio.fadeInMs',
+    'panel.expandTriggerDistancePx',
+    'panel.borderRadius',
+    'panel.height',
+    'panel.animation.staggerDelayMs',
+    'panel.animation.durationMs',
+    'menu.autoCloseMs',
+  ]);
+  if (field && integerKeys.has(field.key)) return true;
+  if (field && field.step !== undefined && Number.isInteger(field.step) && field.step >= 1) {
+    // Heuristic: step 1,10,50,100 etc. implies integer
+    return true;
+  }
+  return false;
+}
+
+export function validateField(field, value, draft) {
+  if (!field) return null;
+  // boolean / enum are not free-fill numbers but still validate
+  if (field.type === 'boolean') {
+    if (typeof value !== 'boolean') return '需为布尔值';
+    return null;
+  }
+  if (field.type === 'enum') {
+    const allowed = (field.options ?? []).map((o) => o.value);
+    if (!allowed.includes(value)) return `需为 ${allowed.join(' / ')}`;
+    return null;
+  }
+  if (field.type === 'number') {
+    // nullable latitude/longitude: null is valid when not in fixed mode
+    if (field.nullable && (value === null || value === undefined)) {
+      // fixed mode requires both coordinates
+      if (field.key === 'weather.location.latitude' || field.key === 'weather.location.longitude') {
+        const mode = draft ? getPath(draft, 'weather.location.mode') : null;
+        if (mode === 'fixed') return 'fixed 模式下需同时填写纬度与经度';
+      }
+      return null;
+    }
+    if (isEmptyValue(value)) return '不能为空';
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '需为数值';
+    if (field.min !== undefined && value < field.min - 1e-9) {
+      if (field.max !== undefined) {
+        const kind = isIntegerLike(field) ? '整数' : '数值';
+        return `需为 ${field.min}–${field.max} 的${kind}`;
+      }
+      return `需为不小于 ${field.min} 的数值`;
+    }
+    if (field.max !== undefined && value > field.max + 1e-9) {
+      if (field.min !== undefined) {
+        const kind = isIntegerLike(field) ? '整数' : '数值';
+        return `需为 ${field.min}–${field.max} 的${kind}`;
+      }
+      return `需为不大于 ${field.max} 的数值`;
+    }
+    // integer check for known integer fields
+    if (isIntegerLike(field) && !Number.isInteger(value)) {
+      return `需为 ${field.min ?? ''}${field.max !== undefined ? `–${field.max}` : ''} 的整数`.replace(/^需为 –/, '需为 ').trim();
+    }
+    // special minimum for panel.animation.durationMs is 400
+    if (field.key === 'panel.animation.durationMs' && value < 400) return '需为不小于 400 的数值';
+    return null;
+  }
+  if (field.type === 'text' || field.type === 'password') {
+    // menu.terminal is optional (empty means auto-detect)
+    if (field.key === 'menu.terminal') {
+      if (value !== undefined && value !== null && typeof value !== 'string') return '需为字符串';
+      return null;
+    }
+    // apiHost has HTTPS hostname rule
+    if (field.key === 'apiHost') {
+      if (isEmptyValue(value)) return '不能为空';
+      const raw = String(value).trim();
+      try {
+        const url = new URL(raw.includes('://') ? raw : `https://${raw}`);
+        if (url.protocol !== 'https:' || url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash) {
+          return '需为 HTTPS 域名，如 your-host.qweatherapi.com';
+        }
+        if (!url.hostname.includes('.')) return '需为 HTTPS 域名，如 your-host.qweatherapi.com';
+      } catch {
+        return '需为 HTTPS 域名，如 your-host.qweatherapi.com';
+      }
+      return null;
+    }
+    if (field.key === 'apiKey') {
+      // credentials save handles empty-as-keep-existing, but field validation for draft is still required when creating new
+      // Allow empty here; required check is done on saveCredentials path. For live validation we show hint only if host filled.
+      if (isEmptyValue(value)) return null; // keep-existing allowed; required enforced on save when configured===false
+      return null;
+    }
+    // fallbackLocationId / tideStationId / command subfields are nonEmpty
+    if (isEmptyValue(value)) return '不能为空';
+    if (typeof value !== 'string') return '需为字符串';
+    return null;
+  }
+  if (field.type === 'commands') {
+    const list = value;
+    if (!Array.isArray(list)) return '需为数组';
+    // per-row checks are handled by validateCommandField
+    return null;
+  }
+  return null;
+}
+
+export function validateCommandField(subfield, value) {
+  if (!subfield) return null;
+  if (subfield.type === 'enum') {
+    const allowed = (subfield.options ?? []).map((o) => o.value);
+    if (!allowed.includes(value)) return `需为 ${allowed.join(' / ')}`;
+    return null;
+  }
+  if (isEmptyValue(value)) return '不能为空';
+  return null;
+}
+
+// Validate an entire draft object; returns Map<key, message> for every
+// invalid field. `credentials` is optional extra draft for apiHost/apiKey.
+export function validateDraft(draft, { credentials } = {}) {
+  const errors = new Map();
+  for (const group of SETTINGS_GROUPS) {
+    if (group.static) continue;
+    for (const field of group.fields) {
+      if (field.type === 'commands') {
+        const list = getPath(draft, field.key) ?? [];
+        if (!Array.isArray(list)) {
+          errors.set(field.key, '需为数组');
+          continue;
+        }
+        list.forEach((entry, idx) => {
+          if (!entry || typeof entry !== 'object') {
+            errors.set(`${field.key}[${idx}]`, '需为对象');
+            return;
+          }
+          for (const sub of field.fields ?? []) {
+            const v = entry[sub.key];
+            const msg = validateCommandField(sub, v);
+            if (msg) errors.set(`${field.key}[${idx}].${sub.key}`, msg);
+          }
+        });
+        continue;
+      }
+      if (field.external) {
+        // external credentials are not part of config.json; only validate when
+        // caller supplies a credentials object (e.g. live UI values)
+        if (!credentials) continue;
+        const v = credentials[field.key];
+        const msg = validateField(field, v, draft);
+        if (msg) errors.set(field.key, msg);
+        continue;
+      }
+      const value = getPath(draft, field.key);
+      const msg = validateField(field, value, draft);
+      if (msg) errors.set(field.key, msg);
+    }
+  }
+  // cross-field: fixed mode requires both coordinates (also covered per-field but ensure both flagged)
+  const mode = getPath(draft, 'weather.location.mode');
+  if (mode === 'fixed') {
+    const lat = getPath(draft, 'weather.location.latitude');
+    const lng = getPath(draft, 'weather.location.longitude');
+    if (lat === null || lat === undefined) errors.set('weather.location.latitude', 'fixed 模式下需同时填写纬度与经度');
+    if (lng === null || lng === undefined) errors.set('weather.location.longitude', 'fixed 模式下需同时填写纬度与经度');
+    if (typeof lat === 'number' && (lat < -90 || lat > 90)) errors.set('weather.location.latitude', '需为 -90–90 的数值');
+    if (typeof lng === 'number' && (lng < -180 || lng > 180)) errors.set('weather.location.longitude', '需为 -180–180 的数值');
+  }
+  return errors;
+}
+
+// Translate backend English errors to concise Chinese using field metadata.
+// Falls back to original message if no mapping found.
+export function translateBackendError(message) {
+  if (!message || typeof message !== 'string') return String(message);
+  // Try to extract field path prefix like "panel.shadowIntensity must ..."
+  const mustIdx = message.indexOf(' must ');
+  let path = message;
+  if (message.startsWith('Unknown configuration field: ')) {
+    path = message.slice('Unknown configuration field: '.length);
+    const key = path.trim().split(/[.\[]/)[0] + (path.includes('.') ? '.' + path.split('.')[1] : '');
+    // Map unknown field to generic
+    return '未知字段：' + path;
+  }
+  if (mustIdx !== -1) path = message.slice(0, mustIdx).trim();
+  // Normalize "menu.customCommands[0].label must ..." -> "menu.customCommands"
+  const baseKey = path.split('[')[0];
+  // Find field by baseKey or exact path
+  let field = null;
+  for (const g of SETTINGS_GROUPS) {
+    for (const f of g.fields) {
+      if (f.key === path || f.key === baseKey) field = f;
+      if (path.startsWith(f.key + '.') || path.startsWith(f.key + '[')) field = f;
+    }
+  }
+  if (field) {
+    // Re-run validate logic to get Chinese message for current draft? For now return generic range hint
+    if (message.includes('must be between')) {
+      if (field.min !== undefined && field.max !== undefined) {
+        const kind = isIntegerLike(field) ? '整数' : '数值';
+        return `需为 ${field.min}–${field.max} 的${kind}`;
+      }
+      return '超出允许范围';
+    }
+    if (message.includes('must be a finite number')) {
+      if (field.min !== undefined && field.max !== undefined) {
+        const kind = isIntegerLike(field) ? '整数' : '数值';
+        return `需为 ${field.min}–${field.max} 的${kind}`;
+      }
+      if (message.includes('at least 0')) return '需为不小于 0 的数值';
+      if (message.includes('greater than 0')) return '需为大于 0 的数值';
+      return '需为数值';
+    }
+    if (message.includes('must be a non-empty string')) return '不能为空';
+    if (message.includes('must be a string')) return '需为字符串';
+    if (message.includes('must be a boolean')) return '需为布尔值';
+    if (message.includes('must be') && field.type === 'enum') {
+      const allowed = (field.options ?? []).map((o) => o.value).join(' / ');
+      if (allowed) return `需为 ${allowed}`;
+    }
+    if (message.includes('apiHost')) return '需为 HTTPS 域名，如 your-host.qweatherapi.com';
+    if (message.includes('apiKey')) return '不能为空';
+  }
+  // Fallback: map common English fragments
+  if (message.includes('Duplicate menu command id')) return '命令 ID 重复';
+  if (message.includes('Menu command id is reserved')) return '命令 ID 为保留字';
+  if (message.includes('fixed mode requires both latitude and longitude')) return 'fixed 模式下需同时填写纬度与经度';
+  if (message.includes('must be an integer between')) return '需为整数且在允许范围内';
+  return message;
 }

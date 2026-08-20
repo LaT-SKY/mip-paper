@@ -6,7 +6,7 @@
 // 2*PI*6.5, damping 0.6) so the settings UI shares the wallpaper menu's motion
 // language; CSS holds state classes and hover, JS drives container motion.
 
-import { SETTINGS_GROUPS, SETTINGS_ICONS, getPath, setPath } from '../settings-fields.mjs';
+import { SETTINGS_GROUPS, SETTINGS_ICONS, SETTINGS_SECTIONS, getPath, setPath, validateField, validateCommandField, validateDraft, translateBackendError } from '../settings-fields.mjs';
 import { ICONS } from './context-menu.mjs';
 
 // Mirrors context-menu.mjs SPRING (small control surface, one subtle bounce).
@@ -158,6 +158,10 @@ function renderNav() {
   }
 }
 
+function fieldErrorId(key) {
+  return 'error-' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
 function createControl(field) {
   const wrap = document.createElement('div');
   wrap.className = 'field-control';
@@ -181,6 +185,7 @@ function createControl(field) {
   if (field.type === 'enum') {
     const select = document.createElement('select');
     select.dataset.field = field.key;
+    select.setAttribute('aria-describedby', fieldErrorId(field.key));
     for (const option of field.options) {
       const opt = document.createElement('option');
       opt.value = option.value;
@@ -197,6 +202,7 @@ function createControl(field) {
     const input = document.createElement('input');
     input.type = 'number';
     input.dataset.field = field.key;
+    input.setAttribute('aria-describedby', fieldErrorId(field.key));
     if (field.min !== undefined) input.min = String(field.min);
     if (field.max !== undefined) input.max = String(field.max);
     if (field.step !== undefined) input.step = String(field.step);
@@ -215,6 +221,7 @@ function createControl(field) {
   const input = document.createElement('input');
   input.type = field.type === 'password' ? 'password' : 'text';
   input.dataset.field = field.key;
+  input.setAttribute('aria-describedby', fieldErrorId(field.key));
   if (field.placeholder) input.placeholder = field.placeholder;
   const value = getPath(draft, field.key);
   input.value = value == null ? '' : String(value);
@@ -242,6 +249,7 @@ function createFieldRow(field) {
   const error = document.createElement('div');
   error.className = 'field-error';
   error.dataset.errorFor = field.key;
+  error.id = fieldErrorId(field.key);
   copy.appendChild(error);
   row.appendChild(copy);
 
@@ -254,6 +262,108 @@ function createFieldRow(field) {
   reset.dataset.resetFor = field.key;
   row.appendChild(reset);
   return row;
+}
+
+function setFieldError(key, message) {
+  const row = contentRoot.querySelector('[data-field="' + key + '"]');
+  if (!row) return;
+  row.dataset.invalid = '';
+  const errorEl = row.querySelector('[data-error-for="' + key + '"]');
+  if (errorEl) errorEl.textContent = message;
+  const input = row.querySelector('[data-field="' + key + '"]');
+  if (input) {
+    input.setAttribute('aria-invalid', 'true');
+    input.setAttribute('aria-describedby', fieldErrorId(key));
+  }
+}
+
+function clearFieldError(key) {
+  const row = contentRoot.querySelector('[data-field="' + key + '"]');
+  if (!row) return;
+  delete row.dataset.invalid;
+  const errorEl = row.querySelector('[data-error-for="' + key + '"]');
+  if (errorEl) errorEl.textContent = '';
+  const input = row.querySelector('[data-field="' + key + '"]');
+  if (input) {
+    input.removeAttribute('aria-invalid');
+  }
+}
+
+function validateAndShowField(key) {
+  const field = findField(key);
+  if (!field) return null;
+  const value = getPath(draft, key);
+  const msg = validateField(field, value, draft);
+  if (msg) setFieldError(key, msg);
+  else clearFieldError(key);
+  return msg;
+}
+
+function validateAllFields() {
+  // Only validate config fields; external credentials are handled separately
+  // via the weather credentials UI so they don't block the main "保存更改".
+  const errors = validateDraft(draft);
+  // clear previous (but keep credentials rows - they are cleared separately if needed)
+  for (const row of contentRoot.querySelectorAll('[data-invalid]')) {
+    // don't clear credential rows here; they are managed by credential validation
+    if (row.dataset.field === 'apiHost' || row.dataset.field === 'apiKey') continue;
+    delete row.dataset.invalid;
+  }
+  for (const el of contentRoot.querySelectorAll('[data-error-for]')) {
+    if (el.dataset.errorFor === 'apiHost' || el.dataset.errorFor === 'apiKey') continue;
+    el.textContent = '';
+  }
+  for (const el of contentRoot.querySelectorAll('[aria-invalid]')) {
+    const f = el.dataset.field || el.dataset.commandField;
+    if (f === 'apiHost' || f === 'apiKey' || el.id === 'credentials-host' || el.id === 'credentials-key') continue;
+    // for command rows, check parent
+    const row = el.closest && el.closest('[data-field="apiHost"],[data-field="apiKey"]');
+    if (row) continue;
+    el.removeAttribute('aria-invalid');
+  }
+  // also clear command row errors
+  for (const r of contentRoot.querySelectorAll('.command-row[data-invalid]')) delete r.dataset.invalid;
+  for (const e of contentRoot.querySelectorAll('.command-error')) e.textContent = '';
+
+  for (const [key, msg] of errors) {
+    // command subfield errors: key like menu.customCommands[0].label
+    if (key.startsWith('menu.customCommands')) {
+      const m = key.match(/^menu\.customCommands\[(\d+)\]\.(.+)$/);
+      if (m) {
+        const idx = Number(m[1]);
+        const subKey = m[2];
+        setCommandRowError(idx, subKey, msg);
+        continue;
+      }
+      // whole list error
+      setFieldError('menu.customCommands', msg);
+      continue;
+    }
+    setFieldError(key, msg);
+  }
+  return errors;
+}
+
+function setCommandRowError(index, subKey, message) {
+  const row = contentRoot.querySelector('.command-row[data-command-index="' + index + '"]');
+  if (!row) return;
+  row.dataset.invalid = '';
+  // create or reuse error element
+  let err = row.querySelector('.command-error');
+  if (!err) {
+    err = document.createElement('div');
+    err.className = 'command-error';
+    row.appendChild(err);
+  }
+  err.textContent = subKey ? subKey + '：' + message : message;
+  const input = row.querySelector('[data-command-field="' + subKey + '"]');
+  if (input) input.setAttribute('aria-invalid', 'true');
+}
+
+function clearCommandRowErrors() {
+  for (const r of contentRoot.querySelectorAll('.command-row[data-invalid]')) delete r.dataset.invalid;
+  for (const e of contentRoot.querySelectorAll('.command-error')) e.textContent = '';
+  for (const inp of contentRoot.querySelectorAll('.command-row [aria-invalid]')) inp.removeAttribute('aria-invalid');
 }
 
 // --- Custom command list editor ---------------------------------------------
@@ -502,6 +612,7 @@ function createCommandRow(index) {
     }
     input.dataset.commandField = subfield.key;
     input.dataset.commandIndex = String(index);
+    input.setAttribute('aria-describedby', `cmd-${index}-${subfield.key}-error`);
     const value = entry[subfield.key];
     input.value = value == null ? '' : String(value);
     row.appendChild(input);
@@ -515,6 +626,20 @@ function createCommandRow(index) {
   more.innerHTML = menuActionIcon('more');
   more.addEventListener('click', () => openCommandMenu(more, index));
   row.appendChild(more);
+  const err = document.createElement('div');
+  err.className = 'command-error';
+  err.id = `cmd-${index}-error`;
+  row.appendChild(err);
+  // initial validation for this row
+  for (const subfield of subfields) {
+    const v = entry[subfield.key];
+    const msg = validateCommandField(subfield, v);
+    if (msg) {
+      row.dataset.invalid = '';
+      err.textContent = subfield.label + '：' + msg;
+      break;
+    }
+  }
   return row;
 }
 
@@ -561,32 +686,60 @@ function appendCredentialsSection(card) {
 
   const hostRow = document.createElement('div');
   hostRow.className = 'field-row';
-  hostRow.appendChild(createCopy('API Host', '只填 HTTPS 域名，不包含协议、路径或查询参数'));
+  hostRow.dataset.field = 'apiHost';
+  const hostCopy = createCopy('API Host', '只填 HTTPS 域名，不包含协议、路径或查询参数');
+  const hostErr = document.createElement('div');
+  hostErr.className = 'field-error';
+  hostErr.dataset.errorFor = 'apiHost';
+  hostErr.id = fieldErrorId('apiHost');
+  hostCopy.appendChild(hostErr);
+  hostRow.appendChild(hostCopy);
   const hostControl = document.createElement('div');
   hostControl.className = 'field-control';
   const hostInput = document.createElement('input');
   hostInput.type = 'text';
   hostInput.id = 'credentials-host';
+  hostInput.setAttribute('aria-describedby', fieldErrorId('apiHost'));
   hostInput.placeholder = 'your-project-host.qweatherapi.com';
   hostInput.value = state.credentials && state.credentials.apiHost ? state.credentials.apiHost : '';
   hostControl.appendChild(hostInput);
   hostRow.appendChild(hostControl);
+  const hostReset = document.createElement('button');
+  hostReset.type = 'button';
+  hostReset.className = 'field-reset';
+  hostReset.textContent = '重置';
+  hostReset.addEventListener('click', () => { hostInput.value = ''; hostInput.dispatchEvent(new Event('input', { bubbles: true })); });
+  hostRow.appendChild(hostReset);
   card.appendChild(hostRow);
 
   const keyRow = document.createElement('div');
   keyRow.className = 'field-row';
-  keyRow.appendChild(createCopy(
+  keyRow.dataset.field = 'apiKey';
+  const keyCopy = createCopy(
     'API Key',
     '已保存时留空可保留现有 Key；仅主进程读取，不会进入 renderer、日志或缓存',
-  ));
+  );
+  const keyErr = document.createElement('div');
+  keyErr.className = 'field-error';
+  keyErr.dataset.errorFor = 'apiKey';
+  keyErr.id = fieldErrorId('apiKey');
+  keyCopy.appendChild(keyErr);
+  keyRow.appendChild(keyCopy);
   const keyControl = document.createElement('div');
   keyControl.className = 'field-control';
   const keyInput = document.createElement('input');
   keyInput.type = 'password';
   keyInput.id = 'credentials-key';
+  keyInput.setAttribute('aria-describedby', fieldErrorId('apiKey'));
   keyInput.placeholder = configured ? '已保存（留空保留）' : '必填';
   keyControl.appendChild(keyInput);
   keyRow.appendChild(keyControl);
+  const keyReset = document.createElement('button');
+  keyReset.type = 'button';
+  keyReset.className = 'field-reset';
+  keyReset.textContent = '重置';
+  keyReset.addEventListener('click', () => { keyInput.value = ''; keyInput.dispatchEvent(new Event('input', { bubbles: true })); });
+  keyRow.appendChild(keyReset);
   card.appendChild(keyRow);
 
   const actions = document.createElement('div');
@@ -793,21 +946,19 @@ function appendWallpaperSection(card) {
 // Keep the wallpaper section's interactive state in sync with the draft mode
 // without re-rendering the whole section (the mode select would lose focus).
 function updateWallpaperSectionControls() {
-  const card = contentRoot.querySelector('.settings-card');
-  if (!card) return;
   const kde = getPath(draft, 'wallpaper.mode') === 'kde';
-  const pick = card.querySelector('#wallpaper-pick');
+  const pick = contentRoot.querySelector('#wallpaper-pick');
   if (pick) {
     pick.disabled = kde;
     pick.title = kde ? '跟随 KDE 模式下不可用，切换到手动模式后可导入' : '导入 JPEG / PNG / WebP 并切换到手动模式';
   }
-  const grid = card.querySelector('#gallery-grid');
+  const grid = contentRoot.querySelector('#gallery-grid');
   if (grid) grid.classList.toggle('is-dimmed', kde);
-  const hint = card.querySelector('#wallpaper-hint');
+  const hint = contentRoot.querySelector('#wallpaper-hint');
   if (hint) {
     hint.textContent = kde ? '跟随 KDE 模式下画廊仅预览，按显示器同步，不可设为当前' : '画廊按内容去重，收藏永久保留，历史自动清理';
   }
-  const modeHint = card.querySelector('#wallpaper-mode-hint');
+  const modeHint = contentRoot.querySelector('#wallpaper-mode-hint');
   if (modeHint && state && state.config) {
     const fileMode = state.config.wallpaper?.mode;
     const draftMode = getPath(draft, 'wallpaper.mode');
@@ -821,6 +972,17 @@ function updateWallpaperSectionControls() {
   }
 }
 
+function createSectionCard(title, sectionId) {
+  const card = document.createElement('div');
+  card.className = SETTINGS_SECTIONS[currentSection] ? 'settings-card' : 'settings-card';
+  if (sectionId) card.dataset.section = sectionId;
+  const heading = document.createElement('div');
+  heading.className = 'settings-card-heading';
+  heading.textContent = title;
+  card.appendChild(heading);
+  return card;
+}
+
 function renderSection(groupId, { animate = true } = {}) {
   const group = SETTINGS_GROUPS.find((candidate) => candidate.id === groupId);
   if (!group) return;
@@ -828,71 +990,135 @@ function renderSection(groupId, { animate = true } = {}) {
   currentSection = groupId;
   renderNav();
 
-  const card = document.createElement('div');
-  card.className = 'settings-card';
-  const heading = document.createElement('div');
-  heading.className = 'settings-card-heading';
-  heading.textContent = group.title;
-  card.appendChild(heading);
+  const sections = SETTINGS_SECTIONS[groupId];
+  const cards = [];
 
   if (group.id === 'about') {
+    const card = createSectionCard(group.title);
     appendAboutSection(card);
+    cards.push(card);
+  } else if (sections) {
+    for (const section of sections) {
+      const card = createSectionCard(section.title, section.id);
+      if (section.gallery) {
+        appendWallpaperSection(card);
+      } else if (groupId === 'weather' && section.id === 'weather-credentials') {
+        appendCredentialsSection(card);
+      } else {
+        for (const key of section.fieldKeys) {
+          const field = findField(key);
+          if (!field) continue;
+          if (field.type === 'commands') {
+            const row = document.createElement('div');
+            row.className = 'field-row field-row--stacked';
+            row.dataset.field = field.key;
+            const copy = createCopy(field.label, field.description);
+            const err = document.createElement('div');
+            err.className = 'field-error';
+            err.dataset.errorFor = field.key;
+            err.id = fieldErrorId(field.key);
+            copy.appendChild(err);
+            row.appendChild(copy);
+            row.appendChild(createCommandsEditor());
+            card.appendChild(row);
+          } else if (field.external) {
+            continue;
+          } else {
+            card.appendChild(createFieldRow(field));
+          }
+        }
+      }
+      cards.push(card);
+    }
   } else {
+    const card = createSectionCard(group.title);
     for (const field of group.fields) {
       if (field.external) continue;
       if (field.type === 'commands') {
         const row = document.createElement('div');
         row.className = 'field-row field-row--stacked';
         row.dataset.field = field.key;
-        row.appendChild(createCopy(field.label, field.description));
+        const copy = createCopy(field.label, field.description);
+        const err = document.createElement('div');
+        err.className = 'field-error';
+        err.dataset.errorFor = field.key;
+        err.id = fieldErrorId(field.key);
+        copy.appendChild(err);
+        row.appendChild(copy);
         row.appendChild(createCommandsEditor());
         card.appendChild(row);
       } else {
         card.appendChild(createFieldRow(field));
       }
     }
-    if (group.id === 'wallpaper') {
-      appendWallpaperSection(card);
-    }
-    if (group.id === 'weather') {
-      appendCredentialsSection(card);
-    }
+    if (group.id === 'wallpaper') appendWallpaperSection(card);
+    if (group.id === 'weather') appendCredentialsSection(card);
+    cards.push(card);
   }
 
-  contentRoot.replaceChildren(card);
-  // The card must be attached before the control state is synced; otherwise
+  contentRoot.replaceChildren(...cards);
+  // The cards must be attached before the control state is synced; otherwise
   // the initial KDE/manual mode would never grey out the pick button.
   if (group.id === 'wallpaper') updateWallpaperSectionControls();
-  if (animate && sectionChanged) animateSection(card);
-  else if (animate && !sectionChanged) {
-    // Same-section refresh (e.g. gallery favorite/setActive) — keep steady, no flash
-    card.style.opacity = '1';
-    card.style.transform = 'none';
+  // initial validation display
+  validateAllFields();
+  // credentials live validation (separate from config)
+  if (group.id === 'weather') {
+    const hostInput = document.getElementById('credentials-host');
+    const keyInput = document.getElementById('credentials-key');
+    if (hostInput) {
+      const f = findField('apiHost');
+      const msg = validateField(f, hostInput.value, draft);
+      if (msg) setFieldError('apiHost', msg);
+      else clearFieldError('apiHost');
+      if (msg) hostInput.setAttribute('aria-invalid','true'); else hostInput.removeAttribute('aria-invalid');
+    }
+    if (keyInput) {
+      // empty key is allowed as keep-existing when already configured
+      if (keyInput.value.trim() === '' && state.credentials && state.credentials.configured) {
+        clearFieldError('apiKey');
+        keyInput.removeAttribute('aria-invalid');
+      } else if (keyInput.value.trim() !== '') {
+        const f = findField('apiKey');
+        const msg = validateField(f, keyInput.value, draft);
+        if (msg) setFieldError('apiKey', msg); else clearFieldError('apiKey');
+      } else {
+        clearFieldError('apiKey');
+      }
+    }
+  }
+  if (animate && sectionChanged) {
+    const baseToken = ++animToken;
+    for (let i = 0; i < cards.length; i++) {
+      animateSection(cards[i], baseToken, i);
+    }
   } else {
-    card.style.opacity = '1';
-    card.style.transform = 'none';
+    for (const c of cards) { c.style.opacity = '1'; c.style.transform = 'none'; }
   }
   syncFooterState();
 }
 
-function animateSection(card) {
+function animateSection(card, tokenOverride, index = 0) {
   if (reducedMotion.matches) {
     card.style.opacity = '1';
     card.style.transform = 'none';
     return;
   }
-  const token = ++animToken;
-  const start = performance.now();
+  const token = tokenOverride ?? ++animToken;
+  // stagger start per card to keep spring language
+  const staggerDelay = index * 40;
   let scale = SPRING.startScale;
   let velocity = 0;
-  let last = start;
+  let last = performance.now() + staggerDelay;
   const omega = SPRING.omega;
   const damping = SPRING.damping;
+  const start = last;
   // Only animate the container — rows stay visible to avoid staged flash (matches context-menu language)
   card.style.opacity = '0';
   card.style.transform = `scale(${scale})`;
   function frame(now) {
     if (token !== animToken) return;
+    if (now < start) { requestAnimationFrame(frame); return; }
     const dt = Math.min(0.032, Math.max(0, (now - last) / 1000));
     last = now;
     const elapsed = now - start;
@@ -930,7 +1156,14 @@ function markDirty() {
 }
 
 function syncFooterState() {
-  saveButton.disabled = !dirty;
+  // Disable save when pristine or when any visible field is invalid
+  const hasInvalid = contentRoot.querySelector('[data-invalid]') !== null;
+  saveButton.disabled = !dirty || hasInvalid;
+  if (hasInvalid && dirty) {
+    saveButton.title = '存在未通过校验的字段';
+  } else {
+    saveButton.title = '';
+  }
 }
 
 function clearFieldErrors() {
@@ -940,6 +1173,9 @@ function clearFieldErrors() {
   for (const errorEl of contentRoot.querySelectorAll('[data-error-for]')) {
     errorEl.textContent = '';
   }
+  for (const el of contentRoot.querySelectorAll('[aria-invalid]')) el.removeAttribute('aria-invalid');
+  for (const r of contentRoot.querySelectorAll('.command-row[data-invalid]')) delete r.dataset.invalid;
+  for (const e of contentRoot.querySelectorAll('.command-error')) e.textContent = '';
 }
 
 function fieldKeyForError(message) {
@@ -956,14 +1192,35 @@ function fieldKeyForError(message) {
 }
 
 function highlightFieldError(message) {
-  clearFieldErrors();
+  const translated = translateBackendError(message);
   const key = fieldKeyForError(message);
-  if (!key) return;
+  if (!key) {
+    // fallback: show generic status and try to highlight first invalid after full validation
+    const errors = validateAllFields();
+    if (errors.size > 0) {
+      const first = [...errors.keys()][0];
+      const row = contentRoot.querySelector('[data-field="' + first + '"]');
+      if (row) row.scrollIntoView({ block: 'nearest' });
+    }
+    return;
+  }
+  // map command subfield keys
+  if (key === 'menu.customCommands' && message.includes('[')) {
+    const m = message.match(/menu\.customCommands\[(\d+)\]\.(\w+)/);
+    if (m) {
+      setCommandRowError(Number(m[1]), m[2], translated);
+      const row = contentRoot.querySelector('.command-row[data-command-index="' + m[1] + '"]');
+      if (row) row.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+  }
   const row = contentRoot.querySelector('[data-field="' + key + '"]');
   if (!row) return;
   row.dataset.invalid = '';
   const errorEl = row.querySelector('[data-error-for="' + key + '"]');
-  if (errorEl) errorEl.textContent = message;
+  if (errorEl) errorEl.textContent = translated;
+  const input = row.querySelector('[data-field="' + key + '"]');
+  if (input) input.setAttribute('aria-invalid', 'true');
   row.scrollIntoView({ block: 'nearest' });
 }
 
@@ -996,32 +1253,22 @@ async function reloadState() {
 }
 
 function localValidateDraft() {
-  for (const group of SETTINGS_GROUPS) {
-    if (group.static) continue;
-    for (const field of group.fields) {
-      if (field.external || field.type !== 'number') continue;
-      const value = getPath(draft, field.key);
-      if (value == null || value === '' || typeof value !== 'number' || Number.isNaN(value)) continue;
-      if (field.min !== undefined && value < field.min - 1e-9) {
-        return `${field.key} must be between ${field.min} and ${field.max ?? '∞'}`;
-      }
-      if (field.max !== undefined && value > field.max + 1e-9) {
-        return `${field.key} must be between ${field.min ?? '-∞'} and ${field.max}`;
-      }
-      if (field.key === 'panel.shadowIntensity' && (value < 0 || value > 1)) {
-        return 'panel.shadowIntensity must be between 0 and 1';
-      }
-    }
-  }
-  return null;
+  const errors = validateDraft(draft);
+  if (errors.size === 0) return null;
+  const firstKey = [...errors.keys()][0];
+  // return backend-style message for highlightFieldError to translate
+  return firstKey + ' must be ' + errors.get(firstKey);
 }
 
 async function saveConfig() {
-  clearFieldErrors();
-  const localError = localValidateDraft();
-  if (localError) {
-    showStatus('error', '保存失败');
-    highlightFieldError(localError);
+  const errors = validateAllFields();
+  if (errors.size > 0) {
+    const count = errors.size;
+    showStatus('error', `保存失败 · ${count} 项待修正`);
+    const firstKey = [...errors.keys()][0];
+    const row = contentRoot.querySelector('[data-field="' + firstKey + '"]') || contentRoot.querySelector('.command-row[data-invalid]');
+    if (row) row.scrollIntoView({ block: 'nearest' });
+    syncFooterState();
     return;
   }
   try {
@@ -1029,6 +1276,7 @@ async function saveConfig() {
     state.config = saved;
     draft = structuredClone(saved);
     dirty = false;
+    clearFieldErrors();
     syncFooterState();
     applyTheme();
     showStatus('ok', '修改成功');
@@ -1036,12 +1284,33 @@ async function saveConfig() {
     const message = error && error.message ? error.message : String(error);
     showStatus('error', '保存失败');
     highlightFieldError(message);
+    syncFooterState();
   }
 }
 
 async function saveCredentials() {
-  const host = document.getElementById('credentials-host').value;
-  const key = document.getElementById('credentials-key').value;
+  const hostEl = document.getElementById('credentials-host');
+  const keyEl = document.getElementById('credentials-key');
+  const host = hostEl ? hostEl.value : '';
+  const key = keyEl ? keyEl.value : '';
+  // live validation before IPC
+  clearFieldError('apiHost');
+  clearFieldError('apiKey');
+  const hostField = findField('apiHost');
+  const keyField = findField('apiKey');
+  const hostMsg = validateField(hostField, host, draft);
+  if (hostMsg) { setFieldError('apiHost', hostMsg); hostEl.setAttribute('aria-invalid','true'); showStatus('error', '凭据校验失败'); return; }
+  // apiKey required when not configured
+  if ((!state.credentials || !state.credentials.configured) && key.trim() === '') {
+    setFieldError('apiKey', '不能为空');
+    keyEl.setAttribute('aria-invalid','true');
+    showStatus('error', '凭据校验失败');
+    return;
+  }
+  if (key.trim() !== '') {
+    const keyMsg = validateField(keyField, key, draft);
+    if (keyMsg) { setFieldError('apiKey', keyMsg); showStatus('error', '凭据校验失败'); return; }
+  }
   if (state.credentials && state.credentials.configured && key.trim() === '') {
     showStatus('ok', 'Key 留空，保留现有凭据');
     return;
@@ -1052,8 +1321,12 @@ async function saveCredentials() {
     renderSection(currentSection, { animate: false });
     showStatus('ok', '凭据已保存');
   } catch (error) {
-    const message = error && error.message ? error.message : String(error);
-    showStatus('error', '凭据保存失败：' + message);
+    const raw = error && error.message ? error.message : String(error);
+    const msg = translateBackendError(raw);
+    // map to field
+    if (raw.includes('apiHost')) setFieldError('apiHost', msg);
+    else if (raw.includes('apiKey')) setFieldError('apiKey', msg);
+    showStatus('error', '凭据保存失败：' + msg);
   }
 }
 
@@ -1086,12 +1359,45 @@ function selectSection(groupId) {
 // Event delegation: every control writes straight into the draft.
 contentRoot.addEventListener('input', (event) => {
   const input = event.target;
+  // credentials external fields (apiHost/apiKey) — not in draft but validate live
+  if (input.id === 'credentials-host') {
+    const f = findField('apiHost');
+    const msg = validateField(f, input.value, draft);
+    if (msg) setFieldError('apiHost', msg);
+    else clearFieldError('apiHost');
+    if (msg) input.setAttribute('aria-invalid','true'); else input.removeAttribute('aria-invalid');
+    syncFooterState();
+    return;
+  }
+  if (input.id === 'credentials-key') {
+    // key empty is allowed as keep-existing when already configured
+    if (input.value.trim() === '' && state.credentials && state.credentials.configured) {
+      clearFieldError('apiKey'); input.removeAttribute('aria-invalid'); return;
+    }
+    if (input.value.trim() === '') { clearFieldError('apiKey'); input.removeAttribute('aria-invalid'); return; }
+    const f = findField('apiKey');
+    const msg = validateField(f, input.value, draft);
+    if (msg) setFieldError('apiKey', msg); else clearFieldError('apiKey');
+    if (msg) input.setAttribute('aria-invalid','true'); else input.removeAttribute('aria-invalid');
+    return;
+  }
   const fieldKey = input.dataset && input.dataset.field;
   if (fieldKey) {
     const field = findField(fieldKey);
     if (field) {
       setPath(draft, fieldKey, parseControlValue(input, field));
       markDirty();
+      const msg = validateField(field, getPath(draft, fieldKey), draft);
+      if (msg) setFieldError(fieldKey, msg); else clearFieldError(fieldKey);
+      if (msg) input.setAttribute('aria-invalid','true'); else input.removeAttribute('aria-invalid');
+      // cross-field: latitude/longitude fixed mode both need revalidation
+      if (fieldKey === 'weather.location.mode' || fieldKey === 'weather.location.latitude' || fieldKey === 'weather.location.longitude') {
+        const latMsg = validateField(findField('weather.location.latitude'), getPath(draft,'weather.location.latitude'), draft);
+        const lngMsg = validateField(findField('weather.location.longitude'), getPath(draft,'weather.location.longitude'), draft);
+        if (latMsg) setFieldError('weather.location.latitude', latMsg); else clearFieldError('weather.location.latitude');
+        if (lngMsg) setFieldError('weather.location.longitude', lngMsg); else clearFieldError('weather.location.longitude');
+      }
+      syncFooterState();
       if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
       if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
         // Refresh cover hints without full re-render
@@ -1113,6 +1419,21 @@ contentRoot.addEventListener('input', (event) => {
     commands[index][commandField] = input.value;
     setPath(draft, 'menu.customCommands', commands);
     markDirty();
+    const sub = commandSubfields().find((s) => s.key === commandField);
+    const msg = sub ? validateCommandField(sub, input.value) : null;
+    const row = contentRoot.querySelector('.command-row[data-command-index="' + index + '"]');
+    if (row) {
+      let err = row.querySelector('.command-error');
+      if (!err) { err = document.createElement('div'); err.className='command-error'; row.appendChild(err); }
+      if (msg) { row.dataset.invalid=''; err.textContent = commandField + '：' + msg; input.setAttribute('aria-invalid','true'); }
+      else { delete row.dataset.invalid; err.textContent=''; input.removeAttribute('aria-invalid'); // re-check whole row
+        const entry = commands[index];
+        let hasAny = false;
+        for (const s of commandSubfields()) { const m = validateCommandField(s, entry[s.key]); if (m) { hasAny=true; row.dataset.invalid=''; err.textContent = s.label + '：' + m; break; } }
+        if (!hasAny) { delete row.dataset.invalid; err.textContent=''; }
+      }
+    }
+    syncFooterState();
   }
 });
 contentRoot.addEventListener('change', (event) => {
@@ -1123,6 +1444,15 @@ contentRoot.addEventListener('change', (event) => {
     if (field && field.type === 'enum') {
       setPath(draft, fieldKey, parseControlValue(input, field));
       markDirty();
+      const msg = validateField(field, getPath(draft, fieldKey), draft);
+      if (msg) setFieldError(fieldKey, msg); else clearFieldError(fieldKey);
+      if (fieldKey === 'weather.location.mode') {
+        const latMsg = validateField(findField('weather.location.latitude'), getPath(draft,'weather.location.latitude'), draft);
+        const lngMsg = validateField(findField('weather.location.longitude'), getPath(draft,'weather.location.longitude'), draft);
+        if (latMsg) setFieldError('weather.location.latitude', latMsg); else clearFieldError('weather.location.latitude');
+        if (lngMsg) setFieldError('weather.location.longitude', lngMsg); else clearFieldError('weather.location.longitude');
+      }
+      syncFooterState();
       if (fieldKey === 'wallpaper.mode') updateWallpaperSectionControls();
       if (fieldKey === 'wallpaper.fit' && currentSection === 'wallpaper') {
         const gallery = state.gallery ?? [];
@@ -1133,6 +1463,26 @@ contentRoot.addEventListener('change', (event) => {
         });
       }
     }
+  }
+  // command select change also needs validation
+  const commandField = input.dataset && input.dataset.commandField;
+  if (commandField && input.dataset.commandIndex !== undefined) {
+    const index = Number(input.dataset.commandIndex);
+    const commands = [...(getPath(draft, 'menu.customCommands') ?? [])];
+    if (!commands[index]) commands[index] = { mode: 'background' };
+    commands[index][commandField] = input.value;
+    setPath(draft, 'menu.customCommands', commands);
+    markDirty();
+    const sub = commandSubfields().find((s) => s.key === commandField);
+    const msg = sub ? validateCommandField(sub, input.value) : null;
+    const row = contentRoot.querySelector('.command-row[data-command-index="' + index + '"]');
+    if (row) {
+      let err = row.querySelector('.command-error');
+      if (!err) { err = document.createElement('div'); err.className='command-error'; row.appendChild(err); }
+      if (msg) { row.dataset.invalid=''; err.textContent = sub.label + '：' + msg; }
+      else { delete row.dataset.invalid; err.textContent=''; }
+    }
+    syncFooterState();
   }
 });
 
