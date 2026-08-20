@@ -13,6 +13,16 @@ import {
   session,
 } from 'electron';
 
+// Prevent EPIPE crash when stdout/stderr pipe is closed (e.g. nohup, broken console).
+// Electron's replyWithError logs via console.error which would otherwise throw EPIPE
+// and show the "A JavaScript error occurred in the main process" dialog on invalid input.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (error) => {
+    if (error && error.code === 'EPIPE') return;
+    throw error;
+  });
+}
+
 import { configPath, informationCachePath, loadConfig, weatherCredentialsPath } from './config.mjs';
 import { loadWeatherCredentials } from './weather-credentials.mjs';
 import { readInformationCache, writeInformationCache } from './information-cache.mjs';

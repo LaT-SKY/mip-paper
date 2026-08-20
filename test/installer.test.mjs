@@ -306,7 +306,9 @@ test('wallpaper set, status and failed replacement preserve the managed image', 
     assert.deepEqual(await readFile(fixture.wallpaper), png);
     assert.match((await runCli(['wallpaper', 'status'], fixture)).stdout, /format=png/);
     assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'manual');
-    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /--user restart mip-paper\.service/);
+    const log1 = await readFile(fixture.systemctlLog, 'utf8');
+    assert.match(log1, /--user is-active mip-paper\.service/);
+    assert.ok(!/restart mip-paper\.service/.test(log1), 'wallpaper set should hot-reload instead of restart');
 
     const invalid = path.join(fixture.home, 'invalid.txt');
     await writeFile(invalid, 'not an image');
@@ -325,7 +327,9 @@ test('wallpaper use-kde restores per-display synchronization mode', async () => 
     const { stdout } = await runCli(['wallpaper', 'use-kde'], fixture, { FAKE_SYSTEMCTL_ACTIVE: '1' });
     assert.match(stdout, /Wallpaper mode: kde/);
     assert.equal(JSON.parse(await readFile(fixture.config, 'utf8')).wallpaper.mode, 'kde');
-    assert.match(await readFile(fixture.systemctlLog, 'utf8'), /restart mip-paper\.service/);
+    const log2 = await readFile(fixture.systemctlLog, 'utf8');
+    assert.match(log2, /--user is-active mip-paper\.service/);
+    assert.ok(!/restart mip-paper\.service/.test(log2) || /hot-reload/i.test(stdout), 'use-kde should hot-reload instead of hard restart');
   } finally {
     await cleanup(fixture);
   }

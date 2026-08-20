@@ -33,8 +33,15 @@ async function main(args) {
 
   if (command === 'import' && value && args.length === 2) {
     const entry = await importToGallery(value, { env, homedir });
-    // Activate immediately
+    // Activate immediately (used by `wallpaper set`)
     await setActiveGalleryImage(entry.id, { env, homedir });
+    process.stdout.write(
+      `Gallery imported: ${entry.id} format=${entry.format} size=${entry.size} dimensions=${entry.width}x${entry.height} favorite=${entry.favorite}\n`,
+    );
+    return;
+  }
+  if (command === 'import-only' && value && args.length === 2) {
+    const entry = await importToGallery(value, { env, homedir });
     process.stdout.write(
       `Gallery imported: ${entry.id} format=${entry.format} size=${entry.size} dimensions=${entry.width}x${entry.height} favorite=${entry.favorite}\n`,
     );
@@ -42,6 +49,11 @@ async function main(args) {
   }
   if (command === 'list' && args.length === 1) {
     await printList(env, homedir);
+    return;
+  }
+  if (command === 'list' && args.length === 2 && args[1] === '--json') {
+    const entries = await listGallery(env, homedir);
+    process.stdout.write(JSON.stringify(entries, null, 2) + '\n');
     return;
   }
   if (command === 'show' && value && args.length === 2) {

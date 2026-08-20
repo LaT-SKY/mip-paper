@@ -64,23 +64,28 @@ function resizeCanvas() {
   return dpr;
 }
 
-function draw(image, state, viewport, brightness) {
-  const dpr = resizeCanvas();
-  // Fill the whole window (which can be larger than the display under
-  // Wayland fractional scaling), then clip the wallpaper itself to the
-  // display area so it never bleeds onto a neighbouring screen.
-  const fillWidth = canvasSize.width || viewport.width;
-  const fillHeight = canvasSize.height || viewport.height;
-  const cover = Math.max(viewport.width / image.naturalWidth, viewport.height / image.naturalHeight);
-  const drawWidth = image.naturalWidth * cover;
-  const drawHeight = image.naturalHeight * cover;
-  const camera = state.camera;
+export function computeWallpaperRect(viewport, image, fit = 'cover') {
+  const vw = viewport.width;
+  const vh = viewport.height;
+  const iw = image.naturalWidth || image.width || 1;
+  const ih = image.naturalHeight || image.height || 1;
+  if (fit === 'stretch') {
+    return { drawWidth: vw, drawHeight: vh, mode: 'stretch' };
+  }
+  if (fit === 'center') {
+    return { drawWidth: iw, drawHeight: ih, mode: 'center' };
+  }
+  if (fit === 'contain') {
+    const s = Math.min(vw / iw, vh / ih);
+    return { drawWidth: iw * s, drawHeight: ih * s, mode: 'contain' };
+  }
+  const s = Math.max(vw / iw, vh / ih);
+  return { drawWidth: iw * s, drawHeight: ih * s, mode: 'cover' };
+}
 
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
-  context.fillStyle = '#152229';
-  context.fillRect(0, 0, fillWidth, fillHeight);
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
+function drawWallpaperImage(image, state, viewport, fit) {
+  const rect = computeWallpaperRect(viewport, image, fit);
+  const camera = state.camera;
   context.save();
   context.beginPath();
   context.rect(0, 0, viewport.width, viewport.height);
@@ -88,8 +93,42 @@ function draw(image, state, viewport, brightness) {
   context.translate(viewport.width / 2 + camera.x, viewport.height / 2 + camera.y);
   context.rotate(camera.angle);
   context.scale(camera.scale, camera.scale);
+  if (rect.mode === 'stretch') {
+    context.drawImage(image, -rect.drawWidth / 2, -rect.drawHeight / 2, rect.drawWidth, rect.drawHeight);
+  } else {
+    context.drawImage(image, -rect.drawWidth / 2, -rect.drawHeight / 2, rect.drawWidth, rect.drawHeight);
+  }
+  context.restore();
+}
+
+function draw(image, state, viewport, brightness, fit = 'cover', crossfade = null) {
+  const dpr = resizeCanvas();
+  const fillWidth = canvasSize.width || viewport.width;
+  const fillHeight = canvasSize.height || viewport.height;
+  const camera = state.camera;
+
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.fillStyle = '#152229';
+  context.fillRect(0, 0, fillWidth, fillHeight);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  if (crossfade && crossfade.from && crossfade.to && crossfade.progress < 1) {
+    const t = crossfade.progress;
+    context.save();
+    context.globalAlpha = 1 - t;
+    context.filter = `brightness(${brightness})`;
+    drawWallpaperImage(crossfade.from, state, viewport, fit);
+    context.restore();
+    context.save();
+    context.globalAlpha = t;
+    context.filter = `brightness(${brightness})`;
+    drawWallpaperImage(crossfade.to, state, viewport, fit);
+    context.restore();
+    return;
+  }
+  context.save();
   context.filter = `brightness(${brightness})`;
-  context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  drawWallpaperImage(image, state, viewport, fit);
   context.restore();
 }
 
@@ -116,6 +155,8 @@ async function start() {
   let schedulerOptions = null;
   let state;
   let viewport;
+  let crossfadeState = null;
+  let crossfadeRaf = 0;
   const brightnessTransition = createBrightnessTransition(currentAppearance.wallpaperBrightness);
   applyAppearanceState(document.documentElement, currentAppearance, {
     reducedMotion: reducedMotion.matches,
@@ -132,8 +173,22 @@ async function start() {
     submitAccent: (submission) => window.wallpaper.submitWallpaperAccent(submission),
     applyColor,
     promoteImage: (nextImage) => {
-      image = nextImage;
-      if (paused) drawOnce();
+      const prev = image;
+      const duration = currentConfig.wallpaper.crossfadeMs ?? 420;
+      const canCrossfade = prev && nextImage && prev !== nextImage && duration > 0 && !reducedMotion.matches;
+      if (canCrossfade) {
+        crossfadeState = { from: prev, to: nextImage, start: performance.now(), duration };
+        image = nextImage;
+        if (paused) {
+          if (crossfadeRaf) cancelAnimationFrame(crossfadeRaf);
+          drawOnceWithCrossfade();
+        }
+      } else {
+        if (crossfadeRaf) { cancelAnimationFrame(crossfadeRaf); crossfadeRaf = 0; }
+        crossfadeState = null;
+        image = nextImage;
+        if (paused) drawOnce();
+      }
     },
   });
   const unsubscribeColor = window.wallpaper.onColorUpdated(applyColor);
@@ -157,7 +212,47 @@ async function start() {
     const value = Number.isFinite(radius) ? Math.max(0, Math.min(24, radius)) : 16;
     document.documentElement.style.setProperty('--panel-radius', `${value}px`);
   }
+  function applyPanelSurface(panelCfg) {
+    const opacity = Number.isFinite(panelCfg.surfaceOpacity) ? Math.min(1, Math.max(0.2, panelCfg.surfaceOpacity)) : 0.77;
+    const shadow = Number.isFinite(panelCfg.shadowIntensity) ? Math.min(1, Math.max(0, panelCfg.shadowIntensity)) : 1;
+    document.documentElement.style.setProperty('--panel-surface-alpha', String(opacity));
+    // shadowIntensity 控制重点色装饰的尺寸（图中红圈的描边与底线），非透明度
+    document.documentElement.style.setProperty('--panel-shadow-size', String(shadow));
+    // 兼容旧变量名
+    document.documentElement.style.setProperty('--panel-shadow-alpha', String(shadow));
+  }
+  function applyPanelHeight(panelCfg) {
+    const h = Number.isFinite(panelCfg.height) ? Math.min(560, Math.max(240, panelCfg.height)) : 400;
+    // Expose as factor for CSS if needed, but primary motion scaling is in JS panel controller.
+    document.documentElement.style.setProperty('--panel-height', `${h}px`);
+  }
   applyPanelRadius(currentConfig.panel.borderRadius);
+  applyPanelSurface(currentConfig.panel);
+  applyPanelHeight(currentConfig.panel);
+  function sampleCrossfade() {
+    if (!crossfadeState) return null;
+    const elapsed = performance.now() - crossfadeState.start;
+    const t = Math.min(1, Math.max(0, elapsed / crossfadeState.duration));
+    if (t >= 1) {
+      const done = crossfadeState;
+      crossfadeState = null;
+      return { from: done.from, to: done.to, progress: 1 };
+    }
+    return { from: crossfadeState.from, to: crossfadeState.to, progress: t };
+  }
+  function drawOnceWithCrossfade() {
+    if (!image || !state || !viewport) return;
+    const fit = currentConfig.wallpaper.fit || 'cover';
+    const brightness = sampleBrightness(brightnessTransition, performance.now());
+    const cf = sampleCrossfade();
+    draw(image, state, viewport, brightness, fit, cf);
+    if (cf && cf.progress < 1) {
+      crossfadeRaf = requestAnimationFrame(drawOnceWithCrossfade);
+    } else if (crossfadeRaf) {
+      cancelAnimationFrame(crossfadeRaf);
+      crossfadeRaf = 0;
+    }
+  }
   const panel = createPanelController({
     root: document.getElementById('information-panel'),
     cards: [...document.querySelectorAll('[data-panel-card]')],
@@ -249,6 +344,8 @@ async function start() {
       });
       panel.setConfig(currentConfig.panel);
       applyPanelRadius(currentConfig.panel.borderRadius);
+      applyPanelSurface(currentConfig.panel);
+      applyPanelHeight(currentConfig.panel);
       audioRibbon.setConfig(currentConfig.audio);
       if (menu.isOpen()) rebuildMenuItems();
       if (!currentConfig.mouse.interactionEnabled) {
@@ -287,6 +384,10 @@ async function start() {
       transition: brightnessTransition,
     });
     if (currentColor) applyColor(currentColor);
+    if (crossfadeState && reducedMotion.matches) {
+      crossfadeState = null;
+      if (crossfadeRaf) { cancelAnimationFrame(crossfadeRaf); crossfadeRaf = 0; }
+    }
     if (paused) drawOnce();
   };
   reducedMotion.addEventListener('change', onReducedMotionChanged);
@@ -312,7 +413,8 @@ async function start() {
   };
   function drawOnce() {
     if (!image || !state || !viewport) return;
-    draw(image, state, viewport, sampleBrightness(brightnessTransition, performance.now()));
+    if (crossfadeState) { drawOnceWithCrossfade(); return; }
+    draw(image, state, viewport, sampleBrightness(brightnessTransition, performance.now()), currentConfig.wallpaper.fit || 'cover', null);
   }
 
   function setPaused(nextFullscreenPaused) {
@@ -362,7 +464,8 @@ async function start() {
       },
       draw: (...args) => {
         const started = performance.now();
-        draw(image, args[0], args[1], sampleBrightness(brightnessTransition, performance.now()));
+        const cf = sampleCrossfade();
+        draw(image, args[0], args[1], sampleBrightness(brightnessTransition, performance.now()), currentConfig.wallpaper.fit || 'cover', cf);
         collector.recordDraw(performance.now() - started);
       },
       report: (event) => {
@@ -416,12 +519,10 @@ async function start() {
     viewport,
     panelActive: () => panel.attention(),
     advance: advanceScene,
-    draw: (nextState, nextViewport) => draw(
-      image,
-      nextState,
-      nextViewport,
-      sampleBrightness(brightnessTransition, performance.now()),
-    ),
+    draw: (nextState, nextViewport) => {
+      const cf = sampleCrossfade();
+      draw(image, nextState, nextViewport, sampleBrightness(brightnessTransition, performance.now()), currentConfig.wallpaper.fit || 'cover', cf);
+    },
   };
   scheduler.start(schedulerOptions);
   if (paused) scheduler.stop();

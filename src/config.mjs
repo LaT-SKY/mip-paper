@@ -6,7 +6,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     buttonsEnabled: true,
     interactionEnabled: true,
   }),
-  wallpaper: Object.freeze({ mode: 'kde' }),
+  wallpaper: Object.freeze({ mode: 'kde', fit: 'cover', crossfadeMs: 420 }),
   color: Object.freeze({ mode: 'hybrid', transitionDurationMs: 900 }),
   appearance: Object.freeze({
     mode: 'system',
@@ -40,6 +40,9 @@ export const DEFAULT_CONFIG = Object.freeze({
     expanded: true,
     collapsedOpacity: 0.08,
     borderRadius: 16,
+    surfaceOpacity: 0.77,
+    shadowIntensity: 1,
+    height: 400,
     animation: Object.freeze({ staggerDelayMs: 48, durationMs: 820 }),
   }),
   weather: Object.freeze({
@@ -67,7 +70,7 @@ const SCHEMA = {
     buttonsEnabled: 'boolean',
     interactionEnabled: 'boolean',
   },
-  wallpaper: { mode: 'wallpaperMode' },
+  wallpaper: { mode: 'wallpaperMode', fit: 'wallpaperFit', crossfadeMs: 'crossfadeMs' },
   color: { mode: 'colorMode', transitionDurationMs: 'colorTransitionDuration' },
   appearance: {
     mode: 'themeMode',
@@ -101,6 +104,9 @@ const SCHEMA = {
     expanded: 'boolean',
     collapsedOpacity: 'opacity',
     borderRadius: 'panelRadius',
+    surfaceOpacity: 'surfaceOpacity',
+    shadowIntensity: 'shadowIntensity',
+    height: 'panelHeight',
     animation: {
       staggerDelayMs: 'nonNegative',
       durationMs: 'animationDuration',
@@ -332,6 +338,21 @@ function validateShape(value, schema, prefix = '') {
     if (rule === 'nonEmptyString' && (typeof fieldValue !== 'string' || fieldValue.trim() === '')) {
       throw new TypeError(`${fieldPath} must be a non-empty string`);
     }
+    if (rule === 'wallpaperFit' && !['cover', 'contain', 'stretch', 'center'].includes(fieldValue)) {
+      throw new TypeError(`${fieldPath} must be cover, contain, stretch, or center`);
+    }
+    if (rule === 'crossfadeMs' && (!Number.isInteger(fieldValue) || fieldValue < 0 || fieldValue > 1200)) {
+      throw new RangeError(`${fieldPath} must be an integer between 0 and 1200`);
+    }
+    if (rule === 'surfaceOpacity' && (!Number.isFinite(fieldValue) || fieldValue < 0.2 || fieldValue > 1)) {
+      throw new RangeError(`${fieldPath} must be between 0.2 and 1`);
+    }
+    if (rule === 'panelHeight' && (!Number.isFinite(fieldValue) || fieldValue < 240 || fieldValue > 560)) {
+      throw new RangeError(`${fieldPath} must be between 240 and 560`);
+    }
+    if (rule === 'shadowIntensity' && (!Number.isFinite(fieldValue) || fieldValue < 0 || fieldValue > 1)) {
+      throw new RangeError(`${fieldPath} must be between 0 and 1`);
+    }
   }
 }
 
@@ -399,15 +420,22 @@ function mergeConfig(value) {
 // and mouse.interactionEnabled (pointer-driven parallax); a config that still
 // carries the legacy key is migrated to both fields instead of being rejected.
 function migrateLegacyConfig(value) {
-  if (!isObject(value) || typeof value.interactionEnabled !== 'boolean'
-    || value.mouse !== undefined) {
-    return value;
+  if (!isObject(value)) return value;
+  let result = value;
+  if (typeof result.interactionEnabled === 'boolean' && result.mouse === undefined) {
+    const { interactionEnabled, ...rest } = result;
+    result = {
+      ...rest,
+      mouse: { buttonsEnabled: interactionEnabled, interactionEnabled },
+    };
   }
-  const { interactionEnabled, ...rest } = value;
-  return {
-    ...rest,
-    mouse: { buttonsEnabled: interactionEnabled, interactionEnabled },
-  };
+  // 0.4.0 removed panel.backdropBlurPx due to subpixel scanline; old configs
+  // still carry it and must be stripped instead of rejected.
+  if (isObject(result.panel) && 'backdropBlurPx' in result.panel) {
+    const { backdropBlurPx, ...panelRest } = result.panel;
+    result = { ...result, panel: panelRest };
+  }
+  return result;
 }
 
 export function validateConfig(value) {

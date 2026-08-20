@@ -5,15 +5,20 @@ All notable changes to Mip-Paper are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] - 2026-08-20
+## [0.4.0] - 2026-08-21
 
 ### Added
 
 - Wallpaper gallery under `${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery` with `index.json` (0600) and per-entry `wallpaper` (0644), deduplicated by `sha256:contentKey`, with favorite protection, 50-item non-favorite history limit, legacy single-file migration, and corrupted-index recovery (`src/wallpaper-gallery.mjs`).
 - Gallery CLI via `mip-paper wallpaper gallery {list|show|set|favorite|unfavorite|remove|prune}` and `mip-paper wallpaper set` now imports to the gallery and activates atomically (`scripts/wallpaper-gallery.mjs`, `bin/mip-paper`).
 - Settings gallery IPC (`settings:gallery-*`) and state exposure (gallery entries + display bounds for smart-crop preview) through `window-manager`, `main`, and `settings-preload` (`src/window-manager.mjs`, `src/main.mjs`, `src/settings-preload.cjs`).
-- Gallery grid in the settings wallpaper section with lazy thumbnails, cover-info hint computed from primary display bounds, set-active/favorite/remove actions, and drag-over drop zone (`src/renderer/settings.mjs`, `settings.css`).
+- Gallery grid in the settings wallpaper section with lazy thumbnails, cover-info hint computed from primary display bounds, and set-active/favorite/remove actions (`src/renderer/settings.mjs`, `settings.css`).
 - `doctor` gallery-index check and `wallpaper status` gallery summary (`bin/mip-paper`).
+- Wallpaper presentation controls `wallpaper.fit` (`cover`/`contain`/`stretch`/`center`) and `wallpaper.crossfadeMs` (0–1200 ms) with per-display cover hint and crossfade transition in the renderer (`src/config.mjs`, `src/renderer/renderer.mjs`, `src/settings-fields.mjs`).
+- Panel surface controls `panel.surfaceOpacity` (0.2–1), `panel.shadowIntensity` (0–1, accent decoration size on right/bottom edge + bottom glow — red circled area, 0=no decoration, not `box-shadow`) and `panel.height` (240–560 px) with live preview via CSS variables (`src/config.mjs`, `src/renderer/panel.css`, `src/renderer/renderer.mjs`, `src/panel-motion.mjs`).
+- Gallery sorting favorite-first → lastUsed → importedAt and keyboard accessibility (`role=list`/`listitem`, `Enter`/`Space` activation, `aria-pressed`/`aria-label`) (`src/wallpaper-gallery.mjs`, `src/renderer/settings.mjs`).
+- Hot-reload gallery activation without `systemctl restart`: settings and `gallery set` now publish through `wallpaperSync`/`colorService` atomically; CLI `wallpaper set`/`gallery set` print hot-reload hints and `list --json` (`src/main.mjs`, `scripts/wallpaper-gallery.mjs`, `bin/mip-paper`).
+- Gallery `import-only` CLI (`wallpaper gallery import`) and detailed `doctor` gallery report (total/favorite counts) (`scripts/wallpaper-gallery.mjs`, `bin/mip-paper`).
 
 ### Changed
 
@@ -28,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - Hyprland/GNOME/Niri roadmap from 0.4.0 mainline; the layer-shell native host is retained on `archive/hyprland-layer-shell-2026-08-20` for a future 0.5.0 merge (`0.4.0-compatibility-discussion.tmp.md` archived).
+- Card backdrop blur (`panel.backdropBlurPx`) due to subpixel scanlines; `backdrop-filter` removed from `panel.css` and `renderer.mjs`.
+- Gallery drag-drop import (`settings:gallery-import-file` IPC and grid `dragenter`/`dragover`/`drop` handlers) due to bugs; gallery import now only via “选择图片…” button and CLI.
 
 ## [0.3.9] - 2026-08-17
 

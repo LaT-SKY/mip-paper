@@ -10,7 +10,7 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "buttonsEnabled": true,
     "interactionEnabled": true
   },
-  "wallpaper": { "mode": "kde" },
+  "wallpaper": { "mode": "kde", "fit": "cover", "crossfadeMs": 420 },
   "color": { "mode": "hybrid", "transitionDurationMs": 900 },
   "appearance": {
     "mode": "system",
@@ -44,6 +44,9 @@ The configuration file is `~/.config/mip-paper/config.json`. Set `wallpaper.mode
     "expanded": true,
     "collapsedOpacity": 0.08,
     "borderRadius": 16,
+    "surfaceOpacity": 0.77,
+    "shadowIntensity": 1,
+    "height": 400,
     "animation": {
       "staggerDelayMs": 48,
       "durationMs": 820
@@ -78,6 +81,16 @@ The legacy top-level `interactionEnabled` key from 0.3.2 and earlier is migrated
 | `mouse.interactionEnabled` | boolean | `true` | Use pointer movement to drive parallax and the information panels; false only stops parallax, the context menu still opens | Live reload |
 | `frameRate.interactive` | integer, `1–180` FPS | `60` | Target rate during interaction, return, expanded panel, and panel animation | Live reload |
 | `frameRate.drift` | integer, `1–180` FPS | `30` | Target rate during idle drift when the panel is collapsed and settled | Live reload |
+
+## Wallpaper
+
+| Field | Type / range | Default | Effect | Apply |
+| --- | --- | --- | --- | --- |
+| `wallpaper.mode` | `kde` or `manual` | `kde` | Follow KDE static wallpaper or use manual image (gallery) | Live reload |
+| `wallpaper.fit` | `cover`, `contain`, `stretch`, or `center` | `cover` | Wallpaper fit: cropped fill, letterboxed, stretched, centered | Live reload |
+| `wallpaper.crossfadeMs` | integer, `0–1200 ms` | `420` | Crossfade duration when switching wallpaper; `0` is immediate, reduced motion forces `0` | Live reload |
+
+`wallpaper.fit=contain` letterboxes with the viewport background, `stretch` fills the viewport by stretching the image, `center` keeps the original size centered. `crossfadeMs` draws a double-buffered transition during the fade; when paused the fade animates via `requestAnimationFrame` without raising the resident frame rate.
 
 ## Light and Dark Appearance
 
@@ -140,6 +153,9 @@ When a fullscreen or maximized window (video, game, etc.) covers a display, that
 | `panel.expanded` | boolean | `true` | Fixed state when automatic behavior is disabled | Live reload |
 | `panel.collapsedOpacity` | `0–1` | `0.08` | Minimum opacity of collapsed panels | Live reload |
 | `panel.borderRadius` | finite number, `0–24` px | `16` | Card corner radius | Live reload |
+| `panel.surfaceOpacity` | `0.2–1` | `0.77` | Card surface opacity | Live reload |
+| `panel.shadowIntensity` | `0–1` | `1` | Accent decoration size on the right/bottom edge + bottom glow (red circled area); `0`=no decoration, larger=more; not `box-shadow` | Live reload |
+| `panel.height` | `240–560` px | `400` | Effective panel height; scales hover/parallax amplitude — larger is more intense | Live reload |
 | `panel.animation.staggerDelayMs` | finite number, `>= 0` ms | `48` | Delay between panel animations | Live reload |
 | `panel.animation.durationMs` | finite number, `>= 400` ms | `820` | Single-panel animation including two rebounds | Live reload |
 

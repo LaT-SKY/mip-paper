@@ -53,7 +53,8 @@ test('separates frosted card surfaces from their animated 3D shells', async () =
   assert.match(shellRule, /rotateY\(var\(--panel-ry\)\)/);
   assert.match(shellRule, /box-shadow:/);
   assert.doesNotMatch(shellRule, /backdrop-filter|background:|border:|overflow:\s*hidden|padding:/);
-  assert.match(surfaceRule, /backdrop-filter:\s*blur\(9px\)\s*saturate\(1\.08\)/);
+  assert.doesNotMatch(surfaceRule, /backdrop-filter/);
+  assert.doesNotMatch(panelCss, /--panel-blur/);
   assert.match(surfaceRule, /background:\s*var\(--surface\)/);
   assert.match(surfaceRule, /border:\s*1px\s+solid/);
   assert.match(surfaceRule, /overflow:\s*hidden/);

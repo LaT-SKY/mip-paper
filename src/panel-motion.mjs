@@ -2,6 +2,8 @@ function distance(left, right) {
   return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
+export const DEFAULT_PANEL_HEIGHT = 400;
+
 const COLLAPSE_VECTORS = Object.freeze([
   Object.freeze({ x: -0.46, y: -0.28 }),
   Object.freeze({ x: 0.46, y: -0.28 }),
@@ -138,6 +140,8 @@ export function panelRequestsInteractiveFps(state) {
 }
 
 export function getCardTransforms(state) {
+  const height = Number.isFinite(state.config.height) ? state.config.height : DEFAULT_PANEL_HEIGHT;
+  const heightFactor = Math.min(560, Math.max(240, height)) / DEFAULT_PANEL_HEIGHT;
   return state.cards.map((card) => {
     const collapsed = 1 - card.progress;
     const burst = Math.max(0, card.progress - 1);
@@ -145,13 +149,19 @@ export function getCardTransforms(state) {
     return {
       id: card.id,
       progress: card.progress,
-      translateXFactor: card.collapseX * collapsed,
-      translateYFactor: card.collapseY * collapsed,
-      scale: 1 - 0.12 * collapsed + burst * 0.22,
+      translateXFactor: card.collapseX * collapsed * heightFactor,
+      translateYFactor: card.collapseY * collapsed * heightFactor,
+      scale: 1 - 0.12 * collapsed * heightFactor + burst * 0.22 * heightFactor,
       opacity: state.config.collapsedOpacity
         + (1 - state.config.collapsedOpacity) * visibleProgress,
       brightness: 1 + burst * 0.95,
       saturation: 1 + burst * 1.3,
+      heightFactor,
     };
   });
+}
+
+export function getPanelHeightFactor(config) {
+  const height = Number.isFinite(config?.height) ? config.height : DEFAULT_PANEL_HEIGHT;
+  return Math.min(560, Math.max(240, height)) / DEFAULT_PANEL_HEIGHT;
 }

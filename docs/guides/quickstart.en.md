@@ -129,9 +129,9 @@ Return to per-display KDE synchronization with:
 mip-paper wallpaper use-kde
 ```
 
-A failed replacement preserves the previous valid image. A successful replacement restarts the service when it is active.
+A failed replacement preserves the previous valid image. A successful replacement hot-reloads the wallpaper when the service is active (no restart, supports `wallpaper.fit`/`crossfadeMs`); it takes effect on the next `mip-paper start` when the service is inactive.
 
-You can also import an image from the settings window: right-click the wallpaper → Settings → Wallpaper section → Choose image…, which imports a JPEG / PNG / WebP and switches to manual mode automatically.
+You can also import an image from the settings window: right-click the wallpaper → Settings → Wallpaper section → Choose image…, which imports a JPEG / PNG / WebP, switches to manual mode, and hot-publishes it.
 
 ### Gallery (0.4.0)
 
@@ -145,16 +145,18 @@ ${XDG_DATA_HOME:-$HOME/.local/share}/mip-paper/gallery/index.json
 The history limit is 50 non-favorite, non-active entries; oldest non-favorite entries are evicted first.
 
 ```bash
-mip-paper wallpaper gallery list
-mip-paper wallpaper gallery show <id>
-mip-paper wallpaper gallery set <id>
-mip-paper wallpaper gallery favorite <id>
-mip-paper wallpaper gallery unfavorite <id>
-mip-paper wallpaper gallery remove <id>
-mip-paper wallpaper gallery prune
+mip-paper wallpaper gallery list              # list gallery
+mip-paper wallpaper gallery list --json       # JSON output for scripts
+mip-paper wallpaper gallery show <id>         # show entry
+mip-paper wallpaper gallery set <id>          # activate (auto manual + hot-reload)
+mip-paper wallpaper gallery import <path>     # import without activating
+mip-paper wallpaper gallery favorite <id>     # favorite
+mip-paper wallpaper gallery unfavorite <id>   # unfavorite
+mip-paper wallpaper gallery remove <id>       # remove
+mip-paper wallpaper gallery prune             # prune
 ```
 
-The settings wallpaper section shows a gallery grid with lazy thumbnails, a cover-info hint computed from the primary display bounds (`800×600 → 1920×1080 cover`), and actions for set-active/favorite/remove plus a drop zone that opens the file dialog.
+The settings wallpaper section shows a gallery grid sorted favorite-first, supports keyboard (`Enter`/`Space` to activate, `aria-pressed` favorite), shows a cover-info hint per `wallpaper.fit` and primary display `bounds×scaleFactor` (`800×600 → 1920×1080 cover`, with `· N displays` when multi-display) and a remove confirmation.
 
 ## KWin Integration
 

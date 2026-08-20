@@ -39,6 +39,28 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+export function compareGalleryEntries(a, b) {
+  if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+  const ta = a.lastUsed || a.importedAt || '';
+  const tb = b.lastUsed || b.importedAt || '';
+  if (ta !== tb) return ta > tb ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+function sortedGallery(entries) {
+  return [...entries].sort(compareGalleryEntries);
+}
+
+export async function getActiveContentKey(env = process.env, homedir) {
+  const base = homedir || os.homedir();
+  try {
+    const active = await inspectWallpaper(wallpaperPath(env, base));
+    return active.contentKey;
+  } catch {
+    return null;
+  }
+}
+
 async function readIndex(env, homedir) {
   const indexPath = galleryIndexPath(env, homedir);
   try {
@@ -116,7 +138,7 @@ export async function listGallery(env = process.env, homedir) {
   const base = homedir || os.homedir();
   // Auto-migrate legacy single wallpaper file on first list
   const migrated = await migrateLegacyWallpaperIfNeeded(env, base);
-  if (migrated.length > 0) return migrated;
+  if (migrated.length > 0) return sortedGallery(migrated);
   const entries = await readIndex(env, base);
   // Verify files still exist, filter missing
   const verified = [];
@@ -131,7 +153,7 @@ export async function listGallery(env = process.env, homedir) {
   if (verified.length !== entries.length) {
     await writeIndexAtomic(env, base, verified).catch(() => {});
   }
-  return verified;
+  return sortedGallery(verified);
 }
 
 export async function importToGallery(sourcePath, { env = process.env, homedir, favorite = false } = {}) {
@@ -248,11 +270,7 @@ export async function pruneGallery({ env = process.env, homedir, maxHistory = DE
   const base = homedir || os.homedir();
   let entries = await readIndex(env, base);
   // Active wallpaper contentKey (if exists) must not be pruned
-  let activeKey = null;
-  try {
-    const active = await inspectWallpaper(wallpaperPath(env, base));
-    activeKey = active.contentKey;
-  } catch {}
+  const activeKey = await getActiveContentKey(env, base);
   const nonFavorite = entries.filter((e) => !e.favorite && e.contentKey !== activeKey);
   if (nonFavorite.length <= maxHistory) return entries;
   // Sort by lastUsed/importedAt ascending, oldest first
@@ -275,4 +293,4 @@ export async function pruneGallery({ env = process.env, homedir, maxHistory = DE
   return kept;
 }
 
-export const __internal = { shortId, readIndex, writeIndexAtomic, DEFAULT_MAX_HISTORY };
+export const __internal = { shortId, readIndex, writeIndexAtomic, DEFAULT_MAX_HISTORY, compareGalleryEntries, sortedGallery };

@@ -498,15 +498,24 @@ wallpaper_command() {
       node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" import "$2"
       node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual
       if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then
-        systemctl --user restart "$SERVICE_NAME"
+        printf 'Wallpaper set; live service will hot-reload (no restart needed).\n'
+      else
+        printf 'Wallpaper set; run mip-paper start to apply.\n'
       fi
       ;;
     gallery)
       local sub=${2:-}
       case "$sub" in
-        list) (($# == 2)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list ;;
+        list)
+          if [[ "${3:-}" == "--json" ]]; then
+            (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list --json
+          else
+            (($# == 2)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list
+          fi
+          ;;
         show) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" show "$3" ;;
-        set) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" set "$3"; node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual; if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then systemctl --user restart "$SERVICE_NAME"; fi ;;
+        set) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" set "$3"; node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" manual; if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then printf 'Gallery image activated; live service will hot-reload.\n'; else printf 'Gallery image activated; run mip-paper start to apply.\n'; fi ;;
+        import) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" import-only "$3" ;;
         favorite) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" favorite "$3" ;;
         unfavorite) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" unfavorite "$3" ;;
         remove) (($# == 3)) || usage; node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" remove "$3" ;;
@@ -518,20 +527,34 @@ wallpaper_command() {
       (($# == 1)) || usage
       node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" set "$CONFIG_PATH" kde
       if systemctl --user is-active "$SERVICE_NAME" >/dev/null 2>&1; then
-        systemctl --user restart "$SERVICE_NAME"
+        printf 'Wallpaper mode: kde (following each display static KDE wallpaper) — hot-reloaded.\n'
+      else
+        printf 'Wallpaper mode: kde (following each display static KDE wallpaper)\n'
       fi
-      printf 'Wallpaper mode: kde (following each display static KDE wallpaper)\n'
       ;;
     status)
       (($# == 1)) || usage
       local mode
       mode=$(node "$SOURCE_ROOT/scripts/wallpaper-mode.mjs" get "$CONFIG_PATH")
       printf 'Wallpaper mode: %s\n' "$mode"
+      # Show fit/crossfade when available
+      node --input-type=module - "$CONFIG_PATH" <<'NODE' 2>/dev/null || true
+import { readFile } from 'node:fs/promises';
+try {
+  const raw = JSON.parse(await readFile(process.argv[2], 'utf8'));
+  if (raw.wallpaper?.fit) console.log(`Wallpaper fit: ${raw.wallpaper.fit}`);
+  if (raw.wallpaper?.crossfadeMs != null) console.log(`Wallpaper crossfade: ${raw.wallpaper.crossfadeMs}ms`);
+  if (raw.panel?.surfaceOpacity != null) console.log(`Panel surfaceOpacity: ${raw.panel.surfaceOpacity} shadow: ${raw.panel.shadowIntensity ?? 1} height: ${raw.panel.height ?? 400}px`);
+} catch {}
+NODE
       if [[ "$mode" == manual ]]; then
         node "$SOURCE_ROOT/scripts/wallpaper-image.mjs" status
         if node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list >/dev/null 2>&1; then
           echo "---"
-          node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list 2>&1 | head -n 20
+          node "$SOURCE_ROOT/scripts/wallpaper-gallery.mjs" list --json 2>&1 | node --input-type=module -e '
+import { readFile } from "node:fs/promises";
+let raw=""; process.stdin.on("data", d=> raw+=d); process.stdin.on("end", ()=>{ try{ const arr=JSON.parse(raw); const fav=arr.filter(x=>x.favorite).length; const active=arr.find(x=>x.lastUsed)?.id ?? arr[0]?.id ?? "none"; console.log(`Gallery: total=${arr.length} favorite=${fav} active~${active}`); for(const e of arr.slice(0,20)) console.log(`  ${e.id} ${e.favorite?"★":" "} ${e.width}x${e.height} ${e.contentKey.slice(0,12)}`); } catch{ process.stdout.write(raw.slice(0,800)); } });
+' 2>&1 | head -n 24
         fi
       elif [[ -d "$DATA_DIRECTORY/wallpapers" ]]; then
         find "$DATA_DIRECTORY/wallpapers" -mindepth 2 -maxdepth 2 -name status.json -type f -print0 \
@@ -678,10 +701,18 @@ NODE
   fi
   local gallery_helper="$runtime_root/scripts/wallpaper-gallery.mjs"
   if [[ ! -f "$gallery_helper" ]]; then gallery_helper="$SOURCE_ROOT/scripts/wallpaper-gallery.mjs"; fi
-  if [[ -f "$gallery_helper" ]] && node "$gallery_helper" list >/dev/null 2>&1; then
-    check_pass gallery-index "$DATA_DIRECTORY/gallery/index.json"
+  if [[ -f "$gallery_helper" ]]; then
+    gallery_report=$(node "$gallery_helper" list --json 2>&1 | node --input-type=module -e '
+import { readFile } from "node:fs/promises";
+let raw=""; process.stdin.on("data",d=>raw+=d); process.stdin.on("end",()=>{ try{ const arr=JSON.parse(raw); const fav=arr.filter(x=>x.favorite).length; console.log(`ok ${arr.length} total ${fav} favorite`); } catch(e){ console.log("fail "+(e.message||"invalid")); }});
+' 2>&1)
+    if [[ "$gallery_report" == ok* ]]; then
+      check_pass gallery-index "$DATA_DIRECTORY/gallery/index.json (${gallery_report#ok })"
+    else
+      check_fail gallery-index "gallery index is missing or unreadable (${gallery_report#fail })"
+    fi
   else
-    check_fail gallery-index 'gallery index is missing or unreadable'
+    check_fail gallery-index 'gallery index helper missing'
   fi
 
   check_manual 'window stacking' 'verify wallpaper remains below ordinary windows and above the desktop surface'

@@ -4,7 +4,7 @@
     "Id": "mip-paper",
     "Name": "Mip-Paper Display Coordinator",
     "Description": "Assigns each wallpaper window to its declared display",
-    "Version": "0.3.9",
+    "Version": "0.4.0",
     "License": "MIT",
     "EnabledByDefault": false
   },

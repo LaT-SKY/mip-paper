@@ -706,6 +706,12 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   padding: 14px 0 8px;
+  border-radius: 12px;
+}
+.gallery-grid:focus-within { outline: none; }
+.gallery-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 @media (max-width: 720px) {
