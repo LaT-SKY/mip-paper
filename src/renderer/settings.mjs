@@ -766,9 +766,10 @@ function updateWallpaperSectionControls() {
   if (preview) preview.classList.toggle('is-dimmed', kde);
 }
 
-function renderSection(groupId) {
+function renderSection(groupId, { animate = true } = {}) {
   const group = SETTINGS_GROUPS.find((candidate) => candidate.id === groupId);
   if (!group) return;
+  const sectionChanged = groupId !== currentSection;
   currentSection = groupId;
   renderNav();
 
@@ -807,12 +808,24 @@ function renderSection(groupId) {
   // The card must be attached before the control state is synced; otherwise
   // the initial KDE/manual mode would never grey out the pick button.
   if (group.id === 'wallpaper') updateWallpaperSectionControls();
-  animateSection(card);
+  if (animate && sectionChanged) animateSection(card);
+  else if (animate && !sectionChanged) {
+    // Same-section refresh (e.g. gallery favorite/setActive) — keep steady, no flash
+    card.style.opacity = '1';
+    card.style.transform = 'none';
+  } else {
+    card.style.opacity = '1';
+    card.style.transform = 'none';
+  }
   syncFooterState();
 }
 
 function animateSection(card) {
-  if (reducedMotion.matches) return;
+  if (reducedMotion.matches) {
+    card.style.opacity = '1';
+    card.style.transform = 'none';
+    return;
+  }
   const token = ++animToken;
   const start = performance.now();
   let scale = SPRING.startScale;
@@ -820,13 +833,9 @@ function animateSection(card) {
   let last = start;
   const omega = SPRING.omega;
   const damping = SPRING.damping;
-  const rows = [...card.querySelectorAll('.field-row, .command-row, .wallpaper-actions, .wallpaper-preview, .credentials-actions, .about-list')];
+  // Only animate the container — rows stay visible to avoid staged flash (matches context-menu language)
   card.style.opacity = '0';
-  for (const row of rows) {
-    row.style.opacity = '0';
-    row.style.transform = 'translateY(2px)';
-  }
-
+  card.style.transform = `scale(${scale})`;
   function frame(now) {
     if (token !== animToken) return;
     const dt = Math.min(0.032, Math.max(0, (now - last) / 1000));
@@ -837,22 +846,12 @@ function animateSection(card) {
     const acceleration = omega * omega * (SPRING.targetScale - scale) - 2 * damping * omega * velocity;
     velocity += acceleration * dt;
     scale += velocity * dt;
-    card.style.transform = 'scale(' + scale.toFixed(4) + ')';
-    rows.forEach((row, index) => {
-      const delay = Math.min(index * ROW_STAGGER_MS, SECTION_TRANSITION_MS);
-      const rowProgress = Math.min(1, Math.max(0, (elapsed - delay) / SECTION_TRANSITION_MS));
-      row.style.opacity = String(rowProgress);
-      row.style.transform = rowProgress >= 1 ? 'none' : 'translateY(2px)';
-    });
+    card.style.transform = `scale(${scale.toFixed(4)})`;
     const settled = Math.abs(SPRING.targetScale - scale) < SPRING.settleEpsilon
       && Math.abs(velocity) < SPRING.settleVelocity;
     if (settled || elapsed > 600) {
       card.style.transform = 'scale(1)';
       card.style.opacity = '1';
-      for (const row of rows) {
-        row.style.opacity = '1';
-        row.style.transform = 'none';
-      }
       return;
     }
     requestAnimationFrame(frame);
@@ -920,7 +919,7 @@ async function reloadState() {
   applyTheme();
   applyAccent();
   if (state.appVersion) versionEl.textContent = 'v' + state.appVersion;
-  renderSection(currentSection);
+  renderSection(currentSection, { animate: false });
 }
 
 async function saveConfig() {
@@ -950,8 +949,8 @@ async function saveCredentials() {
   try {
     const result = await window.settings.saveCredentials({ apiHost: host, apiKey: key });
     state.credentials = result;
-    renderSection(currentSection);
-    showStatus('ok', '凭据已保存（0600 权限）');
+    renderSection(currentSection, { animate: false });
+    showStatus('ok', '凭据已保存');
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
     showStatus('error', '凭据保存失败：' + message);
@@ -1085,7 +1084,7 @@ window.settings.onConfigUpdated((payload) => {
   if (!dirty) {
     state.config = payload.config;
     draft = structuredClone(payload.config);
-    renderSection(currentSection);
+    renderSection(currentSection, { animate: false });
   }
   if (payload.appearance) {
     state.appearance = payload.appearance;
